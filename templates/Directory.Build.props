@@ -1,0 +1,3 @@
+<Project>
+  <!-- Template sources are not buildable mods: this file stops ../Directory.Build.props (game references, net472, deploy to game) from applying to them. -->
+</Project>

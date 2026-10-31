@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Igi",
+  "classifications": [ "Game", "BepInEx", "Vanguard Galaxy" ],
+  "identity": "Igi.VanguardGalaxy.Mod",
+  "name": "Vanguard Galaxy BepInEx mod",
+  "description": "A BepInEx 5 / Harmony plugin for Vanguard Galaxy with a dev harness and game-version snapshots.",
+  "shortName": "vgmod",
+  "sourceName": "VgMod",
+  "preferNameDirectory": true,
+  "tags": { "language": "C#", "type": "project" },
+  "symbols": {
+    "GameDir": {
+      "type": "parameter",
+      "datatype": "text",
+      "description": "Vanguard Galaxy install folder, written into Directory.Build.props as the default.",
+      "defaultValue": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Vanguard Galaxy",
+      "replaces": "GAMEDIR_TOKEN"
+    },
+    "Author": {
+      "type": "parameter",
+      "datatype": "text",
+      "description": "Prefix of the plugin GUID (author.modname).",
+      "defaultValue": "yourname"
+    },
+    "authorLower": {
+      "type": "derived",
+      "valueSource": "Author",
+      "valueTransform": "lower",
+      "replaces": "AUTHOR_TOKEN"
+    },
+    "nameLower": {
+      "type": "derived",
+      "valueSource": "name",
+      "valueTransform": "lower",
+      "replaces": "MODID_TOKEN"
+    }
+  },
+  "forms": {
+    "lower": { "identifier": "lowerCase" }
+  }
+}

@@ -3,6 +3,8 @@ obj/
 # Decompiled game code: reference only, copyrighted, never commit.
 decompiled/
 decompiled-*/
+# Copies of the game's assemblies per version (Directory.Build.props, SnapshotGameAssemblies): copyrighted, never commit.
+game-versions/
 # Local working notes: session log, phase plans, wishlist and planning docs.
 SESSION_LOG.md
 PHASE_*.md

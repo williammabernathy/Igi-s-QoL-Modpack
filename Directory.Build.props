@@ -34,4 +34,24 @@
     <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb" DestinationFolder="$(BepInExDir)/plugins/$(AssemblyName)" SkipUnchangedFiles="true" />
     <Message Importance="high" Text="Deployed $(AssemblyName) -> $(BepInExDir)/plugins/$(AssemblyName)" />
   </Target>
+
+  <!--
+    Keep a copy of the game assemblies each build compiles against, in game-versions/<game version>-<hash>/, so the
+    previous version is still around after Steam updates the game. tools/VersionDiff compares two of these folders.
+    Runs before compiling, so a build that fails against a new game version still saves it.
+  -->
+  <Target Name="SnapshotGameAssemblies" BeforeTargets="BeforeBuild">
+    <GetFileHash Files="$(ManagedDir)/Assembly-CSharp.dll">
+      <Output TaskParameter="Hash" PropertyName="GameAssemblyHash" />
+    </GetFileHash>
+    <PropertyGroup>
+      <GameVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(GameDir)/VanguardGalaxy_Data/globalgamemanagers')), '\b\d+\.\d+\.\d+(\.\d+)?\b').Value)</GameVersion>
+      <GameSnapshotDir>$(MSBuildThisFileDirectory)game-versions/$(GameVersion)-$(GameAssemblyHash.Substring(0, 8).ToLowerInvariant())</GameSnapshotDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <GameSnapshotFile Include="$(ManagedDir)/Assembly-CSharp.dll;$(ManagedDir)/UnityEngine*.dll;$(ManagedDir)/Unity.InputSystem.dll;$(ManagedDir)/Unity.TextMeshPro.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(GameSnapshotFile)" DestinationFolder="$(GameSnapshotDir)" SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="$(GameSnapshotDir)/managed-dir.txt" Lines="$(ManagedDir)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
 </Project>

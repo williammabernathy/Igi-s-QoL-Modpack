@@ -76,16 +76,49 @@ dotnet build -c Release
 - Targets `net472`, which matches the game's Mono profile.
 - After each build, copies the DLL to `BepInEx/plugins/<AssemblyName>/`. Turn this off with `-p:DeployToGame=false`.
 
-New mod: copy `src/HelloVanguard`, rename the folder, `.csproj`, `AssemblyName`, and plugin GUID, then `dotnet sln add src/<Name>/<Name>.csproj`. Restart the game to load a rebuilt DLL; BepInEx 5 has no hot reload.
+New mod in this repo: copy `src/HelloVanguard`, rename the folder, `.csproj`, `AssemblyName`, and plugin GUID, then `dotnet sln add src/<Name>/<Name>.csproj`. Restart the game to load a rebuilt DLL; BepInEx 5 has no hot reload.
 
-Refresh the decompiled source after a game update:
+New mod in its own repo: `templates/VgMod` is a `dotnet new` template with the same build setup, a plugin that patches each patch class separately (a class broken by a game update is skipped and logged), and a trimmed dev harness (auto-load a save, run checks, log `CHECK` lines, quit). Its README covers the rest.
 
 ```fish
-rm -rf decompiled
+dotnet new install templates/VgMod
+dotnet new vgmod -n MyMod --Author yourname --GameDir "/path/to/Vanguard Galaxy"
+```
+
+### After a game update
+
+Every build first copies the game DLLs it compiles against (`Assembly-CSharp`, `UnityEngine*`, `Unity.InputSystem`, `Unity.TextMeshPro`, about 17 MB) into `game-versions/<game version>-<hash>/`, so the version you last built against is still there after Steam replaces it. The copy happens before compiling, so a build that fails against the new game still saves the new version. `game-versions/` is gitignored.
+
+`tools/VersionDiff` compares two of those versions:
+
+```fish
+dotnet run --project tools/VersionDiff -- patches --out patch-report.md
+```
+
+With no options it compares the newest snapshot against the installed game, or against the second newest snapshot once you've rebuilt, using `src/IgiQoL/bin/Release/IgiQoL.dll` (`--old`, `--new` and `--mod` override each). For every method the mod patches it reports `unchanged`, `body changed` (with a diff of the decompiled method), `signature changed`, `missing` or `ambiguous`. It also reports:
+- patch parameters whose names no longer match the target, including `___field` injections
+- members the compiled DLL uses that are gone from the new game
+- string lookups (`AccessTools.Method(typeof(X), "name")`, `FieldRefAccess`, `Traverse`) that no longer resolve
+
+It exits 1 when any of those need attention. With only one version on disk it lists the targets without diffs. [`tools/VersionDiff/README.md`](tools/VersionDiff/README.md) has the full reference: options and defaults, every status and what to do about it, the report layout, exit codes and limits.
+
+Then refresh the decompiled source, keeping the old one for wider diffs:
+
+```fish
+mv decompiled decompiled-<old version>
 ilspycmd -p -o decompiled "/mnt/data/SteamLibrary/steamapps/common/Vanguard Galaxy/VanguardGalaxy_Data/Managed/Assembly-CSharp.dll"
 ```
 
 The folder layout follows the namespaces. The game uses both `Behaviour.*` and `Behavior.*`, so search for both spellings.
+
+To see what an update changed in the game's data, you need a dump from each version. `[Dev] DumpGameData` (see the `[Dev]` section below) writes one to `BepInEx/config/IgiQoL/dumps/<game version>/`; the 0.8.3.4 dump is already there. Once the game has updated, dump again and compare:
+
+```fish
+set D "/mnt/data/SteamLibrary/steamapps/common/Vanguard Galaxy/BepInEx/config/IgiQoL/dumps"
+dotnet run --project tools/VersionDiff -- data $D/0.8.3.4 $D/<new version> --out data-changes.md
+```
+
+That lists added and removed items, ships, recipes and so on, and every changed value as `path: old → new`.
 
 ## Igi's QoL Modpack (`src/IgiQoL`)
 
@@ -127,6 +160,8 @@ One plugin (`igi.qol`, deployed to `BepInEx/plugins/IgiQoL/`). Every feature has
 Mod data goes into the save under a `Player.igiQol` key (per-ship records keyed by ship guid). A feature whose patch throws switches itself off, logs the stack trace, and the main menu lists it in a popup.
 
 The `[Dev]` section is a test harness, off by default. With `Enabled = true` it suppresses autosaves, loads `AutoLoadSave` at the main menu, runs each feature's self-check (`CHECK <Feature>/<name> PASS|FAIL|SKIP` lines in `LogOutput.log`; `OnlyChecks` limits that to a comma-separated list of feature ids; an exception inside a check, also in a coroutine it yields, fails the check and the run goes on), dumps the UI hierarchy of the components named in `DumpHierarchy` to `BepInEx/config/IgiQoL/dumps/` (plus `icons.txt` with `DumpIcons`, `turret-ranges.txt` with `DumpTurretRanges`, `recipes.txt` with `DumpRecipes` and `missiles.txt` with `DumpMissiles`), writes `igiqol-screenshot.png` and the self-checks' `igiqol-<name>.png` next to the `Saves` folder, then with `ProfileSeconds` above 0 spawns `ProfileEnemies` (default 12) hostile ships next to the fleet and measures for that long: frame times (mean, p50, p95, p99), the time spent in each of this mod's Harmony patches and MonoBehaviour updates, and the game's own `SimMarker` sections, written to `dumps/profile.txt`; then with `EchoSoakSeconds` above 0 switches ECHO on for that long (a `[Dev] soak` status line every 15 s, the whole event log at the end), logs `Self-check complete`, and quits after `QuitAfterSeconds`. Point it at a copy of a save, never at a save you care about.
+
+Two more dumps read any value the game holds, without new code. `DumpGameData = true` writes the 15 content registries (items, recipes, equipment and item builders, ships, drones, station parts, modules, defensive turrets, aspects, hazards, crew types, skill trees and nodes, dungeons) to `dumps/<game version>/`, about 9.5 MB, in under a second. `DumpStatics` takes your own comma-separated list of static members, `TypeName.member` with an optional `:depth` (default 3), for example `Faction.all:2`. Each file has one line per value: element key, field path, value, tab-separated, sorted. Grep it to find a number (`grep _range dumps/0.8.3.4/InventoryItemType.allItems.txt`) or compare two versions with `VersionDiff data`. The walk follows fields, not properties. It expands game components on prefabs, including sibling components (`definition.@LaserTurret._range`), lists the first 64 entries of each collection, and prints other Unity objects by name.
 
 ## What mods can do
 

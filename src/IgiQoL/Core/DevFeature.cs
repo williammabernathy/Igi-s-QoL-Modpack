@@ -44,6 +44,8 @@ public sealed class DevFeature : Feature
     public ConfigEntry<bool> DumpTurretRanges;
     public ConfigEntry<bool> DumpRecipes;
     public ConfigEntry<bool> DumpMissiles;
+    public ConfigEntry<string> DumpStatics;
+    public ConfigEntry<bool> DumpGameData;
     public ConfigEntry<int> EchoSoakSeconds;
     public ConfigEntry<int> ProfileSeconds;
     public ConfigEntry<int> ProfileEnemies;
@@ -65,6 +67,8 @@ public sealed class DevFeature : Feature
         DumpTurretRanges = cfg.Bind(Id, "DumpTurretRanges", false, "Write identifier, rarity, item level and base range of every turret item to dumps/turret-ranges.txt");
         DumpRecipes = cfg.Bind(Id, "DumpRecipes", false, "Write every forge recipe with its ingredients, results and the recipe that makes each item ingredient to dumps/recipes.txt");
         DumpMissiles = cfg.Bind(Id, "DumpMissiles", false, "Write every missile launcher's missile flight values and your ships' thrust and mass to dumps/missiles.txt");
+        DumpStatics = cfg.Bind(Id, "DumpStatics", "", "Comma-separated TypeName.staticMember[:depth] entries (default depth 3) dumped to dumps/<game version>/<TypeName>.<member>.txt for `VersionDiff data`");
+        DumpGameData = cfg.Bind(Id, "DumpGameData", false, "Dump the game's content registries (items, recipes, ships, drones, crew, skills, ...) to dumps/<game version>/ for `VersionDiff data`");
         EchoSoakSeconds = cfg.Bind(Id, "EchoSoakSeconds", 0, "After the checks, let ECHO play this many seconds, logging its status every 15 s and the event log at the end (0 = off)");
         ProfileSeconds = cfg.Bind(Id, "ProfileSeconds", 0, "After the checks, spawn ProfileEnemies hostile ships next to the fleet and measure frame times, this mod's patch and update costs and the game's own sections for this many seconds; report in dumps/profile.txt (0 = off)");
         ProfileEnemies = cfg.Bind(Id, "ProfileEnemies", 12, "Hostile ships the profile spawns (0 = profile wherever the save is, without a fight)");
@@ -176,6 +180,12 @@ public sealed class DevFeature : Feature
             {
                 try { DumpMissileValues(); }
                 catch (Exception e) { Plugin.Log.LogError($"[Dev] missile dump failed: {e}"); }
+            }
+
+            if (DumpGameData.Value || !string.IsNullOrEmpty(DumpStatics.Value))
+            {
+                try { DevDump.Run(DumpStatics.Value, DumpGameData.Value); }
+                catch (Exception e) { Plugin.Log.LogError($"[Dev] data dump failed: {e}"); }
             }
 
             if (Screenshot.Value)

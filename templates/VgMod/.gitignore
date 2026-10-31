@@ -1,0 +1,4 @@
+bin/
+obj/
+# Copies of the game's DLLs. They belong to the game's developers: never commit or share them.
+game-versions/
