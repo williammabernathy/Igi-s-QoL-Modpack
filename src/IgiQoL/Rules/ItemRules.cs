@@ -33,6 +33,7 @@ public static class ItemRules
     public static readonly Dictionary<(ItemCategory, Rarity), ItemRule> ByCategoryRarity = new();
     // Key = Items.RuleKey(type): "identifier" or "identifier@level".
     public static readonly Dictionary<string, ItemRule> ByItem = new();
+    private static readonly Dictionary<(string id, int level), ItemRule> ByItemLevel = new();   // per-level rules of ByItem by (identifier, level), so Resolve needs no key string
     public static bool HasDockRules { get; private set; }
 
     public static int Count => ByCategory.Count + ByCategoryRarity.Count + ByItem.Count;
@@ -41,7 +42,7 @@ public static class ItemRules
     {
         if (ByItem.Count > 0 && item.identifier != null)
         {
-            if (item.itemLevel > 0 && ByItem.TryGetValue(Items.RuleKey(item), out var levelRule)) return levelRule;
+            if (item.itemLevel > 0 && ByItemLevel.Count > 0 && ByItemLevel.TryGetValue((item.identifier, item.itemLevel), out var levelRule)) return levelRule;
             if (ByItem.TryGetValue(item.identifier, out var idRule)) return idRule;
         }
         if (ByCategoryRarity.Count > 0 && ByCategoryRarity.TryGetValue((item.itemCategory, item.rarity), out var crRule)) return crRule;
@@ -115,13 +116,23 @@ public static class ItemRules
 
     public static ItemRule Edit(string key)
     {
-        if (!ByItem.TryGetValue(key, out var rule)) ByItem[key] = rule = new ItemRule();
+        if (!ByItem.TryGetValue(key, out var rule))
+        {
+            ByItem[key] = rule = new ItemRule();
+            IndexLevels();
+        }
         return rule;
     }
 
     public static bool Remove(ItemCategory c) => ByCategory.Remove(c);
     public static bool Remove(ItemCategory c, Rarity r) => ByCategoryRarity.Remove((c, r));
-    public static bool Remove(string key) => ByItem.Remove(key);
+
+    public static bool Remove(string key)
+    {
+        if (!ByItem.Remove(key)) return false;
+        IndexLevels();
+        return true;
+    }
 
     // Tables only, no save write (self-checks).
     public static void UseForTest(string json) => Apply(JsonValue.Parse(json).AsJsonObject, "test rules");
@@ -132,6 +143,7 @@ public static class ItemRules
         ByCategory.Clear();
         ByCategoryRarity.Clear();
         ByItem.Clear();
+        ByItemLevel.Clear();
         HasDockRules = false;
     }
 
@@ -174,6 +186,7 @@ public static class ItemRules
                 var rule = ParseRule(kv.Value);
                 if (rule != null) ByItem[kv.Key] = rule;
             }
+        IndexLevels();
         UpdateHasDockRules();
     }
 
@@ -184,6 +197,16 @@ public static class ItemRules
         foreach (var r in ByCategoryRarity.Values) any |= r.dockAction != DockAction.Default;
         foreach (var r in ByItem.Values) any |= r.dockAction != DockAction.Default;
         HasDockRules = any;
+    }
+
+    private static void IndexLevels()
+    {
+        ByItemLevel.Clear();
+        foreach (var kv in ByItem)
+        {
+            int at = kv.Key.LastIndexOf('@');
+            if (at > 0 && int.TryParse(kv.Key.Substring(at + 1), out int level)) ByItemLevel[(kv.Key.Substring(0, at), level)] = kv.Value;
+        }
     }
 
     private static JsonObject ToJson(ItemRule rule)

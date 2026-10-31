@@ -8,6 +8,7 @@ using Behaviour.Unit;
 using Behaviour.Util;
 using Behaviour.Weapons;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using IgiQoL.Features.DroneModes;
 using IgiQoL.UI;
 using Source.Data.Persistable;
@@ -128,7 +129,7 @@ internal static class OrePreferenceCheck
     private static IEnumerator CheckPicks(SelfCheckContext ctx, List<OreItemData> known)
     {
         yield return SelfCheckContext.EnsureInSpace();
-        var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var ship = Fleet.Flagship;
         var poi = MapPointOfInterest.current;
         var bay = ship != null ? ship.droneBayModule : null;
         if (ship == null || poi == null || bay == null || ship.spaceShipData.droneSlots.Count == 0)

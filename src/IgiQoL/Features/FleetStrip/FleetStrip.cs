@@ -124,13 +124,16 @@ public sealed class FleetStripRow : MonoBehaviour
 
     public FleetPanelRow row;
     public Button stop, hold, regroup, holdFire, aggressive, defensive, escort, tractor, drones, cargo, settings;
-    public Image tractorIcon, dronesIcon;
+    public Image tractorIcon;
     public RectTransform strip;
 
     private readonly List<SpaceShip> one = new(1);
     private SpaceShip cachedShip;
     private TractorModule tractorModule;
     private DroneBayModule droneBay;
+    // What the tiles last showed, so unchanged state costs nothing.
+    private FleetStance lastStance = (FleetStance)(-1);
+    private int lastDeployed = -1;
 
     public void Build(FleetPanelRow owner)
     {
@@ -159,7 +162,6 @@ public sealed class FleetStripRow : MonoBehaviour
         cargo = Tile(PoiIconKeys.Fleet("FleetCargo"), ColorHelper.offWhite, "Cargo", OnCargo);
         settings = Tile(Kit.Icon("Info", PoiIconKeys.RouteUi("Edit")), ColorHelper.offWhite, "Ship settings", OnSettings);
         tractorIcon = tractor.transform.Find("Icon").GetComponent<Image>();
-        dronesIcon = drones.transform.Find("Icon").GetComponent<Image>();
         Refresh();
     }
 
@@ -240,9 +242,10 @@ public sealed class FleetStripRow : MonoBehaviour
         SetActive(aggressive, fleet);
         SetActive(defensive, fleet);
         SetActive(escort, fleet);
-        if (data != null)
+        // SetTileState recolours the border (a Find and an array each); only when the state changed.
+        if (data != null && data.fleetStance != lastStance)
         {
-            var stance = data.fleetStance;
+            var stance = lastStance = data.fleetStance;
             FleetBarParts.SetTileState(holdFire, stance == FleetStance.HoldFire ? FleetTileState.Active : FleetTileState.Normal);
             FleetBarParts.SetTileState(aggressive, stance == FleetStance.Aggressive ? FleetTileState.Active : FleetTileState.Normal);
             FleetBarParts.SetTileState(defensive, stance == FleetStance.Defensive ? FleetTileState.Active : FleetTileState.Normal);
@@ -253,7 +256,14 @@ public sealed class FleetStripRow : MonoBehaviour
         if (data != null) tractorIcon.color = data.tractorOff ? ColorHelper.fleetTractorOff : ColorHelper.fleetTractorOn;
         SetActive(drones, droneBay != null);
         if (droneBay != null)
-            FleetBarParts.SetTileState(drones, droneBay.AreDronesDeployed() ? FleetTileState.ToggledOn : FleetTileState.Normal);
+        {
+            int deployed = droneBay.AreDronesDeployed() ? 1 : 0;
+            if (deployed != lastDeployed)
+            {
+                lastDeployed = deployed;
+                FleetBarParts.SetTileState(drones, deployed == 1 ? FleetTileState.ToggledOn : FleetTileState.Normal);
+            }
+        }
         SetActive(cargo, manage && !row.isFlagship);
     }
 

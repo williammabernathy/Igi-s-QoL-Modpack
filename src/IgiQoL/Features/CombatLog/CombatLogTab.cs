@@ -49,11 +49,20 @@ public static class CombatLogTab
         return scope < CombatLog.Fights.Count ? CombatLog.Fights[scope] : null;
     }
 
-    // Rebuilt once a second while something new was recorded.
+    // Refreshed once a second while something new was recorded; rows are built once and only their texts change.
     internal sealed class CombatTable : MonoBehaviour
     {
+        private sealed class Cells
+        {
+            public RectTransform row;
+            public TMP_Text[] text;
+        }
+
         private int version = -1;
         private float next;
+        private TMP_Text empty, summary, more;
+        private RectTransform header;
+        private readonly List<Cells> pool = new();
         internal int RowCount { get; private set; }
 
         private void Update()
@@ -61,65 +70,102 @@ public static class CombatLogTab
             if (Time.unscaledTime < next || version == CombatLog.Version) return;
             next = Time.unscaledTime + 1f;
             version = CombatLog.Version;
-            Rebuild();
+            Refresh();
         }
 
-        private void Rebuild()
+        private void Refresh()
         {
             var column = (RectTransform)transform;
-            for (int i = column.childCount - 1; i >= 0; i--)
-            {
-                var child = column.GetChild(i).gameObject;
-                child.SetActive(false);
-                Destroy(child);
-            }
             RowCount = 0;
             var fight = Selected();
-            if (fight == null || fight.dealt + fight.taken <= 0)
+            bool has = fight != null && fight.dealt + fight.taken > 0;
+            if (empty == null && !has) empty = Kit.Muted(column, "Nothing recorded yet. Hits by and on your ships, drones and fighters show up here.");
+            if (empty != null) empty.gameObject.SetActive(!has);
+            if (summary != null) summary.gameObject.SetActive(has);
+            if (header != null) header.gameObject.SetActive(has);
+            if (!has)
             {
-                Kit.Muted(column, "Nothing recorded yet. Hits by and on your ships, drones and fighters show up here.");
+                foreach (var c in pool) c.row.gameObject.SetActive(false);
+                if (more != null) more.gameObject.SetActive(false);
                 return;
             }
+
             float secs = fight.Duration;
-            Kit.Label(column, $"{FormatString.FormatTime(secs)} of fighting. Dealt {GameMath.FormatNumber((float)fight.dealt)} ({GameMath.FormatNumber((float)(fight.dealt / secs))}/s), taken {GameMath.FormatNumber((float)fight.taken)} ({GameMath.FormatNumber((float)(fight.taken / secs))}/s), kills {fight.kills}.");
+            if (summary == null) summary = Kit.Label(column, "");
+            Set(summary, $"{FormatString.FormatTime(secs)} of fighting. Dealt {GameMath.FormatNumber((float)fight.dealt)} ({GameMath.FormatNumber((float)(fight.dealt / secs))}/s), taken {GameMath.FormatNumber((float)fight.taken)} ({GameMath.FormatNumber((float)(fight.taken / secs))}/s), kills {fight.kills}.");
 
             bool dealtView = view <= View.DealtToTarget;
-            var header = Kit.Row(column, 6f, 20f);
-            Kit.Label(header, CombatLog.ViewName(view)).color = ColorHelper.stationCardTitle;
-            Head(header, "Damage", 80f);
-            Head(header, "Share", 46f);
-            Head(header, "Per s", 64f);
-            Head(header, "Hits", 50f);
-            Head(header, "Crit", 44f);
-            Head(header, "Biggest", 66f);
-            Kit.Tooltip(Head(header, "Shd/Arm/Hull", 104f), "Shield / armour / hull", "Of each row's damage, the percent absorbed by shields, absorbed by armour, and taken off the hull.");
-            if (dealtView) Head(header, "Kills", 40f);
+            if (header == null)
+            {
+                header = Kit.Row(column, 6f, 20f);
+                Kit.Label(header, CombatLog.ViewName(view)).color = ColorHelper.stationCardTitle;
+                Head(header, "Damage", 80f);
+                Head(header, "Share", 46f);
+                Head(header, "Per s", 64f);
+                Head(header, "Hits", 50f);
+                Head(header, "Crit", 44f);
+                Head(header, "Biggest", 66f);
+                Kit.Tooltip(Head(header, "Shd/Arm/Hull", 104f), "Shield / armour / hull", "Of each row's damage, the percent absorbed by shields, absorbed by armour, and taken off the hull.");
+                if (dealtView) Head(header, "Kills", 40f);
+            }
 
             double whole = dealtView ? fight.dealt : fight.taken;
             var rows = CombatLog.Sorted(fight, view);
-            for (int i = 0; i < rows.Count && i < MaxRows; i++)
+            int shown = Mathf.Min(rows.Count, MaxRows);
+            for (int i = 0; i < shown; i++)
             {
                 var s = rows[i];
-                var r = Kit.Row(column, 6f, 20f);
-                var name = Kit.Label(r, s.label);
-                name.overflowMode = TextOverflowModes.Ellipsis;
-                Cell(r, GameMath.FormatNumber((float)s.total), 80f);
-                Cell(r, CombatLog.Pct(s.total, whole) + "%", 46f);
-                Cell(r, GameMath.FormatNumber((float)(s.total / secs)), 64f);
-                Cell(r, s.hits.ToString(), 50f);
-                Cell(r, CombatLog.Pct(s.crits, s.hits) + "%", 44f);
-                Cell(r, GameMath.FormatNumber((float)s.max), 66f);
-                Cell(r, $"{CombatLog.Pct(s.shield, s.total)}/{CombatLog.Pct(s.armor, s.total)}/{CombatLog.Pct(s.hull, s.total)}", 104f);
-                if (dealtView) Cell(r, s.kills > 0 ? s.kills.ToString() : "", 40f);
-                RowCount++;
+                if (i == pool.Count) pool.Add(NewRow(column, dealtView));
+                var c = pool[i];
+                c.row.gameObject.SetActive(true);
+                var t = c.text;
+                Set(t[0], s.label);
+                Set(t[1], GameMath.FormatNumber((float)s.total));
+                Set(t[2], CombatLog.Pct(s.total, whole) + "%");
+                Set(t[3], GameMath.FormatNumber((float)(s.total / secs)));
+                Set(t[4], s.hits.ToString());
+                Set(t[5], CombatLog.Pct(s.crits, s.hits) + "%");
+                Set(t[6], GameMath.FormatNumber((float)s.max));
+                Set(t[7], $"{CombatLog.Pct(s.shield, s.total)}/{CombatLog.Pct(s.armor, s.total)}/{CombatLog.Pct(s.hull, s.total)}");
+                if (dealtView) Set(t[8], s.kills > 0 ? s.kills.ToString() : "");
             }
-            if (rows.Count > MaxRows) Kit.Muted(column, $"{rows.Count - MaxRows} smaller rows not shown.");
+            for (int i = shown; i < pool.Count; i++) pool[i].row.gameObject.SetActive(false);
+            RowCount = shown;
+
+            bool extra = rows.Count > MaxRows;
+            if (extra && more == null) more = Kit.Muted(column, "");
+            if (more != null)
+            {
+                more.gameObject.SetActive(extra);
+                if (extra)
+                {
+                    Set(more, $"{rows.Count - MaxRows} smaller rows not shown.");
+                    // Rows may have been added after it.
+                    if (more.transform.GetSiblingIndex() != column.childCount - 1) more.transform.SetAsLastSibling();
+                }
+            }
+        }
+
+        private static Cells NewRow(RectTransform column, bool dealtView)
+        {
+            var r = Kit.Row(column, 6f, 20f);
+            var c = new Cells { row = r, text = new TMP_Text[dealtView ? 9 : 8] };
+            c.text[0] = Kit.Label(r, "");
+            c.text[0].overflowMode = TextOverflowModes.Ellipsis;
+            float[] widths = { 80f, 46f, 64f, 50f, 44f, 66f, 104f, 40f };
+            for (int i = 1; i < c.text.Length; i++) c.text[i] = Cell(r, "", widths[i - 1]);
+            return c;
+        }
+
+        private static void Set(TMP_Text t, string text)
+        {
+            if (t.text != text) t.text = text;
         }
 
         private static TMP_Text Head(RectTransform row, string text, float width) =>
             Kit.Fixed(row, text, width, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
 
-        private static void Cell(RectTransform row, string text, float width) =>
+        private static TMP_Text Cell(RectTransform row, string text, float width) =>
             Kit.Fixed(row, text, width, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
     }
 }

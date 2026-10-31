@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Behaviour.UI;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Player;
 using Source.SpaceShip;
@@ -29,9 +30,7 @@ public static class LoadoutsTab
     internal static List<SpaceShipData> Ships()
     {
         var player = GamePlayer.current;
-        var list = new List<SpaceShipData> { player.currentSpaceShip };
-        foreach (var s in player.activeFleet)
-            if (s != null && !list.Contains(s)) list.Add(s);
+        var list = Fleet.Ships(withMercenaries: true);
         foreach (var s in player.spaceShips)
             if (s != null && !list.Contains(s) && !s.IsWorkBayAssigned && !s.IsEmpireFleetAssigned) list.Add(s);
         return list;

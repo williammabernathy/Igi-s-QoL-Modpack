@@ -4,13 +4,13 @@ using Behaviour.UI;
 using Behaviour.UI.HUD;
 using Behaviour.UI.Shared;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using IgiQoL.Features.DronesOnArrival;
 using IgiQoL.Features.DroneModes;
 using IgiQoL.Features.EngagementDistance;
 using IgiQoL.Features.MissileRetarget;
 using IgiQoL.Features.Separation;
 using IgiQoL.Features.TargetPriority;
-using Source.Player;
 using Source.SpaceShip;
 using TMPro;
 using UnityEngine;
@@ -23,8 +23,6 @@ public static class ShipPopup
 {
     private static RectTransform root;
 
-    public static SpaceShipData Current { get; private set; }
-
     public static bool IsOpen => root != null;
 
     public static RectTransform Body { get; private set; }
@@ -33,7 +31,6 @@ public static class ShipPopup
     {
         Close();
         if (ship == null) return;
-        Current = ship;
         root = UiCards.NewChild("IgiQoL_ShipPopup", HudManager.Instance.rootCanvasTransform);
         var canvas = root.gameObject.AddComponent<Canvas>();
         canvas.overrideSorting = true;
@@ -55,7 +52,8 @@ public static class ShipPopup
             Kit.Dropdown(row, new[] { "Default (" + MissileNames[(int)missile.Mode.Value] + ")", MissileNames[0], MissileNames[1], MissileNames[2] },
                 s.missileRetarget.HasValue ? (int)s.missileRetarget.Value + 1 : 0, i =>
                 {
-                    s.missileRetarget = i == 0 ? null : (RetargetMode)(i - 1);
+                    var e = ShipSettings.Edit(guid);
+                    e.missileRetarget = i == 0 ? null : (RetargetMode)(i - 1);
                     ShipSettings.Save(guid);
                 });
         }
@@ -69,7 +67,7 @@ public static class ShipPopup
             Kit.Dropdown(row, new[] { "Default (" + (drones.Default.Value ? "on" : "off") + ")", "On", "Off" },
                 s.dronesOnArrival == null ? 0 : (s.dronesOnArrival.Value ? 1 : 2), i =>
                 {
-                    s.dronesOnArrival = i == 0 ? null : i == 1;
+                    ShipSettings.Edit(guid).dronesOnArrival = i == 0 ? null : i == 1;
                     ShipSettings.Save(guid);
                 });
         }
@@ -84,15 +82,17 @@ public static class ShipPopup
             RectTransform anchorRow = null;
             Kit.Dropdown(row, DroneModes.ModeNames, (int)s.droneMode, i =>
             {
-                s.droneMode = (DroneMode)i;
-                radius.gameObject.SetActive(s.droneMode != DroneMode.Game);
-                anchorRow.gameObject.SetActive(s.droneMode != DroneMode.Game);
+                var e = ShipSettings.Edit(guid);
+                e.droneMode = (DroneMode)i;
+                radius.gameObject.SetActive(e.droneMode != DroneMode.Game);
+                anchorRow.gameObject.SetActive(e.droneMode != DroneMode.Game);
                 ShipSettings.Save(guid);
             }, 200f);
             radius = Kit.Input(row, s.droneRadius.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
             {
-                if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) s.droneRadius = Mathf.Clamp(f, 2f, 40f);
-                radius.SetTextWithoutNotify(s.droneRadius.ToString("0.#", CultureInfo.InvariantCulture));
+                var e = ShipSettings.Edit(guid);
+                if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) e.droneRadius = Mathf.Clamp(f, 2f, 40f);
+                radius.SetTextWithoutNotify(e.droneRadius.ToString("0.#", CultureInfo.InvariantCulture));
                 ShipSettings.Save(guid);
             }, 50f);
             radius.gameObject.SetActive(s.droneMode != DroneMode.Game);
@@ -102,18 +102,11 @@ public static class ShipPopup
             Kit.Tooltip(Kit.Label(anchorRow, "Drones stay with"), null, "The ship the drone mode is about: drones follow it, guard it, take its target and repair it first. When that ship isn't at the same place (travelling, docked, destroyed), the drones stay with their own ship.");
             var names = new List<string> { "This ship" };
             var guids = new List<string> { null };
-            var player = GamePlayer.current;
-            if (player != null)
+            foreach (var other in Fleet.Ships(withMercenaries: true))
             {
-                var fleet = new List<SpaceShipData>();
-                if (player.currentSpaceShip != null) fleet.Add(player.currentSpaceShip);
-                fleet.AddRange(player.activeFleet);
-                foreach (var other in fleet)
-                {
-                    if (other == null || other.guid == guid || guids.Contains(other.guid)) continue;
-                    names.Add(other.GetShipName());
-                    guids.Add(other.guid);
-                }
+                if (other.guid == guid || guids.Contains(other.guid)) continue;
+                names.Add(other.GetShipName());
+                guids.Add(other.guid);
             }
             int at = guids.IndexOf(s.droneAnchor);
             if (at < 0)
@@ -124,7 +117,7 @@ public static class ShipPopup
             }
             Kit.Dropdown(anchorRow, names, at, i =>
             {
-                s.droneAnchor = guids[i];
+                ShipSettings.Edit(guid).droneAnchor = guids[i];
                 ShipSettings.Save(guid);
             }, 200f);
             anchorRow.gameObject.SetActive(s.droneMode != DroneMode.Game);
@@ -138,15 +131,17 @@ public static class ShipPopup
             TMP_InputField field = null;
             Kit.Dropdown(row, new[] { "Auto (game default)", "Weapons' max range", "Fixed distance" }, (int)s.engagement, i =>
             {
-                s.engagement = (EngagementMode)i;
-                field.gameObject.SetActive(s.engagement == EngagementMode.Fixed);
+                var e = ShipSettings.Edit(guid);
+                e.engagement = (EngagementMode)i;
+                field.gameObject.SetActive(e.engagement == EngagementMode.Fixed);
                 ShipSettings.Save(guid);
             });
             field = Kit.Input(row, s.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
             {
+                var e = ShipSettings.Edit(guid);
                 if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
-                    s.engagementDistance = Mathf.Clamp(f, 1f, 30f);
-                field.SetTextWithoutNotify(s.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture));
+                    e.engagementDistance = Mathf.Clamp(f, 1f, 30f);
+                field.SetTextWithoutNotify(e.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture));
                 ShipSettings.Save(guid);
             }, 70f);
             field.gameObject.SetActive(s.engagement == EngagementMode.Fixed);
@@ -162,7 +157,7 @@ public static class ShipPopup
             Kit.Dropdown(row, new[] { "Default (" + (separation.Default.Value ? "on" : "off") + ")", "On", "Off" },
                 s.separation == null ? 0 : (s.separation.Value ? 1 : 2), i =>
                 {
-                    s.separation = i == 0 ? null : i == 1;
+                    ShipSettings.Edit(guid).separation = i == 0 ? null : i == 1;
                     ShipSettings.Save(guid);
                 });
         }
@@ -179,7 +174,6 @@ public static class ShipPopup
         if (root != null) Object.Destroy(root.gameObject);
         root = null;
         Body = null;
-        Current = null;
     }
 
     private static readonly float?[] RepickValues = { null, 0f, 2f, 5f, 10f };
@@ -194,7 +188,7 @@ public static class ShipPopup
         TargetPriority.RuleNames.CopyTo(rules, 1);
         Kit.Dropdown(row, rules, s.targetRule.HasValue ? (int)s.targetRule.Value + 1 : 0, i =>
         {
-            s.targetRule = i == 0 ? null : (TargetRule)(i - 1);
+            ShipSettings.Edit(guid).targetRule = i == 0 ? null : (TargetRule)(i - 1);
             ShipSettings.Save(guid);
         }, 230f);
 
@@ -204,7 +198,7 @@ public static class ShipPopup
         Kit.Dropdown(row, new[] { "Default (" + (repick > 0f ? "every " + repick.ToString("0.#", CultureInfo.InvariantCulture) + " s" : "never") + ")", "Never", "Every 2 s", "Every 5 s", "Every 10 s" },
             Mathf.Max(0, System.Array.IndexOf(RepickValues, s.repickSeconds)), i =>
             {
-                s.repickSeconds = RepickValues[i];
+                ShipSettings.Edit(guid).repickSeconds = RepickValues[i];
                 ShipSettings.Save(guid);
             }, 200f);
 
@@ -214,7 +208,7 @@ public static class ShipPopup
         Kit.Dropdown(row, new[] { "Default (" + (finish > 0 ? "below " + finish + "%" : "off") + ")", "Off", "Below 25% hull", "Below 50% hull" },
             Mathf.Max(0, System.Array.IndexOf(FinishValues, s.finishBelow)), i =>
             {
-                s.finishBelow = FinishValues[i];
+                ShipSettings.Edit(guid).finishBelow = FinishValues[i];
                 ShipSettings.Save(guid);
             }, 200f);
 
@@ -223,8 +217,9 @@ public static class ShipPopup
         TMP_InputField level = null;
         level = Kit.Input(row, s.maxLevel.ToString(CultureInfo.InvariantCulture), TMP_InputField.ContentType.IntegerNumber, v =>
         {
-            if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)) s.maxLevel = Mathf.Clamp(n, 0, 999);
-            level.SetTextWithoutNotify(s.maxLevel.ToString(CultureInfo.InvariantCulture));
+            var e = ShipSettings.Edit(guid);
+            if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)) e.maxLevel = Mathf.Clamp(n, 0, 999);
+            level.SetTextWithoutNotify(e.maxLevel.ToString(CultureInfo.InvariantCulture));
             ShipSettings.Save(guid);
         }, 70f);
 
@@ -233,8 +228,9 @@ public static class ShipPopup
         TMP_InputField leash = null;
         leash = Kit.Input(row, s.leash.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
         {
-            if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) s.leash = Mathf.Clamp(f, 0f, 200f);
-            leash.SetTextWithoutNotify(s.leash.ToString("0.#", CultureInfo.InvariantCulture));
+            var e = ShipSettings.Edit(guid);
+            if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) e.leash = Mathf.Clamp(f, 0f, 200f);
+            leash.SetTextWithoutNotify(e.leash.ToString("0.#", CultureInfo.InvariantCulture));
             ShipSettings.Save(guid);
         }, 70f);
         Kit.Muted(Body, "Target choice only changes what a ship picks by itself. Your clicks on the flagship and attack orders still decide first; the Escort and Defensive stances pick the ship's target, and weapon rules still apply under them.");
@@ -255,8 +251,9 @@ public static class ShipPopup
             Kit.Tooltip(Kit.Label(row, name), null, "What this weapon shoots while the ship is fighting. Follow the ship: the ship's target, as in the game. Any other choice: the best enemy by that rule among those this weapon can hit and has in range; with none in range it follows the ship. The ship's re-check and finish settings apply to weapons too.");
             Kit.Dropdown(row, follow, rule != null ? (int)rule.rule + 1 : 0, i =>
             {
-                if (i == 0) s.weaponRules.Remove(index);
-                else s.weaponRules[index] = new WeaponRule((TargetRule)(i - 1), item.identifier);
+                var e = ShipSettings.Edit(guid);
+                if (i == 0) e.weaponRules.Remove(index);
+                else e.weaponRules[index] = new WeaponRule((TargetRule)(i - 1), item.identifier);
                 ShipSettings.Save(guid);
             }, 200f);
         }

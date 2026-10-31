@@ -9,6 +9,7 @@ using Behaviour.Unit;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using Source.Item;
 using Source.Player;
 using Source.SpaceShip;
@@ -45,6 +46,11 @@ public sealed class FleetHolds : Feature
             "When a ship's hold can't take the loot its tractor beam is about to pick up, it moves cargo to other ships of your fleet at the same location, the flagship first, freeing the stack's volume plus a quarter of its hold. Favourites, ammo the ship uses, usable items and items your missions need stay where they are. ECHO then only heads home once every ship is full."));
     }
 
+    public override void OnActivated()
+    {
+        GameEvents.SaveLoaded += nextTry.Clear;
+    }
+
     // Vanilla IdleManager.ShouldKeepInCargo for any ship, plus warp fuel and mission items.
     public static bool Keep(SpaceShipData ship, SpaceShip unit, Inventory.InventoryItem stack)
     {
@@ -61,7 +67,7 @@ public sealed class FleetHolds : Feature
     {
         var list = new List<SpaceShip>();
         var player = GamePlayer.current;
-        var flagship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var flagship = Fleet.Flagship;
         if (flagship != null && flagship != from) list.Add(flagship);
         var rest = new List<SpaceShip>();
         foreach (var data in player.activeFleet)
@@ -91,13 +97,15 @@ public sealed class FleetHolds : Feature
         foreach (var stack in stacks)
         {
             if (freed >= want) break;
+            int left = stack.count;
             foreach (var to in receivers)
             {
-                if (freed >= want || stack.count <= 0) break;
-                int n = Mathf.Min(stack.count, Mathf.CeilToInt((want - freed) / stack.item.m3));
+                if (freed >= want || left <= 0) break;
+                int n = Mathf.Min(left, Mathf.CeilToInt((want - freed) / stack.item.m3));
                 var item = stack.item;
                 int done = PlayerCargo.MoveStack(data.cargo, stack, n, to.spaceShipData.cargo);
                 if (done <= 0) continue;
+                left -= done;
                 freed += done * item.m3;
                 moved?.Add($"{done} {Source.Util.Translation.Translate(item.displayName)} to {to.spaceShipData.GetShipName()}");
             }

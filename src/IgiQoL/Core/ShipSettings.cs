@@ -79,16 +79,10 @@ public sealed class ShipSettings
         else record.Remove("missileRetarget");
         if (s.dronesOnArrival.HasValue) record["dronesOnArrival"] = s.dronesOnArrival.Value;
         else record.Remove("dronesOnArrival");
-        if (s.engagement != EngagementMode.Auto)
-        {
-            record["engagement"] = s.engagement.ToString();
-            record["engagementDistance"] = s.engagementDistance;
-        }
-        else
-        {
-            record.Remove("engagement");
-            record.Remove("engagementDistance");
-        }
+        if (s.engagement != EngagementMode.Auto) record["engagement"] = s.engagement.ToString();
+        else record.Remove("engagement");
+        if (s.engagementDistance != Default.engagementDistance) record["engagementDistance"] = s.engagementDistance;
+        else record.Remove("engagementDistance");
         if (s.targetRule.HasValue) record["targetRule"] = s.targetRule.Value.ToString();
         else record.Remove("targetRule");
         if (s.repickSeconds.HasValue) record["repickSeconds"] = s.repickSeconds.Value;
@@ -113,19 +107,12 @@ public sealed class ShipSettings
             record["weaponRules"] = list;
         }
         else record.Remove("weaponRules");
-        if (s.droneMode != DroneMode.Game)
-        {
-            record["droneMode"] = s.droneMode.ToString();
-            record["droneRadius"] = s.droneRadius;
-            if (s.droneAnchor != null) record["droneAnchor"] = s.droneAnchor;
-            else record.Remove("droneAnchor");
-        }
-        else
-        {
-            record.Remove("droneMode");
-            record.Remove("droneRadius");
-            record.Remove("droneAnchor");
-        }
+        if (s.droneMode != DroneMode.Game) record["droneMode"] = s.droneMode.ToString();
+        else record.Remove("droneMode");
+        if (s.droneRadius != Default.droneRadius) record["droneRadius"] = s.droneRadius;
+        else record.Remove("droneRadius");
+        if (s.droneAnchor != null) record["droneAnchor"] = s.droneAnchor;
+        else record.Remove("droneAnchor");
         if (s.separation.HasValue) record["separation"] = s.separation.Value;
         else record.Remove("separation");
     }

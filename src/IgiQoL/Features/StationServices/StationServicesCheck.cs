@@ -102,9 +102,6 @@ internal static class StationServicesCheck
             if (job.spaceshipGuid == ship.guid && !job.autoRepair) { paid = true; perUnit = job.costPerUnit; }
     }
 
-    private static SpaceShip UnitOf(SpaceShipData s) =>
-        s == GamePlayer.current.currentSpaceShip ? GameplayManager.Instance.spaceShip : s.unit as SpaceShip;
-
     private static InventoryItemType AmmoOf(SpaceShip unit)
     {
         if (unit.torpedoBayModule != null && unit.torpedoBayModule.ammoType != null) return unit.torpedoBayModule.ammoType;
@@ -122,7 +119,7 @@ internal static class StationServicesCheck
         // Prefer a fleet ship over the flagship: vanilla ECHO only restocks the flagship.
         foreach (var s in Services.FleetShips())
         {
-            var u = UnitOf(s);
+            var u = Fleet.Unit(s);
             var a = u != null ? AmmoOf(u) : null;
             seen += $"{s.GetShipName()}(unit={(u != null)}, ammo={(a != null ? Translation.Translate(a.displayName) : "none")}) ";
             if (a == null || ship != null && ship != GamePlayer.current.currentSpaceShip) continue;
@@ -284,6 +281,29 @@ internal static class StationServicesCheck
             detail = $"keep={keep} stored {stored}->{storage.GetCount(ore)} cargo 9->{ship.cargo.GetCount(ore)} credits +{player.credits - before} (expected {ore.sellValue * 5})";
             if (storage.GetCount(ore) == keep && ship.cargo.GetCount(ore) == 0 && player.credits - before == ore.sellValue * 5) ctx.Pass("sell-above", detail);
             else ctx.Fail("sell-above", detail);
+
+            // Sell above N over two ships: the quote books the first ship's deposit, so it matches what the run earns.
+            SpaceShipData wing = null;
+            foreach (var s in Services.FleetShips())
+                if (s != ship && s.cargo != null) { wing = s; break; }
+            if (wing == null) ctx.Skip("sell-above-fleet", "no fleet ship docked with you");
+            else
+            {
+                int wing0 = wing.cargo.GetCount(ore);
+                ctx.Cleanup(() => { wing.cargo.Remove(ore, wing.cargo.GetCount(ore)); if (wing0 > 0) wing.cargo.Add(ore, wing0); });
+                if (wing0 > 0) wing.cargo.Remove(ore, wing0);
+                ship.cargo.Add(ore, 9);
+                wing.cargo.Add(ore, 9);
+                keep = storage.GetCount(ore) + 4;
+                ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}}}");
+                before = player.credits;
+                var fleetQuote = Services.Sell(false);
+                var fleetRun = Services.Sell(true);
+                long expectedFleet = ore.sellValue * 14;
+                detail = $"keep={keep} quote={fleetQuote.credits} run={fleetRun.credits} credits +{player.credits - before} (expected {expectedFleet}) stored={storage.GetCount(ore)} cargo {ship.cargo.GetCount(ore)}/{wing.cargo.GetCount(ore)}";
+                if (fleetQuote.credits == expectedFleet && fleetRun.credits == expectedFleet && player.credits - before == expectedFleet && storage.GetCount(ore) == keep && ship.cargo.GetCount(ore) == 0 && wing.cargo.GetCount(ore) == 0) ctx.Pass("sell-above-fleet", detail);
+                else ctx.Fail("sell-above-fleet", detail);
+            }
 
             // Favourite stacks stay.
             ship.cargo.Add(ore, 3);
@@ -590,7 +610,7 @@ internal static class StationServicesCheck
         int ammo0 = 0;
         foreach (var s in Services.FleetShips())
         {
-            var u = UnitOf(s);
+            var u = Fleet.Unit(s);
             ammo = u != null ? AmmoOf(u) : null;
             if (ammo == null) continue;
             ammoShip = s;

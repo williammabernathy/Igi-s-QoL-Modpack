@@ -46,7 +46,12 @@ public sealed class MissileRetarget : Feature
 
 public sealed class MissileOverride : MonoBehaviour
 {
+    // Live overrides in the scene; lets the per-step prefix skip GetComponent when none exist.
+    public static int Live;
     public TargetableUnit target;
+
+    private void OnEnable() { Live++; }
+    private void OnDisable() { Live--; }
 }
 
 [HarmonyPatch]
@@ -107,6 +112,7 @@ internal static class MissilePatches
     [HarmonyPatch(typeof(Missile), "UpdateTrackingTarget")]
     private static bool UpdateTrackingTargetPrefix(Missile __instance)
     {
+        if (MissileOverride.Live <= 0) return true;
         var feature = MissileRetarget.Instance;
         if (!feature.Active) return true;
         try

@@ -9,6 +9,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Combat;
 using Source.Galaxy;
@@ -71,9 +72,9 @@ public sealed class CombatLog : Feature
     public CombatLog() { Instance = this; }
 
     public override string Id => "CombatLog";
-    public override string Title => "Combat log";
-    public override string Description => "Records the damage your ships, drones and fighters deal and take: by weapon, damage type, ship and enemy type, split into shield, armour and hull, with hits, crits and kills. See it on the Combat tab.";
-    public override string SettingsTab => "Combat";
+    public override string Title => "DPS parser";
+    public override string Description => "Records the damage your ships, drones and fighters deal and take: by weapon, damage type, ship and enemy type, split into shield, armour and hull, with hits, crits and kills. See it on the DPS parser tab.";
+    public override string SettingsTab => "DPS parser";
     public override Type[] PatchClasses => new[] { typeof(CombatLogPatches) };
 
     public ConfigEntry<int> FightGapSeconds;
@@ -107,7 +108,7 @@ public sealed class CombatLog : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("combat", "Combat", 7, CombatLogTab.Build);
+        ModWindow.AddTab("combat", "DPS parser", 7, CombatLogTab.Build);
         GameEvents.SaveLoaded += Reset;
         Plugin.Instance.StartCoroutine(WriteFinishedFights());
     }
@@ -119,9 +120,10 @@ public sealed class CombatLog : Feature
         while (true)
         {
             yield return wait;
-            if (!Active || !WriteFile.Value || Fights.Count == 0) continue;
-            var f = Fights[0];
-            if (!f.written && Time.time - f.last > FightGapSeconds.Value) WriteFight(f);
+            if (!Active || !WriteFile.Value) continue;
+            float gap = FightGapSeconds.Value;
+            foreach (var f in Fights)
+                if (!f.written && Time.time - f.last > gap) WriteFight(f);
         }
     }
 
@@ -132,7 +134,7 @@ public sealed class CombatLog : Feature
             ctx.Pass("live", $"dealt {Session.dealt:0} in {Session.views[(int)View.DealtByWeapon].Count} weapon rows, taken {Session.taken:0}, kills {Session.kills}, fights {Fights.Count}");
         else ctx.Skip("live", "no combat happened during the harness");
 
-        var flagship = GameplayManager.Instance?.spaceShip;
+        var flagship = Fleet.Flagship;
         var ourTurret = flagship != null ? flagship.GetComponentInChildren<AbstractTurret>() : null;
         var poi = MapPointOfInterest.current;
         if (ourTurret == null || poi == null)
@@ -183,7 +185,7 @@ public sealed class CombatLog : Feature
         ModWindow.Close();
 
         string text = Describe(Session, "Session");
-        if (text.Contains(dealtRow.label) && text.Contains(takenRow.label)) ctx.Pass("file-text", $"{text.Length} chars, {text.Split('\n').Length} lines");
+        if (dealtRow != null && takenRow != null && text.Contains(dealtRow.label) && text.Contains(takenRow.label)) ctx.Pass("file-text", $"{text.Length} chars, {text.Split('\n').Length} lines");
         else ctx.Fail("file-text", text.Length > 200 ? text.Substring(0, 200) : text);
     }
 
@@ -222,7 +224,6 @@ public sealed class CombatLog : Feature
     private static Fight Current(float now)
     {
         if (Fights.Count > 0 && now - Fights[0].last <= Instance.FightGapSeconds.Value) return Fights[0];
-        if (Fights.Count > 0 && !Fights[0].written && Instance.WriteFile.Value) WriteFight(Fights[0]);
         var f = new Fight(now);
         Fights.Insert(0, f);
         if (Fights.Count > KeptFights) Fights.RemoveAt(Fights.Count - 1);
@@ -292,7 +293,7 @@ public sealed class CombatLog : Feature
     {
         if (source is Drone) return Definition(source);
         if (turret != null && turret.item != null) return turret.item;
-        return (object)turret ?? Definition(source);
+        return turret != null ? turret : Definition(source);
     }
 
     private static object Definition(AbstractUnit unit) => (object)unit.unitData?.unitDefinition ?? unit;

@@ -1,9 +1,11 @@
 <Project>
   <!--
     Shared build settings for every mod in this repo.
+    GameDir defaults to Steam's default library on Windows and to this machine's library elsewhere.
     Override the game path per machine with:  dotnet build -p:GameDir="/path/to/Vanguard Galaxy"
   -->
   <PropertyGroup>
+    <GameDir Condition="'$(GameDir)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">C:\Program Files (x86)\Steam\steamapps\common\Vanguard Galaxy</GameDir>
     <GameDir Condition="'$(GameDir)' == ''">/mnt/data/SteamLibrary/steamapps/common/Vanguard Galaxy</GameDir>
     <ManagedDir>$(GameDir)/VanguardGalaxy_Data/Managed</ManagedDir>
     <BepInExDir>$(GameDir)/BepInEx</BepInExDir>

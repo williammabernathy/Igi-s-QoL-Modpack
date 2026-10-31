@@ -34,6 +34,12 @@ public sealed class TargetPriority : Feature
     public override string Description => "Decides which enemy your ships attack when they pick a target themselves: the nearest one (the game's choice), the most damaged, the one hurting your fleet most, and more. Single weapons can have their own rule too, for example one turret on drones while the rest follow the ship. Your clicks and attack orders always win. Set it per ship with the last button on its row in the fleet panel.";
     public override Type[] PatchClasses => new[] { typeof(TargetPriorityPatches) };
 
+    public override void OnActivated()
+    {
+        GameEvents.SaveLoaded += TargetPriorityPatches.Reset;
+        GameEvents.MainMenuShown += TargetPriorityPatches.Reset;
+    }
+
     public ConfigEntry<TargetRule> Rule;
     public ConfigEntry<float> RepickSeconds;
     public ConfigEntry<int> FinishBelowPercent;
@@ -127,7 +133,7 @@ public sealed class TargetPriority : Feature
         if (r.rule == TargetRule.LowestHull && r.repick == 2f && r.finishBelow == 25 && savedRule == "LowestHull") ctx.Pass("settings-roundtrip", detail);
         else ctx.Fail("settings-roundtrip", detail);
 
-        var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var ship = Fleet.Flagship;
         var module = ship != null ? ship.GetModule<CombatModule>() : null;
         var poi = MapPointOfInterest.current;
         if (module == null || poi == null || module.blocked || module.holdFire)
@@ -187,7 +193,7 @@ public sealed class TargetPriority : Feature
             // Re-pick: the ship holds the nearest enemy; the scan postfix should move it to the weak one.
             module.ResetCurrentTargets();
             module.SetAutoTarget(nearest);
-            TargetPriorityPatches.ClearTimers();
+            TargetPriorityPatches.Reset();
             module.UpdateAvailableTargets(candidates);
             string repickDetail = $"autoTarget={Name(module.autoTarget)} weak={Name(weak)} from={Name(nearest)}";
             if (module.autoTarget == weak) ctx.Pass("repick", repickDetail);
@@ -321,10 +327,9 @@ internal static class TargetRanking
     // With a turret, only enemies that weapon can hit and has in range count, and distance is measured from it.
     public static TargetableUnit Pick(AbstractTargetingModule module, List<TargetableUnit> candidates, TargetRule rule, TargetPriority.Resolved r, bool validate, AbstractTurret turret = null)
     {
-        var flagship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var flagship = Fleet.Flagship;
         bool leashed = turret == null && r.leash > 0f && flagship != null && module.parent != flagship && module.parent.autoActions is WingmanActions;
         Vector2 from = turret != null ? turret.transform.position : module.transform.position;
-        if (rule == TargetRule.MostDamage) CollectFleet();
 
         TargetableUnit best = null;
         int bestTier = 0;
@@ -356,14 +361,13 @@ internal static class TargetRanking
     // True when the candidate beats the current target by enough to be worth switching.
     public static bool ClearlyBetter(Vector2 from, TargetableUnit candidate, TargetableUnit current, TargetRule rule, TargetPriority.Resolved r)
     {
-        var flagship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var flagship = Fleet.Flagship;
         if (r.maxLevel > 0)
         {
             int ct = candidate is AbstractUnit cu && cu.level > r.maxLevel ? 1 : 0;
             int pt = current is AbstractUnit pu && pu.level > r.maxLevel ? 1 : 0;
             if (ct != pt) return ct < pt;
         }
-        if (rule == TargetRule.MostDamage) CollectFleet();
         float a = Key(rule, candidate, Vector2.Distance(from, candidate.transform.position), flagship);
         float b = Key(rule, current, Vector2.Distance(from, current.transform.position), flagship);
         return a < b - Margin(rule, b);
@@ -428,10 +432,10 @@ internal static class TargetRanking
         return total;
     }
 
-    private static void CollectFleet()
+    internal static void CollectFleet()
     {
         fleetUnits.Clear();
-        var flagship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var flagship = Fleet.Flagship;
         if (flagship != null) fleetUnits.Add(flagship);
         var player = GamePlayer.current;
         if (player == null) return;
@@ -463,7 +467,12 @@ internal static class TargetPriorityPatches
     internal static readonly Dictionary<AbstractTurret, WeaponPick> WeaponPicks = new(new ReferenceComparer());
     private static readonly List<AbstractTurret> deadTurrets = new();
 
-    public static void ClearTimers() => nextRepick.Clear();
+    // Keys are Unity objects that die with the save; drop them on load and at the main menu.
+    internal static void Reset()
+    {
+        nextRepick.Clear();
+        WeaponPicks.Clear();
+    }
 
     private static bool Resolve(AbstractTargetingModule module, out TargetPriority.Resolved r)
     {
@@ -497,6 +506,7 @@ internal static class TargetPriorityPatches
         try
         {
             if (!Resolve(__instance, out var r) || r.Vanilla) return true;
+            if (r.rule == TargetRule.MostDamage) TargetRanking.CollectFleet();
             __result = TargetRanking.Pick(__instance, __instance.filteredTargets, r.rule, r, validate: false);
             return false;
         }
@@ -531,11 +541,17 @@ internal static class TargetPriorityPatches
         if (current == null || module.manualTarget != null || module.blocked || module.holdFire) return;
 
         var unit = module.parent;
-        var flagship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var flagship = Fleet.Flagship;
         if (r.leash > 0f && flagship != null && unit != flagship && unit.autoActions is WingmanActions
             && Vector2.Distance(current.transform.position, flagship.transform.position) > r.leash)
         {
             module.ResetAutoTarget();
+            if (list != null)
+            {
+                if (r.rule == TargetRule.MostDamage) TargetRanking.CollectFleet();
+                var pick = TargetRanking.Pick(module, list, r.rule, r, validate: true);
+                if (pick != null) module.SetAutoTarget(pick);
+            }
             return;
         }
 
@@ -545,6 +561,7 @@ internal static class TargetPriorityPatches
         nextRepick[module] = now + r.repick;
 
         if (TargetRanking.BelowFinish(current, r.finishBelow)) return;
+        if (r.rule == TargetRule.MostDamage) TargetRanking.CollectFleet();
         var best = TargetRanking.Pick(module, list, r.rule, r, validate: true);
         if (best == null || best == current || !TargetRanking.ClearlyBetter(module.transform.position, best, current, r.rule, r)) return;
         module.SetAutoTarget(best);
@@ -559,6 +576,7 @@ internal static class TargetPriorityPatches
         if (turrets == null) return;
         bool engaged = module.priorityTarget != null && !module.blocked && !module.holdFire && !ManualWins(module);
         float now = Time.time;
+        bool fleetCollected = false;
         for (int i = 0; i < turrets.Length; i++)
         {
             var turret = turrets[i];
@@ -583,6 +601,11 @@ internal static class TargetPriorityPatches
             {
                 pick.due = now + r.repick;
                 continue;
+            }
+            if (rule.rule == TargetRule.MostDamage && !fleetCollected)
+            {
+                TargetRanking.CollectFleet();
+                fleetCollected = true;
             }
             var best = TargetRanking.Pick(module, list, rule.rule, r, validate: true, turret);
             if (best == null)

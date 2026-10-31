@@ -8,6 +8,7 @@ using Behaviour.Weapons;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using Source.Galaxy.POI;
 using Source.Galaxy.POI.Station;
 using Source.MissionSystem;
@@ -42,6 +43,8 @@ public sealed class EchoMissions : Feature
         foreach (var k in MissionKinds.All)
             Kinds[k.Id] = cfg.Bind(Id, k.Id, true, SettingInfo.Describe(k.Label, k.Help));
     }
+
+    public override void OnActivated() => EchoPriority.EchoPriority.EnsureTab();
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
@@ -150,7 +153,9 @@ public static class MissionKinds
             ctx.Skip("kinds", "not docked at a station with a mission board");
             return;
         }
-        var type = GameplayManager.Instance.spaceShip.GetPreferredGameplayType();
+        var ship = Fleet.Flagship;
+        if (ship == null) { ctx.Skip("kinds", "not in space"); return; }
+        var type = ship.GetPreferredGameplayType();
         if (type != GameplayType.Combat)
         {
             ctx.Skip("kinds", $"the flagship's preferred activity is {type}; the check uses combat missions");

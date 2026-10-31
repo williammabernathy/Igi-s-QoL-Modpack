@@ -54,12 +54,14 @@ public sealed class DroneModes : Feature
     // Your flagship or a fleet ship with that guid, if it is in space here.
     public static SpaceShip FindShip(string guid)
     {
-        SpaceShip found = null;
-        var flagship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
-        if (flagship != null && flagship.spaceShipData != null && flagship.spaceShipData.guid == guid) found = flagship;
-        else if (GamePlayer.current != null)
-            foreach (var d in GamePlayer.current.activeFleet)
-                if (d != null && d.guid == guid) { found = d.unit as SpaceShip; break; }
+        var player = GamePlayer.current;
+        if (player == null) return null;
+        SpaceShipData data = null;
+        if (player.currentSpaceShip != null && player.currentSpaceShip.guid == guid) data = player.currentSpaceShip;
+        else
+            foreach (var d in player.activeFleet)
+                if (d != null && d.guid == guid) { data = d; break; }
+        var found = data != null ? Fleet.Unit(data) : null;
         return found != null && !found.isDestroyed && !found.travelling && found.gameObject.activeInHierarchy ? found : null;
     }
 
@@ -244,7 +246,8 @@ public sealed class DroneModes : Feature
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
-        var ship = GameplayManager.Instance.spaceShip;
+        var ship = Fleet.Flagship;
+        if (ship == null) { ctx.Skip("settings-roundtrip", "not in space"); yield break; }
         var data = ship.spaceShipData;
         var g = data.guid;
         var before = ShipSettings.Get(g);
@@ -617,7 +620,7 @@ internal static class DroneModePatches
         try
         {
             var bay = __instance.droneBay;
-            var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+            var ship = Fleet.Flagship;
             if (bay == null || ship == null) return true;
             string guid = ship.spaceShipData.guid;
             var s = ShipSettings.Edit(guid);
@@ -652,7 +655,7 @@ internal static class DroneModePatches
         try
         {
             var label = __instance.behaviorLabel;
-            var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+            var ship = Fleet.Flagship;
             if (label == null || ship == null || !DroneModes.TryGet(ship, out var mode, out var radius, out _)) return;
             label.text = DroneModes.ShortName(mode, radius);
         }

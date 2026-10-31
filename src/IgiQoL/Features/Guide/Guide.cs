@@ -9,6 +9,7 @@ using Behaviour.Equipment.Turret.CombatTurrets;
 using Behaviour.Item;
 using Behaviour.Unit;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Combat;
 using Source.Item;
@@ -27,11 +28,11 @@ public sealed class Guide : Feature
     public Guide() { Instance = this; }
 
     public override string Id => "Guide";
-    public override string Title => "Combat guide";
-    public override string Description => "The Guide tab: damage types with the weapons that deal them and the armour weak to them, every armour type's resistance, how a hit is reduced on its way to the hull, and your ship's handling and crit numbers, all read from the game's data.";
+    public override string Title => "Stat reference";
+    public override string Description => "The Stat reference tab: damage types with the weapons that deal them and the armour weak to them, every armour type's resistance, how a hit is reduced on its way to the hull, and your ship's handling and crit numbers, all read from the game's data.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 
-    public override void OnActivated() => ModWindow.AddTab("guide", "Guide", 85, Build);
+    public override void OnActivated() => ModWindow.AddTab("guide", "Stat reference", 85, Build);
 
     internal sealed class WeaponType
     {
@@ -113,16 +114,15 @@ public sealed class Guide : Feature
     {
         Collect();
 
-        Kit.Heading(content, "How a hit lands");
-        Kit.Muted(content,
-            "1. The weapon rolls its damage: power / 5, times 0.8 to 1.25, spread over its shots per second. A critical hit multiplies it by 2 plus the weapon's critical damage bonus; with the Mega crit skill one hit can crit more than once.\n" +
-            "2. The weapon's bonus for its damage type and its general damage bonus are added on top.\n" +
-            "3. The target's damage reduction and its resistance to that damage type take their share off. Together they never remove more than 80%.\n" +
-            "4. Shields absorb the hit first and treat every damage type the same. Weapons with a damage-vs-shield bonus hit shields harder.\n" +
-            "5. Armour takes what's left: it cuts damage by its resistance, unless the armour is weak to that damage type, then it takes extra instead. Painter drones strip armour resistance for a while. Damage-vs-armour bonuses apply here.\n" +
-            "6. Whatever gets through comes off the hull.");
+        var hit = Section(content, "How a hit lands", first: true);
+        Kit.Text(hit, "1. The weapon rolls its damage: power / 5, times 0.8 to 1.25, spread over its shots per second. A critical hit multiplies it by 2 plus the weapon's critical damage bonus; with the Mega crit skill one hit can crit more than once.");
+        Kit.Text(hit, "2. The weapon's bonus for its damage type and its general damage bonus are added on top.");
+        Kit.Text(hit, "3. The target's damage reduction and its resistance to that damage type take their share off. Together they never remove more than 80%.");
+        Kit.Text(hit, "4. Shields absorb the hit first and treat every damage type the same. Weapons with a damage-vs-shield bonus hit shields harder.");
+        Kit.Text(hit, "5. Armour takes what's left: it cuts damage by its resistance, unless the armour is weak to that damage type, then it takes extra instead. Painter drones strip armour resistance for a while. Damage-vs-armour bonuses apply here.");
+        Kit.Text(hit, "6. Whatever gets through comes off the hull.");
 
-        Kit.Heading(content, "Damage types and the weapons that deal them");
+        var types = Section(content, "Damage types and the weapons that deal them");
         foreach (DamageType t in Enum.GetValues(typeof(DamageType)))
         {
             var sb = new StringBuilder();
@@ -132,10 +132,10 @@ public sealed class Guide : Feature
             sb.Clear();
             foreach (var a in Armours)
                 if (a.weak.Contains(t)) sb.Append(sb.Length > 0 ? ", " : "").Append(a.name).Append(" takes +").Append(Percent(a.minWeak, a.maxWeak));
-            Line(content, Colored(t) + ": " + weapons + "." + (sb.Length > 0 ? " Strong against armour: " + sb + "." : ""));
+            Kit.Text(types, Colored(t) + ": " + weapons + "." + (sb.Length > 0 ? " Strong against armour: " + sb + "." : ""));
         }
 
-        Kit.Heading(content, "Armour types");
+        var armours = Section(content, "Armour types");
         foreach (var a in Armours)
         {
             var sb = new StringBuilder(a.name).Append(": resists ").Append(Percent(a.minResist, a.maxResist));
@@ -151,60 +151,55 @@ public sealed class Guide : Feature
                 }
                 sb.Append(" (takes +").Append(Percent(a.minWeak, a.maxWeak)).Append(')');
             }
-            Line(content, sb.ToString());
+            Kit.Text(armours, sb.ToString());
         }
 
         ShipSection(content);
     }
 
-    // A wrapping, rich-text line in body colour (Kit.Label is one line, Kit.Muted is grey).
-    private static void Line(RectTransform content, string text)
+    // A heading with space above it, and a column whose lines sit a little apart so the tab doesn't read as one block.
+    private static RectTransform Section(RectTransform content, string title, bool first = false)
     {
-        var t = Kit.Muted(content, text);
-        t.color = ColorHelper.offWhite;
-        t.fontSize = 12f;
-        t.richText = true;
+        if (!first) Kit.Gap(content, 10f);
+        Kit.Heading(content, title);
+        return Kit.Column(content, 6f);
     }
 
     private static void ShipSection(RectTransform content)
     {
-        var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
-        Kit.Heading(content, "Your ship" + (ship != null ? ": " + ship.spaceShipData.GetShipName() : ""));
+        var ship = Fleet.Flagship;
+        var lines = Section(content, "Your ship" + (ship != null ? ": " + ship.spaceShipData.GetShipName() : ""));
         if (ship == null || ship.engine == null)
         {
-            Kit.Muted(content, "Shown while you're in space.");
+            Kit.Muted(lines, "Shown while you're in space.");
             return;
         }
         var rb = ship.rigidbody;
         float accel = ship.GetFullForwardAcceleration();
         float top = ship.GetReachableTopSpeed();
         float side = rb.mass > 0f ? ship.engine.sideThrust / rb.mass : 0f;
-        Line(content, $"Tonnage {ship.unitData.unitDefinition.tonnage}: the hull's mass is tonnage x 10 ({rb.mass:0}). Engines push against it, so a heavier hull with the same engine is slower to speed up, turn and sidestep.");
-        Line(content, $"Acceleration {accel:0.00} units/s² (thrust / mass), top speed {top:0.0} units/s, about {(accel > 0f ? top / accel : 0f):0} s from standstill.");
-        Line(content, $"Sidestep {side:0.00} units/s² (side thrust / mass): {0.5f * side * 9f:0.0} units in 3 s from standing, too little to dodge missiles, which turn on a 4-11 unit circle. Turning speed is rotational thrust against the hull's inertia, so it also falls with tonnage.");
+        Kit.Text(lines, $"Tonnage {ship.unitData.unitDefinition.tonnage}: the hull's mass is tonnage x 10 ({rb.mass:0}). Engines push against it, so a heavier hull with the same engine is slower to speed up, turn and sidestep.");
+        Kit.Text(lines, $"Acceleration {accel:0.00} units/s² (thrust / mass), top speed {top:0.0} units/s, about {(accel > 0f ? top / accel : 0f):0} s from standstill.");
+        Kit.Text(lines, $"Sidestep {side:0.00} units/s² (side thrust / mass): {0.5f * side * 9f:0.0} units in 3 s from standing, too little to dodge missiles, which turn on a 4-11 unit circle. Turning speed is rotational thrust against the hull's inertia, so it also falls with tonnage.");
         float precision = ship.GetPrecisionCrit();
-        Line(content, $"Base crit chance 3% + {precision * 100f:0.0}% from Precision ({ship.GetStat(EquipStat.Precision):0}), before weapon crit bonuses. Each crit multiplies damage by 2 plus the critical damage bonus (x{2f + ship.GetStat(EquipStat.CriticalDamage):0.00} for this ship).");
+        Kit.Text(lines, $"Base crit chance 3% + {precision * 100f:0.0}% from Precision ({ship.GetStat(EquipStat.Precision):0}), before weapon crit bonuses. Each crit multiplies damage by 2 plus the critical damage bonus (x{2f + ship.GetStat(EquipStat.CriticalDamage):0.00} for this ship).");
         var resists = new StringBuilder();
         foreach (DamageType t in Enum.GetValues(typeof(DamageType)))
         {
             float r = ship.GetStat(EquipStat.DamageReduction) + ship.GetStat(t.GetResistStat());
             resists.Append(resists.Length > 0 ? ", " : "").Append(Colored(t)).Append(' ').Append(Mathf.Min(80f, r * 100f).ToString("0")).Append('%');
         }
-        Line(content, "Incoming damage removed before shields: " + resists + ".");
+        Kit.Text(lines, "Incoming damage removed before shields: " + resists + ".");
 
         var stats = new[] { EquipStat.Thrust, EquipStat.SideThrust, EquipStat.RotationalThrust, EquipStat.Precision, EquipStat.CriticalChance, EquipStat.CriticalDamage, EquipStat.DamageReduction, EquipStat.DamageVsShield, EquipStat.DamageVsArmor };
-        var sb = new StringBuilder();
+        RectTransform descriptions = null;
         foreach (var s in stats)
         {
             string key = "@EquipStat" + s + "Description";
             if (!Translation.Exists(key)) continue;
             string name = Translation.Exists("@EquipStat" + s) ? Translation.Translate("@EquipStat" + s) : s.ToString();
-            sb.Append(name).Append(": ").Append(Translation.Translate(key)).Append('\n');
-        }
-        if (sb.Length > 0)
-        {
-            Kit.Heading(content, "The game's own stat descriptions");
-            Kit.Muted(content, sb.ToString().TrimEnd());
+            descriptions ??= Section(content, "The game's own stat descriptions");
+            Kit.Text(descriptions, "<b>" + name + "</b>: " + Translation.Translate(key));
         }
     }
 

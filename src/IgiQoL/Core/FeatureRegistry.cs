@@ -43,6 +43,7 @@ public static class FeatureRegistry
         new Features.StationServices.StationServices(),
         new Features.MissionDistance.MissionDistance(),
         new Features.EchoRetreat.EchoRetreat(),
+        new Features.Mods.Mods(),
     };
 
     public static readonly List<FeatureFailure> Failures = new();
@@ -72,9 +73,6 @@ public static class FeatureRegistry
                 feature.Harmony = new Harmony("igi.qol." + feature.Id);
                 foreach (var type in feature.PatchClasses)
                     feature.Harmony.CreateClassProcessor(type).Patch();
-                foreach (var type in feature.PatchClasses)
-                    PatchWarmup.Prepare(type);
-                PatchWarmup.Prepare(feature.GetType());
                 feature.OnActivated();
                 feature.Active = true;
                 int count = 0;
@@ -89,6 +87,6 @@ public static class FeatureRegistry
                 if (feature is CoreFeature) coreFailed = true;
             }
         }
-        Plugin.Log.LogInfo($"IgiQoL startup: {active} active, {disabled} disabled, {failed} failed (warm-up ineffective on this runtime: broken patches switch off on first use)");
+        Plugin.Log.LogInfo($"IgiQoL startup: {active} active, {disabled} disabled, {failed} failed");
     }
 }

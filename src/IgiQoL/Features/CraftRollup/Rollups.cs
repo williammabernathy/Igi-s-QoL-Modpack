@@ -137,6 +137,10 @@ public static class Rollups
 
     private const float Epsilon = 0.0001f;
 
+    // Refinery units of one ore needed to cover `need` of a material, counting what is already pending.
+    internal static int UnitsFor(int need, float pending, float yield, float mult) =>
+        Math.Max(1, Mathf.CeilToInt((need - pending) / (yield * mult) - Epsilon));
+
     // Ore at the station the refinery may take for a roll-up: unfavourited, not needed for missions, auto-refine allowed.
     public static Dictionary<OreItemData, int> RefinableOre(Refinery refinery)
     {
@@ -247,7 +251,7 @@ public static class Rollups
                         if (y > bestYield) { best = kv.Key; bestYield = y; }
                     }
                     if (best == null) break;
-                    int units = Math.Max(1, Mathf.CeilToInt((need - supply[mi]) / (bestYield * mult) - Epsilon));
+                    int units = UnitsFor(need, supply[mi], bestYield, mult);
                     units = Math.Min(units, ores[best]);
                     ores[best] -= units;
                     AddRefine(best, units);
@@ -547,7 +551,7 @@ public static class Rollups
             {
                 foreach (var rv in v["refines"].AsJsonArray)
                 {
-                    var ore = InventoryItemType.Get(rv["ore"].AsString ?? "")?.GetComponent<OreItemData>();
+                    var ore = InventoryItemType.TryGet(rv["ore"].AsString ?? "", out var oreItem) ? oreItem.GetComponent<OreItemData>() : null;
                     if (ore == null)
                     {
                         Plugin.Log.LogWarning($"[{FeatureKey}] dropped a refine step for {rv["ore"].AsString}: no such ore");

@@ -26,6 +26,8 @@ public static class SaveData
         pending = value.IsJsonObject ? value.AsJsonObject : null;
     }
 
+    public static void Discard() => pending = null;
+
     public static void Attach()
     {
         Root = pending ?? new JsonObject();
@@ -39,7 +41,7 @@ public static class SaveData
 
     public static JsonObject Feature(string id, bool create) => Child(Root["features"].AsJsonObject, id, create);
 
-    private static JsonObject Child(JsonObject parent, string key, bool create)
+    public static JsonObject Child(JsonObject parent, string key, bool create)
     {
         var value = parent[key];
         if (value.IsJsonObject) return value.AsJsonObject;
@@ -52,7 +54,7 @@ public static class SaveData
     public static JsonObject Export()
     {
         var player = GamePlayer.current;
-        if (player == null) return Root;
+        if (player == null) return Copy();
         var live = new HashSet<string>();
         foreach (var ship in player.spaceShips) live.Add(ship.guid);
         foreach (var ship in player.activeFleet) live.Add(ship.guid);
@@ -61,7 +63,13 @@ public static class SaveData
         foreach (var kv in ships)
             if (!live.Contains(kv.Key)) stale.Add(kv.Key);
         foreach (var key in stale) ships.Remove(key);
-        return Root;
+        return Copy();
+    }
+
+    // The autosave thread serialises what ToJson returns, so it must never see the live Root.
+    private static JsonObject Copy()
+    {
+        return JsonValue.Parse(Root.ToString()).AsJsonObject;
     }
 }
 

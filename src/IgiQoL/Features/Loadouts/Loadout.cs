@@ -62,17 +62,6 @@ public sealed class Loadout
         return o;
     }
 
-    public int FittedCount
-    {
-        get
-        {
-            int n = modules.Count;
-            foreach (var h in hardpoints) if (!h.IsNull) n++;
-            foreach (var b in boosters) if (!b.IsNull) n++;
-            return n;
-        }
-    }
-
     public string Summary()
     {
         int turrets = 0, boost = 0, drone = 0, grunts = 0;

@@ -251,9 +251,6 @@ public sealed class CraftRollup : Feature
         return any;
     }
 
-    private static int UnitsFor(int need, float pending, float yield, float mult) =>
-        Math.Max(1, Mathf.CeilToInt((need - pending) / (yield * mult) - 0.0001f));
-
     // With no ore and no canisters at the station, the plan lists canisters as missing; one ore type that yields
     // the first of them is then planned for exactly that shortfall, refined, and the recipe queued at the end.
     private static IEnumerator CheckRefine(SelfCheckContext ctx)
@@ -312,7 +309,7 @@ public sealed class CraftRollup : Feature
 
         float mult = PlayerStation.GetRefineryYieldMultiplier(station);
         int need = basePlan.missing[canister];
-        int added = UnitsFor(need, refinery.GetPendingYield(material.Value), bestYield, mult) + 3;
+        int added = Rollups.UnitsFor(need, refinery.GetPendingYield(material.Value), bestYield, mult) + 3;
         storage.Add(ore.item, added);
         // The same ore is topped up for every other missing material it yields, up to what's there.
         int expect = 0;
@@ -320,7 +317,7 @@ public sealed class CraftRollup : Feature
         {
             var ci = c.product.GetCanisterItem();
             if (ci == null || !basePlan.missing.TryGetValue(ci, out int n)) continue;
-            expect = Math.Max(expect, UnitsFor(n, refinery.GetPendingYield(c.product), Rollups.YieldOf(ore, c.product), mult));
+            expect = Math.Max(expect, Rollups.UnitsFor(n, refinery.GetPendingYield(c.product), Rollups.YieldOf(ore, c.product), mult));
         }
         expect = Math.Min(expect, added);
         var plan = Rollups.Build(forge, target, 1);

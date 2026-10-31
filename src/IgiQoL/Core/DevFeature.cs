@@ -14,6 +14,7 @@ using Behaviour.Util;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
+using IgiQoL.Game;
 using Source.Item;
 using Source.Player;
 using Source.Util;
@@ -111,7 +112,7 @@ public sealed class DevFeature : Feature
         bool ready = false;
         while (Time.realtimeSinceStartup < deadline)
         {
-            if (GameplayManager.Instance != null && GameplayManager.Instance.spaceShip != null && HudManager.Instance != null && TravelInfo.instance != null)
+            if (Fleet.Flagship != null && HudManager.Instance != null && TravelInfo.instance != null)
             {
                 ready = true;
                 break;
@@ -280,7 +281,7 @@ public sealed class DevFeature : Feature
         while (Time.realtimeSinceStartup < end)
         {
             yield return new WaitForSecondsRealtime(15f);
-            var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+            var ship = IgiQoL.Game.Fleet.Flagship;
             var poi = Source.Galaxy.MapPointOfInterest.current;
             Plugin.Log.LogInfo($"[Dev] soak t={seconds - (end - Time.realtimeSinceStartup):0}s: status='{(SidePanel.instance != null ? SidePanel.instance.idleStatusMessage.text : "")}' at={(poi != null ? poi.name : "travelling")} docked={(Behaviour.UI.Spacestation.SpaceStationInterior.instance != null)} hull={(ship != null ? ship.currentHullHP / ship.maxHullHP : 0f):P0} cargo={player.currentSpaceShip.cargoUsed:0}/{player.currentSpaceShip.cargoCapacity:0} credits={player.credits}");
         }
@@ -351,7 +352,7 @@ public sealed class DevFeature : Feature
             var rb = unit.rigidbody;
             sb.Append($"{ship.GetShipName()} ({ship.shipClass.identifier})\tmass={rb.mass:0}\tradius={unit.radius:0.00}\tthrust={unit.engine.thrust:0}\tsideThrust={unit.engine.sideThrust:0}\tsideAccel={unit.engine.sideThrust / rb.mass:0.00}\tforwardAccel={unit.GetFullForwardAcceleration():0.00}\tmaxSpeed={unit.maxSpeed:0.0}\tturnRate={unit.GetMaxTurnRate():0.0}\tdamping={rb.linearDamping:0.00}\n");
         }
-        var flag = GameplayManager.Instance.spaceShip;
+        var flag = Fleet.Flagship;
         if (flag != null && flag.engine != null)
             sb.Append($"flagship {flag.spaceShipData.GetShipName()}\tmass={flag.rigidbody.mass:0}\tradius={flag.radius:0.00}\tsideAccel={flag.engine.sideThrust / flag.rigidbody.mass:0.00}\tforwardAccel={flag.GetFullForwardAcceleration():0.00}\tmaxSpeed={flag.maxSpeed:0.0}\tdamping={flag.rigidbody.linearDamping:0.00}\n");
         string path = DumpDir() + "/missiles.txt";

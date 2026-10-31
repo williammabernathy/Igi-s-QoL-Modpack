@@ -83,7 +83,27 @@ public static class LoadoutApply
 
     public static void RestoreEcho(JsonObject echo)
     {
-        if (echo["autopilot"].IsJsonObject) GamePlayer.current.autopilotSettings = AutopilotSettings.FromJson(echo["autopilot"]);
+        if (echo["autopilot"].IsJsonObject)
+        {
+            // Copy into the live object: the Autopilot side tab keeps a reference to it.
+            var fresh = AutopilotSettings.FromJson(echo["autopilot"]);
+            var live = GamePlayer.current.autopilotSettings;
+            if (live == null) GamePlayer.current.autopilotSettings = fresh;
+            else
+            {
+                live.prioritizeHomestation = fresh.prioritizeHomestation;
+                live.runMissions = fresh.runMissions;
+                live.allowCourierMissions = fresh.allowCourierMissions;
+                live.preferMissions = fresh.preferMissions;
+                live.noTravel = fresh.noTravel;
+                live.autoSell = fresh.autoSell;
+                live.ammoMinutes = fresh.ammoMinutes;
+                live.preferredGameplayType = fresh.preferredGameplayType;
+                live.preferredTargetLayer = fresh.preferredTargetLayer;
+                live.autonomousDungeonMode = fresh.autonomousDungeonMode;
+                live.maxAutonomousDungeonHostility = fresh.maxAutonomousDungeonHostility;
+            }
+        }
         if (EchoPriority.EchoPriority.Instance.Active && echo["priority"].IsJsonArray)
         {
             var list = new List<EchoPriority.EchoActivity>();
@@ -199,9 +219,10 @@ public static class LoadoutApply
 
         // Final contents: the match, or empty when the loadout has nothing there, or the current item when the wanted
         // one is missing (unless that item moves to another slot).
-        var claimedFitted = new HashSet<InventoryItemType>();
+        // A fitted piece that another slot claims is moving out of its slot.
+        var movedFrom = new HashSet<Slot>();
         foreach (var s in slots)
-            if (s.match != null && s.match.fittedIn != null) claimedFitted.Add(s.match.item);
+            if (s.match != null && s.match.fittedIn != null && s.match.fittedIn != s) movedFrom.Add(s.match.fittedIn);
         int changed = 0;
         foreach (var s in slots)
         {
@@ -209,7 +230,7 @@ public static class LoadoutApply
             else if (s.want.IsNull) s.result = null;
             else
             {
-                s.result = s.current != null && !claimedFitted.Contains(s.current) ? s.current : null;
+                s.result = s.current != null && !movedFrom.Contains(s) ? s.current : null;
                 r.problems.Add($"Missing for {s.Label}: {Loadout.Describe(s.want)}" + (s.result != null ? "; kept the fitted one." : "."));
             }
             if (s.substitute) r.problems.Add($"{s.Label}: the saved {Loadout.Describe(s.want)} is gone; fitted {Loadout.Describe(s.match.item.ToJson())} instead.");
@@ -217,9 +238,6 @@ public static class LoadoutApply
         }
         if (changed == 0) return;
 
-        var finalItems = new HashSet<InventoryItemType>();
-        foreach (var s in slots)
-            if (s.result != null) finalItems.Add(s.result);
         int stored = 0;
         foreach (var s in slots)
         {
@@ -227,7 +245,7 @@ public static class LoadoutApply
         }
         foreach (var s in slots)
         {
-            if (s.current == null || finalItems.Contains(s.current)) continue;
+            if (s.current == null || s.result == s.current || movedFrom.Contains(s)) continue;
             Inventory.global.Add(s.current, 1);
             stored++;
         }

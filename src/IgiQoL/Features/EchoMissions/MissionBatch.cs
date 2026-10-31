@@ -11,6 +11,7 @@ using Source.Galaxy;
 using Source.Galaxy.POI;
 using Source.MissionSystem;
 using Source.Player;
+using IgiQoL.Game;
 using Source.Util;
 using UnityEngine;
 
@@ -45,7 +46,7 @@ public static class MissionBatch
     {
         var here = MapPointOfInterest.current;
         var system = GamePlayer.current.currentSystem;
-        Vector2 from = here != null ? here.GetWorldPosition() : (Vector2)GameplayManager.Instance.spaceShip.transform.position;
+        Vector2 from = here != null ? here.GetWorldPosition() : (Vector2)Fleet.Flagship.transform.position;
         bool courier = GamePlayer.current.autopilotSettings.allowCourierMissions;
         Mission best = null;
         float bestDistance = float.MaxValue;
@@ -71,8 +72,10 @@ public static class MissionBatch
     public static bool NeedsStation(IdleManager idle)
     {
         if (idle.inventoryFull) return true;
-        var ship = GameplayManager.Instance.spaceShip;
+        var ship = Fleet.Flagship;
         if (ship == null) return true;
+        var retreat = EchoRetreat.EchoRetreat.Instance;
+        if (retreat != null && retreat.Active && retreat.LowShip() != null) return true;
         if (!ship.AmmoInCargoForTurrets() && IdleManager.CanRestockAmmoSomewhere()) return true;
         if (!GamePlayer.current.IsPrologueActive() && idle.IsCrewBelowThreshold()) return true;
         if (ship.currentHullHP < ship.maxHullHP * 0.5f) return true;
@@ -198,7 +201,7 @@ internal static class MissionBatchPatches
         if (!F.Active) return;
         try
         {
-            if (MissionBatch.Limit <= 1 || SpaceStationInterior.instance == null) return;
+            if (MissionBatch.Limit <= 1 || SpaceStationInterior.instance == null || !GamePlayer.current.autopilotSettings.runMissions) return;
             var here = MapPointOfInterest.current;
             if (here == null || (__result != null && __result.isComplete && __result.GetActivePoi(forEcho: true) == here)) return;
             foreach (var m in GamePlayer.current.missions)
@@ -247,9 +250,13 @@ internal static class MissionBatchPatches
             if (GamePlayer.current.autopilotSettings.noTravel || MissionBatch.NeedsStation(__instance)) return true;
             var next = MissionBatch.NextOpen();
             if (next == null) return true;
-            __instance.SetIdleCombatMode(GameplayManager.Instance.spaceShip, enable: false);
+            __instance.SetIdleCombatMode(Fleet.Flagship, enable: false);
             if (__instance.TryLootBeforeLeaving()) return false;
-            if (!Singleton<TravelManager>.Instance.CanWeTravel()) return true;
+            if (!Singleton<TravelManager>.Instance.CanWeTravel())
+            {
+                IdleManager.UpdateActivity("@IdleTravelNotPossible");
+                return false;
+            }
             __instance.TryTravelToActiveMission(next);
             Plugin.Log.LogInfo($"[EchoMissions] from {MapPointOfInterest.current?.name} on to {next.GetActivePoi(forEcho: true)?.name} for {next.name} instead of a station");
             return false;

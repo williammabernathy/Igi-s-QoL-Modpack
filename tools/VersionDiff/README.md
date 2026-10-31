@@ -51,6 +51,8 @@ The defaults look for the nearest folder above the current directory that holds 
 
 If there's only one version on disk, the tool runs in manifest mode. It lists every target and checks it against that version, without diffs. That's also a quick check that the tool reads your mod's patches correctly.
 
+CI runs it this way: the job container has no `game-versions/`, so `patches --new /game/VanguardGalaxy_Data/Managed --mod src/IgiQoL/bin/Release/IgiQoL.dll` checks the freshly built DLL against the installed game and fails the pipeline on exit code 1 ([docs/ci.md](../../docs/ci.md)).
+
 ### After a game update
 
 1. Don't rebuild first. Run `dotnet run --project tools/VersionDiff -- patches --out patch-report.md`. The old snapshot is compared against the freshly installed game, and the mod DLL is still the one built against the old version, so the reference check shows exactly what the shipped DLL would hit.

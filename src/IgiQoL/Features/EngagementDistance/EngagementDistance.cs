@@ -26,9 +26,12 @@ public sealed class EngagementDistance : Feature
     {
         var flagship = GamePlayer.current.currentSpaceShip;
         var g = flagship.guid;
+        var before = ShipSettings.Get(g);
+        var kept = (before.engagement, before.engagementDistance);
         ctx.Cleanup(() =>
         {
-            ShipSettings.Edit(g).engagement = EngagementMode.Auto;
+            var c = ShipSettings.Edit(g);
+            (c.engagement, c.engagementDistance) = kept;
             ShipSettings.Save(g);
             ShipSettings.Invalidate();
         });
@@ -45,7 +48,7 @@ public sealed class EngagementDistance : Feature
         if (r.engagement == EngagementMode.Fixed && r.engagementDistance == 12f && saved == "Fixed") ctx.Pass("settings-roundtrip", detail);
         else ctx.Fail("settings-roundtrip", detail);
 
-        var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var ship = Fleet.Flagship;
         var module = ship != null ? ship.targetProvider : null;
         if (module == null || module.priorityTarget == null)
         {
@@ -71,6 +74,7 @@ internal static class ApproachPatch
         if (!feature.Active) return;
         try
         {
+            if (!(__instance is CombatModule)) return;
             var unit = __instance.parent;
             if (unit == null || !Fleet.IsPlayerShip(unit)) return;
             var data = unit.unitData as SpaceShipData;

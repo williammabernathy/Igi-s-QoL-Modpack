@@ -6,6 +6,7 @@ using Behaviour.Tractoring;
 using Behaviour.UI.NotificationAlert;
 using Behaviour.Util;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Data.Persistable;
 using Source.Galaxy;
@@ -104,7 +105,7 @@ internal static class EventLogCheck
     private static IEnumerator CheckLoot(SelfCheckContext ctx)
     {
         yield return SelfCheckContext.EnsureInSpace();
-        var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var ship = Fleet.Flagship;
         if (ship == null || !Singleton<LootManager>.HasInstance)
         {
             ctx.Skip("loot", "not in space");

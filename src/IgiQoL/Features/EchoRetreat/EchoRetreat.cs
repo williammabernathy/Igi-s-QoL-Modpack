@@ -7,6 +7,7 @@ using Behaviour.Util;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using Source.Galaxy;
 using Source.Galaxy.POI;
 using Source.Player;
@@ -42,6 +43,8 @@ public sealed class EchoRetreat : Feature
             "The same for the other ships of your fleet at this location. The game sends a fleet ship away for two minutes of repairs at 10% hull, so only values above 10 change anything. 0 = never.",
             new AcceptableValueRange<int>(0, 90)));
     }
+
+    public override void OnActivated() => EchoPriority.EchoPriority.EnsureTab();
 
     private float nextTick, nextTravelTry;
 
@@ -81,8 +84,8 @@ public sealed class EchoRetreat : Feature
 
     internal void Tick(IdleManager idle)
     {
-        if (Time.unscaledTime < nextTick) return;
-        nextTick = Time.unscaledTime + 0.5f;
+        if (Time.time < nextTick) return;
+        nextTick = Time.time + 0.5f;
         if (FlagshipHullPercent.Value <= 0 && FleetHullPercent.Value <= 0) return;
         if (!CanLeaveHere()) return;
         string low = LowShip();
@@ -96,15 +99,15 @@ public sealed class EchoRetreat : Feature
         var player = GamePlayer.current;
         if (player.autopilotSettings.noTravel)
         {
-            if (Time.unscaledTime < nextTravelTry) return;
-            nextTravelTry = Time.unscaledTime + 30f;
+            if (Time.time < nextTravelTry) return;
+            nextTravelTry = Time.time + 30f;
             IdleManager.UpdateActivity($"{low}; travel is off in the Autopilot settings, so ECHO stays");
             return;
         }
         // CanWeTravel shows a notification each time it says no, so don't ask every tick.
-        if (Time.unscaledTime < nextTravelTry) return;
-        nextTravelTry = Time.unscaledTime + 10f;
-        var ship = GameplayManager.Instance.spaceShip;
+        if (Time.time < nextTravelTry) return;
+        nextTravelTry = Time.time + 10f;
+        var ship = Fleet.Flagship;
         idle.SetIdleCombatMode(ship, enable: false);
         var travel = Singleton<TravelManager>.Instance;
         if (!travel.CanWeTravel()) return;
