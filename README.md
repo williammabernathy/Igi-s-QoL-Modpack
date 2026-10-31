@@ -2,6 +2,8 @@
 
 My modding workspace for Vanguard Galaxy (Steam app 3471800), played on Linux through Proton. The main thing in it is Igi's QoL Modpack, one BepInEx plugin with 33 quality-of-life features. Around it are the tools for keeping mods working across game updates and a template for starting new ones.
 
+The modpack, the tools and the template were developed and tested on Linux only, with the game running under Proton. The game itself is a Windows build, so they should also work on Windows, but nobody has tried them there yet. Reports from Windows players are welcome.
+
 ![Igi's QoL Modpack: the mod window open on the ECHO tab](docs/images/overview.jpg)
 
 ## Documentation
@@ -11,7 +13,7 @@ My modding workspace for Vanguard Galaxy (Steam app 3471800), played on Linux th
 | Install and use the modpack | [docs/modpack/README.md](docs/modpack/README.md) |
 | See what each feature does | [Window and HUD](docs/modpack/features/interface.md), [ECHO](docs/modpack/features/echo.md), [Fleet and combat](docs/modpack/features/fleet-combat.md), [Loot and cargo](docs/modpack/features/loot-and-cargo.md), [Stations, loadouts and crafting](docs/modpack/features/stations.md), [Logs, reference and other mods](docs/modpack/features/logs-and-reference.md) |
 | Look up a setting | [docs/modpack/settings.md](docs/modpack/settings.md) |
-| Get BepInEx running under Proton, find logs and saves | [docs/setup.md](docs/setup.md) |
+| Get BepInEx running on Windows or under Proton, find logs and saves | [docs/setup.md](docs/setup.md) |
 | Build the mods, or update them after a game patch | [docs/building.md](docs/building.md) |
 | Find which game method to patch for something | [docs/modding-reference.md](docs/modding-reference.md) |
 | Work on the modpack's code | [docs/modpack/developing.md](docs/modpack/developing.md) |

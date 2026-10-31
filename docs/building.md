@@ -14,6 +14,8 @@ fish_add_path $HOME/.dotnet $HOME/.dotnet/tools
 
 In bash, for a single session: `export DOTNET_ROOT=$HOME/.dotnet PATH=$HOME/.dotnet:$PATH`.
 
+On Windows, install the .NET 8 SDK with Microsoft's installer (it puts `dotnet` on PATH) and `ilspycmd` with `dotnet tool install -g ilspycmd`. The `dotnet` commands on this page work the same in PowerShell; only the paths differ.
+
 ## Build and deploy
 
 ```fish
@@ -24,7 +26,7 @@ That builds every project in `VanguardGalaxyMods.sln` and copies each plugin int
 
 `Directory.Build.props` holds the shared setup for every project under `src/`:
 
-- References `BepInEx.dll`, `0Harmony.dll`, the game's `Assembly-CSharp.dll`, and the Unity DLLs straight from the game folder. Override the path with `-p:GameDir=...`.
+- References `BepInEx.dll`, `0Harmony.dll`, the game's `Assembly-CSharp.dll`, and the Unity DLLs straight from the game folder. `GameDir` defaults to `C:\Program Files (x86)\Steam\steamapps\common\Vanguard Galaxy` on Windows and to this machine's Steam library elsewhere. If your game is somewhere else, pass `-p:GameDir=...`.
 - Publicizes `Assembly-CSharp` (`BepInEx.AssemblyPublicizer.MSBuild`), so you can use the game's private fields and methods directly instead of reflection.
 - Targets `net472`, which matches the game's Mono profile.
 - After each build, copies the DLL and PDB to `BepInEx/plugins/<AssemblyName>/`. Turn this off with `-p:DeployToGame=false`.

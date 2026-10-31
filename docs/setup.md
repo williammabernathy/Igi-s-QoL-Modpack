@@ -31,14 +31,15 @@ Check that BepInEx ran:
 cat "/mnt/data/SteamLibrary/steamapps/common/Vanguard Galaxy/BepInEx/LogOutput.log"
 ```
 
-The first verified run showed `Chainloader started`, `Loading [Hello Vanguard 0.1.0]`, then the test plugin reporting 0 items at plugin load and 393 items after `InventoryItemType.LoadAll` finished. If `LogOutput.log` doesn't get rewritten when you start the game, the override isn't active.
+On Windows, open `BepInEx\LogOutput.log` in the game folder (Steam > right-click the game > Manage > Browse local files). The first verified run showed `Chainloader started`, `Loading [Hello Vanguard 0.1.0]`, then the test plugin reporting 0 items at plugin load and 393 items after `InventoryItemType.LoadAll` finished. If `LogOutput.log` doesn't get rewritten when you start the game, BepInEx didn't load: under Proton the override isn't active, on Windows the BepInEx files aren't directly in the game folder.
 
 For a live log window, set `[Logging.Console] Enabled = true` in `BepInEx/config/BepInEx.cfg`.
 
 ## Using mods
 
 - Mod DLLs go in `BepInEx/plugins/` (a subfolder per mod is fine).
-- Logs: `BepInEx/LogOutput.log` (BepInEx and plugins, rewritten at every start) and Unity's own log at
+- Logs: `BepInEx/LogOutput.log` (BepInEx and plugins, rewritten at every start) and Unity's own `Player.log`. On Windows that's
+  `%USERPROFILE%\AppData\LocalLow\Bat Roost Games\VanguardGalaxy\Player.log`; under Proton the same folder sits inside the prefix, here
   `/mnt/data/SteamLibrary/steamapps/compatdata/3471800/pfx/drive_c/users/steamuser/AppData/LocalLow/Bat Roost Games/VanguardGalaxy/Player.log`.
 - Per-mod settings appear in `BepInEx/config/<plugin guid>.cfg` after the first run.
 - Play unmodded: set `enabled = false` in `doorstop_config.ini` in the game folder. BepInEx stays on disk but doesn't load.
@@ -47,7 +48,7 @@ For a live log window, set `[Logging.Console] Enabled = true` in `BepInEx/config
 
 ## Saves
 
-Back up your saves before trying mods that touch save data. They live at
+Back up your saves before trying mods that touch save data. They live in `%USERPROFILE%\AppData\LocalLow\Bat Roost Games\VanguardGalaxy\Saves\` on Windows, and under Proton at
 `.../compatdata/3471800/pfx/drive_c/users/steamuser/AppData/LocalLow/Bat Roost Games/VanguardGalaxy/Saves/`.
 
 Each save is a `.save` file (gzip-compressed JSON; `zcat autosave-0.save | jq .` works) plus a `.meta` file holding the game version. There are three rotating autosaves, written every 300 seconds. Steam Cloud syncs the folder, so a save you delete can come back after the next launch.
@@ -59,5 +60,7 @@ The game ships a dev console with about 130 commands (`Behaviour.UI.DebugScreen/
 ```fish
 touch "/mnt/data/SteamLibrary/steamapps/common/Vanguard Galaxy/console.enabled"
 ```
+
+On Windows, create an empty file with that name in the game folder, for example in PowerShell: `New-Item "C:\Program Files (x86)\Steam\steamapps\common\Vanguard Galaxy\console.enabled"`.
 
 Then press the backtick key (`` ` ``) in game and type `help`. Commands include `AddCredits`/`ac`, `AddXp`/`axp`, `AddSkillPoints`/`asp`, `CreateShip`/`cs`, `SetHP`, `FillCrew`, shop refreshes, teleport, and time scale (`ts`). While it's enabled, holding Ctrl+Alt+Shift also lets you click map locations to teleport and open locked systems. Delete the file to turn it off. A mod can add its own commands to `Singleton<ConsoleScreen>.Instance.commands` (a private `List<ConsoleCommand>`, reachable through the publicizer).

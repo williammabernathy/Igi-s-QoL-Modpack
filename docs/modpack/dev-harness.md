@@ -26,14 +26,25 @@ flowchart LR
    cp "$newest" "$S/igiqol-dev.save"; cp "${newest%.save}.meta" "$S/igiqol-dev.meta"
    ```
 
+   On Windows, in PowerShell:
+
+   ```powershell
+   $G = "C:\Program Files (x86)\Steam\steamapps\common\Vanguard Galaxy"
+   $S = "$env:USERPROFILE\AppData\LocalLow\Bat Roost Games\VanguardGalaxy\Saves"
+   $newest = Get-ChildItem "$S\autosave-*.save" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+   Copy-Item $newest.FullName "$S\igiqol-dev.save"; Copy-Item ($newest.FullName -replace '\.save$', '.meta') "$S\igiqol-dev.meta"
+   ```
+
    Some checks need things in the save: a fleet ship besides the flagship, a station with a hangar and a mission board, an asteroid field in the system. Without them those checks SKIP with the reason.
 2. In `BepInEx/config/igi.qol.cfg`, `[Dev]`: `Enabled = true`, `AutoLoadSave = igiqol-dev`, `SelfCheck = true`, `QuitAfterSeconds = 10`.
-3. Start the game through Steam (`steam -applaunch 3471800`) and wait for `Self-check complete` in `LogOutput.log`. A full run takes about four minutes.
+3. Start the game through Steam (`steam -applaunch 3471800` on Linux, or Play in the Steam library) and wait for `Self-check complete` in `LogOutput.log`. A full run takes about four minutes.
 4. Read the results:
 
    ```bash
    grep -E "startup:|switched off|Self-check complete|CHECK .* (FAIL|SKIP)" "$G/BepInEx/LogOutput.log"
    ```
+
+   In PowerShell: `Select-String -Path "$G\BepInEx\LogOutput.log" -Pattern "startup:|switched off|Self-check complete|CHECK .* (FAIL|SKIP)"`.
 
    A clean run ends with `Self-check complete: 163 pass, 0 fail, 5 skip` on the reference save. The five skips need a situation the test save doesn't reach: a dungeon at the location (`EchoGates/dungeon-min`), a target while docked (`EngagementDistance/live`), the game's Autopilot tab in the scene (`EchoPriority/dropdown-to-list`), being docked at that point of the run (`EchoCargo/live-keep`) and a salvage module (`DroneModes/gatherer-assist`).
 5. Set `Enabled = false` again and delete the copy. Steam Cloud sometimes restores a deleted save; delete it again if it comes back.
