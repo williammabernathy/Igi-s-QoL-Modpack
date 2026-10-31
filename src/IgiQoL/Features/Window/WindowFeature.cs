@@ -22,7 +22,7 @@ public sealed class WindowFeature : Feature
 
     public override string Id => "Window";
     public override string Title => "Mod window";
-    public override string Description => "This window. Open and close it with the hotkey below, the QoL button above the Dock button in space, or the QoL tab above the station tabs while docked.";
+    public override string Description => "This window. Open and close it with the hotkey below, the QoL button in space (on top of the side menu or above the Dock button, see below), or the QoL tab above the station tabs while docked.";
     public override Type[] PatchClasses => new[] { typeof(HudButtonPatches) };
 
     public ConfigEntry<Key> Hotkey;

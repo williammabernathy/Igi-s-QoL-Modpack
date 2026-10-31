@@ -1,5 +1,5 @@
 # Runs on pushes to main and development. Every job runs on the self-hosted runner tagged vanguard-galaxy
-# (README, "CI and releases"), which mounts the installed game read-only at /game.
+# (docs/ci.md), which mounts the installed game read-only at /game.
 # A passing main pipeline that changed the mod's sources publishes a release.
 
 workflow:

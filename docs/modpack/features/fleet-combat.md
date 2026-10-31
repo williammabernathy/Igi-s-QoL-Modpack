@@ -1,0 +1,75 @@
+# Fleet and combat
+
+How your ships pick targets, how close they fly, what their missiles and drones do. Most of these have a default on the Settings tab and a per-ship override in the [ship settings popup](interface.md#ship-settings-popup). Settings keys are listed in [settings.md](../settings.md).
+
+Your own clicks on the flagship and attack orders always win over everything on this page.
+
+## Target priority
+
+Which enemy your ships attack when they pick a target on their own. `Rule`:
+
+| Rule | Picks |
+|---|---|
+| Nearest | The closest enemy (the game's choice) |
+| Lowest hull % / Highest hull % | The most damaged or the healthiest enemy |
+| Most damage to my fleet | Whoever has hurt your ships most in the last few seconds |
+| Attacking my flagship | Enemies shooting at the ship you fly |
+| Smallest first / Largest first | By hull class |
+| Lowest level / Highest level | By enemy level |
+
+`RepickSeconds` (0-30, default 0) is how often a ship re-applies its rule. 0 keeps the game's stickiness: a ship stays on its target until it dies or leaves. Above 0, a ship switches when another enemy is clearly better (for example 10 points of hull, or 20% closer), so ships don't flicker between two similar targets. `FinishBelowPercent` (0-100, default 0) keeps a ship on a target below that hull %, so nearly dead enemies get finished. With any rule other than Nearest, ships also stop jumping to whoever just hit a nearby ally.
+
+The ship settings popup adds, per ship:
+
+- its own rule, re-check interval and finish threshold;
+- "Avoid enemies above level": enemies above it are only picked when nothing else is in range (0 = off);
+- "Only attack within (units of the flagship)": fleet ships don't pick enemies further than this from the ship you fly, and drop a target that moves past it (0 = off);
+- one rule per combat weapon (hardpoint). A weapon with a rule shoots the best enemy by that rule among those it can hit and has in range, and follows the ship's target otherwise. For example, one turret on drones while the rest follow the ship.
+
+The Escort and Defensive stances pick the ship's target themselves; weapon rules still apply under them.
+
+## Engagement distance
+
+How close each ship flies to its combat target, set per ship in the popup:
+
+- Auto: the game decides (the default).
+- Max range: stay as far back as the shortest-range weapon that can hit the target allows.
+- Fixed distance: stay this many units away (1 to 30; the game never holds further than 30).
+
+It only changes combat targeting. Mining, salvage, repair and painter modules approach their targets as the game does.
+
+## Keep distance in combat
+
+In a fight the game flies every ship straight at a ring around its target and switches its obstacle-avoiding navigator off, so ships pile on top of each other. With this on, a fighting ship (has a target, no move order, not holding position) has its destination pushed away from every ship whose hull outline is closer than `Gap` (0.5-10 units, default 2). The push is measured again every 0.25 s and added on top of the game's own destination, so it doesn't build up.
+
+`Default` (off) applies to your ships, and each ship can override it in the popup. `OtherShips` (off) makes enemy and allied ships that aren't yours do the same; it changes how enemies move, which is why it's off by default.
+
+Measured in spawned 12-enemy, 4-ally brawls (4 rounds of 33 s each way): with both on, overlapping ship pairs dropped by 42%, and the share of turrets with their target in range dropped from 78% to 71%, because ships that slide apart sometimes slide out of reach.
+
+## Missile retargeting
+
+What your missiles do when their target is destroyed before they hit. `Mode`:
+
+- Off (Fly on): the game's behaviour; the missile flies on and is wasted.
+- WeaponTarget (Weapon's target): steer to whatever the launcher is aiming at now.
+- Nearest (Nearest enemy): steer to the closest enemy the launcher could hit.
+
+Each ship can override it in the popup.
+
+## Drone modes
+
+Drone behaviours beyond the game's Free roam and Follow ship:
+
+| Mode | Combat and painter drones | Mining and salvage drones | Repair drones |
+|---|---|---|---|
+| Follow the ship | Without a target, come back once further than N units | Without a target, come back once further than N units | Without a target, come back once further than N units |
+| Guard the ship | Only take targets whose hull is within N units of the ship, stay within N, drop targets that drift past 1.25 × N | Join the ship's asteroid or wreck when nothing free is within N | Fix the ship first when it's damaged, else anything within N |
+| Ship's target only | Attack the ship's target, otherwise follow | Join the ship's asteroid or wreck when they can (a driller only if the asteroid has room), else take one within N | Fix the ship first when it's damaged, else anything within N |
+
+Mining, salvage and repair drones switch at their next pick, so nothing is pulled off a job. "Drones stay with" in the popup makes "the ship" another ship of your fleet; while that ship is elsewhere (travelling, docked, destroyed), the drones stay with their own ship.
+
+The HUD's drone button cycles Free roam → Follow ship → Follow → Guard → Ship's target for the flagship, with its label showing the mode. Every ship has the mode, distance and anchor in its popup. The game's own saved mode stays Free roam or Follow ship, so a save loads fine without the mod.
+
+## Drones on arrival
+
+`Default` (off): every ship of yours launches its docked drones as soon as it arrives somewhere that isn't a station. Drones you recalled yourself stay docked. Each ship can override it in the popup.
