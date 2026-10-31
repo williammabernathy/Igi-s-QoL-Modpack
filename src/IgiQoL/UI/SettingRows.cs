@@ -4,9 +4,7 @@ using System.Text;
 using BepInEx.Configuration;
 using IgiQoL.Core;
 using TMPro;
-using Behaviour.UI.Shared;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace IgiQoL.UI;
 
@@ -17,12 +15,14 @@ public static class SettingRows
 
     public const string EnabledLabel = "Feature on (applies after a game restart)";
 
-    public static void AddSection(RectTransform column, Feature feature)
+    public static void AddSection(RectTransform column, Feature feature) => AddSection(column, feature.Title, feature.Description);
+
+    public static void AddSection(RectTransform column, string title, string description)
     {
         // A gap above each heading so a section's rows don't run into the next feature's title.
-        UiCards.NewChild("Gap", column).gameObject.AddComponent<LayoutElement>().preferredHeight = 6f;
-        Kit.Heading(column, feature.Title);
-        Kit.Muted(column, feature.Description);
+        Kit.Gap(column, 6f);
+        Kit.Heading(column, title);
+        Kit.Muted(column, description);
     }
 
     public static int AddEntries(RectTransform column, string section, Rows rows = Rows.All)
@@ -42,11 +42,17 @@ public static class SettingRows
 
     private static void AddEntry(RectTransform column, ConfigEntryBase entry, bool enabled)
     {
-        var row = Kit.Row(column);
         var info = SettingInfo.Of(entry);
         string label = enabled ? EnabledLabel : info?.Label ?? Pretty(entry.Definition.Key);
-        var text = Kit.Label(row, label);
         string help = enabled ? "Turns this whole feature on or off. The game only checks this when it starts." : entry.Description?.Description ?? "";
+        AddEntry(column, entry, label, help, info);
+    }
+
+    // One row for any plugin's entry. info (optional) supplies display names for an enum's values.
+    public static void AddEntry(RectTransform column, ConfigEntryBase entry, string label, string help, SettingInfo info = null)
+    {
+        var row = Kit.Row(column);
+        var text = Kit.Label(row, label);
         if (help.Length > 0) Kit.Tooltip(text, label, help);
 
         var type = entry.SettingType;
@@ -54,7 +60,8 @@ public static class SettingRows
         {
             Kit.Toggle(row, null, (bool)entry.BoxedValue, v => entry.BoxedValue = v);
         }
-        else if (type.IsEnum && Enum.GetNames(type).Length <= 12)
+        // Flags enums can hold several values at once, which a dropdown can't show; they get the text field.
+        else if (type.IsEnum && Enum.GetNames(type).Length <= 12 && !type.IsDefined(typeof(FlagsAttribute), false))
         {
             var names = Enum.GetNames(type);
             int index = Array.IndexOf(names, TomlTypeConverter.ConvertToString(entry.BoxedValue, type));

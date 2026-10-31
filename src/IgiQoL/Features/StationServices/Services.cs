@@ -35,16 +35,7 @@ public sealed class ServiceReport
 // Repair, restock and sell for the ship you fly and your active fleet, at the station you're docked at.
 public static class Services
 {
-    public static List<SpaceShipData> FleetShips()
-    {
-        var player = GamePlayer.current;
-        var list = new List<SpaceShipData>();
-        if (player?.currentSpaceShip != null) list.Add(player.currentSpaceShip);
-        if (player != null)
-            foreach (var s in player.activeFleet)
-                if (s != null && !list.Contains(s)) list.Add(s);
-        return list;
-    }
+    public static List<SpaceShipData> FleetShips() => Fleet.Ships(withMercenaries: false);
 
     public static SpaceStation Docked()
     {
@@ -87,7 +78,8 @@ public static class Services
         var player = GamePlayer.current;
         foreach (var s in FleetShips())
         {
-            if (s.IsWorkBayAssigned) continue;
+            // The game only brings fleet ships back from repairs; the flown ship can keep a stale flag from its fleet days.
+            if (s.IsWorkBayAssigned || (s.awayForRepairs && s != player.currentSpaceShip)) continue;
             int amount = RepairAmount(s);
             if (amount <= 0) continue;
             if (reason != null)
@@ -97,7 +89,7 @@ public static class Services
             }
             if (PaidRepairRunning(s)) continue;
             int cost = RepairCost(amount);
-            if (!player.CanAfford(cost + r.credits))
+            if (!player.CanAfford(cost + (run ? 0 : r.credits)))
             {
                 r.problems.Add($"{s.GetShipName()}: not enough credits ({Money(cost)} needed).");
                 continue;
@@ -111,12 +103,6 @@ public static class Services
     }
 
     // ---- Restock: ECHO's ammo top-up (IdleManager.TryRestockAmmo) for every ship, armory first, then the station's shops.
-
-    private static SpaceShip UnitOf(SpaceShipData s)
-    {
-        if (s == GamePlayer.current.currentSpaceShip) return GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
-        return s.unit as SpaceShip;
-    }
 
     // Credit shops only, in the order SpaceStation.shopInventory prefers them; shops that take another currency are left alone.
     private static IEnumerable<ShopInventory> Shops(SpaceStation ss)
@@ -150,9 +136,12 @@ public static class Services
         var iim = InventoryInteractionManager.Instance;
         var faction = MapPointOfInterest.current?.faction;
         var claimed = new Dictionary<InventoryItemType, int>();   // quotes only: armory rounds already promised to an earlier ship
+        var booked = new Dictionary<SpaceShipData, float>();   // quotes only: m3 earlier picks would take in each ship's hold
+        float Free(SpaceShipData ship) { booked.TryGetValue(ship, out float b); return ship.cargo.GetSpaceAvailable() - b; }
+        void Book(SpaceShipData ship, float m3) { booked.TryGetValue(ship, out float b); booked[ship] = b + m3; }
         foreach (var s in FleetShips())
         {
-            var unit = UnitOf(s);
+            var unit = Fleet.Unit(s);
             if (unit == null) continue;
             foreach (var kv in unit.GetAmmoTypesRequired())
             {
@@ -161,8 +150,13 @@ public static class Services
                 if (want <= 0) continue;
                 claimed.TryGetValue(type, out int promised);
                 int fromArmory = Math.Min(want, armory.GetCount(type) - promised);
+                if (!run && type.m3 > 0f) fromArmory = Math.Min(fromArmory, Mathf.FloorToInt(Free(s) / type.m3));
                 if (fromArmory > 0 && run) fromArmory = Cargo.Move(armory, s.cargo, type, fromArmory);
-                if (fromArmory > 0 && !run) claimed[type] = promised + fromArmory;
+                if (fromArmory > 0 && !run)
+                {
+                    claimed[type] = promised + fromArmory;
+                    Book(s, fromArmory * type.m3);
+                }
                 fromArmory = Math.Max(0, fromArmory);
                 want -= fromArmory;
 
@@ -178,13 +172,15 @@ public static class Services
                     if (player.level < stack.item.shopItemData.levelRequirement) { shortReason = "your level is too low to buy it"; break; }
                     int n = Math.Min(want, stack.count);
                     long price = stack.cost;
-                    if (price > 0) n = (int)Math.Min(n, (player.credits - r.credits - spent) / price);
-                    if (type.m3 > 0f) n = Math.Min(n, Mathf.FloorToInt(s.cargo.GetSpaceAvailable() / type.m3));
-                    if (n <= 0) { shortReason = price > 0 && player.credits - r.credits - spent < price ? "not enough credits" : "no cargo space"; break; }
+                    long budget = run ? player.credits : player.credits - r.credits - spent;
+                    if (price > 0) n = (int)Math.Min(n, budget / price);
+                    if (type.m3 > 0f) n = Math.Min(n, Mathf.FloorToInt((run ? s.cargo.GetSpaceAvailable() : Free(s)) / type.m3));
+                    if (n <= 0) { shortReason = price > 0 && budget < price ? "not enough credits" : "no cargo space"; break; }
                     if (run && (iim == null || !iim.BuyAmount(stack, n, null, s.cargo, showStoredInventory: false))) { shortReason = "the shop refused the purchase"; break; }
                     bought += n;
                     spent += price * n;
                     want -= n;
+                    if (!run) Book(s, n * type.m3);
                     if (!run) break;   // a quote stops at the first stack; the shop stack doesn't shrink without a purchase
                 }
                 int loaded = fromArmory + bought;
@@ -199,7 +195,7 @@ public static class Services
                 if (want > 0 && shortReason != null) r.problems.Add($"{s.GetShipName()}: {want} {Name(type)} short, {shortReason}.");
             }
         }
-        RestockFuel(r, run, ss);
+        RestockFuel(r, run, ss, booked);
         return r;
     }
 
@@ -231,7 +227,7 @@ public static class Services
         return list;
     }
 
-    private static void RestockFuel(ServiceReport r, bool run, SpaceStation ss)
+    private static void RestockFuel(ServiceReport r, bool run, SpaceStation ss, Dictionary<SpaceShipData, float> booked)
     {
         var player = GamePlayer.current;
         var s = player.currentSpaceShip;
@@ -240,10 +236,11 @@ public static class Services
         int want = target - FuelCells(s.cargo);
         if (want <= 0) return;
 
-        // A quote moves nothing, so it books the space its earlier picks would take.
-        float booked = 0f;
+        // A quote moves nothing, so it books the space the ammo picks and its own earlier picks would take.
+        float bookedM3 = 0f;
+        if (!run) booked.TryGetValue(s, out bookedM3);
         int Fit(InventoryItemType item, int n) =>
-            item.m3 > 0f ? Math.Min(n, Mathf.FloorToInt((s.cargo.GetSpaceAvailable() - booked) / item.m3)) : n;
+            item.m3 > 0f ? Math.Min(n, Mathf.FloorToInt((s.cargo.GetSpaceAvailable() - bookedM3) / item.m3)) : n;
 
         int fromArmory = 0;
         foreach (var stack in FuelStacks(player.globalInventory.items))
@@ -253,7 +250,7 @@ public static class Services
             int n = Fit(item, Math.Min(want, stack.count));
             if (n <= 0) break;
             if (run) n = Cargo.Move(player.globalInventory, s.cargo, item, n);
-            else booked += n * item.m3;
+            else bookedM3 += n * item.m3;
             fromArmory += n;
             want -= n;
         }
@@ -273,13 +270,13 @@ public static class Services
             anyOnSale = true;
             if (faction != null && !stack.item.EnoughRepWithFaction(faction)) { shortReason = "reputation too low to buy it"; continue; }
             if (player.level < stack.item.shopItemData.levelRequirement) { shortReason = "your level is too low to buy it"; continue; }
-            long left = player.credits - r.credits - spent;
+            long left = run ? player.credits : player.credits - r.credits - spent;
             int n = Math.Min(want, stack.count);
             if (stack.cost > 0) n = (int)Math.Min(n, left / stack.cost);
             n = Fit(stack.item, n);
             if (n <= 0) { shortReason = stack.cost > 0 && left < stack.cost ? "not enough credits" : "no cargo space"; break; }
             if (run && (iim == null || !iim.BuyAmount(stack, n, null, s.cargo, showStoredInventory: false))) { shortReason = "the shop refused the purchase"; break; }
-            if (!run) booked += n * stack.item.m3;
+            if (!run) bookedM3 += n * stack.item.m3;
             bought += n;
             spent += stack.cost * n;
             want -= n;
@@ -308,8 +305,8 @@ public static class Services
         var item = stack.item;
         if (item.itemCategory == ItemCategory.Ammo)
         {
-            var unit = UnitOf(s);
-            return unit != null && unit.DoWeUseAmmo(item);
+            var unit = Fleet.Unit(s);
+            return unit == null || unit.DoWeUseAmmo(item);
         }
         return item.itemCategory == ItemCategory.Usable && item.storageOverride == StorageOverride.None;
     }
@@ -320,28 +317,45 @@ public static class Services
         var ss = Docked();
         if (ss == null || !ItemRules.HasDockRules) return r;
         var player = GamePlayer.current;
+        // Quotes move nothing, so they book what earlier stacks would deposit: count per storage and item, m3 per storage.
+        var planned = new Dictionary<(Inventory, InventoryItemType), int>();
+        var plannedM3 = new Dictionary<Inventory, float>();
         foreach (var s in FleetShips())
         {
             foreach (var stack in new List<Inventory.InventoryItem>(s.cargo.items))
             {
-                if (Protected(s, stack)) continue;
                 var item = stack.item;
                 var rule = ItemRules.Resolve(item);
                 if (rule.dockAction != DockAction.Sell && rule.dockAction != DockAction.SellAbove) continue;
+                if (Protected(s, stack)) continue;
                 var dest = Cargo.DepositTarget(ss, item);
-                int stored = dest != null ? dest.GetCount(item) : 0;
+                int stored = 0;
+                if (dest != null)
+                {
+                    stored = dest.GetCount(item);
+                    if (!run && planned.TryGetValue((dest, item), out int p)) stored += p;
+                }
                 int reserved = player.RequiredItemCountForMissions(item);
                 bool sellable = CargoRules.CanSellHere(ss, item);
                 int count = stack.count;
                 var step = CargoRules.Plan(rule, count, stored, reserved, sellable);
                 if (step.deposit > 0 && dest != null)
                 {
-                    int fit = item.m3 > 0f ? Mathf.FloorToInt(dest.GetSpaceAvailable() / item.m3) : step.deposit;
+                    float free = dest.GetSpaceAvailable();
+                    if (!run && plannedM3.TryGetValue(dest, out float used)) free -= used;
+                    int fit = item.m3 > 0f ? Mathf.FloorToInt(free / item.m3) : step.deposit;
                     int deposit = Math.Min(step.deposit, fit);
                     if (deposit > 0 && run)
                     {
                         dest.Add(item, deposit);
                         s.cargo.Remove(stack, deposit);
+                    }
+                    else if (deposit > 0)
+                    {
+                        planned.TryGetValue((dest, item), out int p2);
+                        planned[(dest, item)] = p2 + deposit;
+                        plannedM3.TryGetValue(dest, out float m);
+                        plannedM3[dest] = m + deposit * item.m3;
                     }
                     if (deposit < step.deposit)
                     {
@@ -402,7 +416,8 @@ public static class Services
                 int want = Math.Min(kv.Value, room);
                 if (want <= 0) break;
                 int added = 0;
-                reserveUsed.TryGetValue(type, out int usedR);
+                int usedR = 0;
+                if (!run) reserveUsed.TryGetValue(type, out usedR);
                 int take = Math.Min(want, Math.Max(0, player.unassignedCrew.GetCrewCount(type) - usedR));
                 if (take > 0)
                 {
@@ -418,7 +433,8 @@ public static class Services
                 if (want > added && CrewType.TryGet(type, out var recruitType))
                 {
                     int cost = Mathf.RoundToInt(recruitType.cost * 0.4f);
-                    stationBrigUsed.TryGetValue(type, out int usedB);
+                    int usedB = 0;
+                    if (!run) stationBrigUsed.TryGetValue(type, out usedB);
                     int shipWilling = s.prisonerData != null ? s.prisonerData.GetWilling(type) : 0;
                     int stationWilling = player.stationPrisoners.GetWilling(type) - usedB;
                     foreach (bool own in new[] { true, false })
@@ -442,7 +458,8 @@ public static class Services
                 if (want > added && center != null && CrewType.TryGet(type, out var crewType))
                 {
                     center.Available.TryGetValue(type, out int stock);
-                    stockUsed.TryGetValue(type, out int usedS);
+                    int usedS = 0;
+                    if (!run) stockUsed.TryGetValue(type, out usedS);
                     int price = PersonnelCenter.GetBuyPrice(crewType, ss.level);
                     int buy = Math.Min(want - added, stock - usedS);
                     long budget = run ? player.credits : player.credits - r.credits - spent;

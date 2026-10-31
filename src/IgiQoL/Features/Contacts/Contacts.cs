@@ -16,6 +16,7 @@ using Behaviour.Weapons;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Data.Persistable;
 using Source.Galaxy;
@@ -35,9 +36,9 @@ public sealed class Contacts : Feature
     public Contacts() { Instance = this; }
 
     public override string Id => "Contacts";
-    public override string Title => "Contacts tab";
-    public override string Description => "The Contacts tab: the boardable ships, wrecks, loot and asteroid ores at your location with the distance to each and a button to board, salvage, tractor or mine it, a counter above the QoL button showing what is left, and markers at the screen edge pointing at the nearest ones off screen.";
-    public override string SettingsTab => "Contacts";
+    public override string Title => "Scanner";
+    public override string Description => "The Scanner tab: the boardable ships, wrecks, loot and asteroid ores at your location with the distance to each and a button to board, salvage, tractor or mine it, a counter above the Dock button showing what is left, and markers at the screen edge pointing at the nearest ones off screen.";
+    public override string SettingsTab => "Scanner";
     public override Type[] PatchClasses => new[] { typeof(LootSpawnPatch) };
 
     public ConfigEntry<bool> HudCounter;
@@ -52,8 +53,8 @@ public sealed class Contacts : Feature
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
-        HudCounter = cfg.Bind(Id, "HudCounter", true, SettingInfo.Describe("Counter above the QoL button",
-            "Shows how many boardable ships, wrecks and loot stacks are left at your location. Click it to open the Contacts tab."));
+        HudCounter = cfg.Bind(Id, "HudCounter", true, SettingInfo.Describe("Counter above the Dock button",
+            "Shows how many boardable ships, wrecks and loot stacks are left at your location. Click it to open the Scanner tab."));
         MarkBoardable = cfg.Bind(Id, "MarkBoardable", true, SettingInfo.Describe("Edge markers: boardable ships",
             $"Marks the {ContactMarkers.MaxPerKind} nearest boardable ships that are off screen at the screen edge, with their distance. Click a marker to open boarding."));
         MarkWrecks = cfg.Bind(Id, "MarkWrecks", true, SettingInfo.Describe("Edge markers: wrecks",
@@ -66,15 +67,22 @@ public sealed class Contacts : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("contacts", "Contacts", 5, Build);
+        ModWindow.AddTab("contacts", "Scanner", 5, Build);
         GameEvents.SaveLoaded += OnSaveLoaded;
+        GameEvents.HudReady += OnHudReady;
     }
 
     private void OnSaveLoaded()
     {
+        // The scenes of the previous save are gone by now.
+        Loot.Clear();
+    }
+
+    private void OnHudReady()
+    {
         if (!Active) return;
-        Plugin.Instance.StartCoroutine(ContactsBadge.CreateWhenReady());
-        Plugin.Instance.StartCoroutine(ContactMarkers.CreateWhenReady());
+        ContactsBadge.Create();
+        ContactMarkers.Create();
     }
 
     public static int PruneLoot()
@@ -118,7 +126,7 @@ public sealed class Contacts : Feature
 
     public static void Tractor(InventoryItemType type)
     {
-        var ship = GameplayManager.Instance?.spaceShip;
+        var ship = Fleet.Flagship;
         if (ship == null) return;
         var tractor = ship.GetModule<TractorModule>();
         if (tractor == null) return;
@@ -175,7 +183,7 @@ public sealed class Contacts : Feature
     private static IEnumerator CheckOres(SelfCheckContext ctx)
     {
         yield return SelfCheckContext.EnsureInSpace();
-        var ship = GameplayManager.Instance?.spaceShip;
+        var ship = Fleet.Flagship;
         var ores = OrePreference.OrePreference.KnownOres();
         if (ship == null || ores.Count < 2)
         {
@@ -269,7 +277,7 @@ public sealed class Contacts : Feature
     private static IEnumerator CheckMarkers(SelfCheckContext ctx)
     {
         yield return SelfCheckContext.EnsureInSpace();
-        var ship = GameplayManager.Instance?.spaceShip;
+        var ship = Fleet.Flagship;
         if (ContactMarkers.Instance == null || ship == null || BasePoiManager.current == null || !Singleton<LootManager>.HasInstance)
         {
             ctx.Skip("markers", "no markers or not in space");
@@ -302,7 +310,7 @@ public sealed class Contacts : Feature
 
     private static void CheckLootRegistry(SelfCheckContext ctx)
     {
-        var ship = GameplayManager.Instance?.spaceShip;
+        var ship = Fleet.Flagship;
         if (BasePoiManager.current == null || !Singleton<LootManager>.HasInstance || ship == null)
         {
             ctx.Skip("loot-registry", "not in space");
@@ -343,7 +351,10 @@ internal static class LootSpawnPatch
         if (!Contacts.Instance.Active) return;
         try
         {
-            if (__result != null) Contacts.Loot.Add(__result);
+            if (__result == null) return;
+            Contacts.Loot.Add(__result);
+            // Destroyed pieces are otherwise only dropped when something reads the list.
+            if ((Contacts.Loot.Count & 63) == 0) Contacts.PruneLoot();
         }
         catch (Exception e) { Contacts.Instance.Fail(e, nameof(LootSpawnPatch)); }
     }
@@ -414,9 +425,14 @@ public sealed class ContactsList : MonoBehaviour
 
     private void Start()
     {
-        Collect();
-        Rebuild();
-        nextRefresh = Time.unscaledTime + 1f;
+        if (!Contacts.Instance.Active) return;
+        try
+        {
+            Collect();
+            Rebuild();
+            nextRefresh = Time.unscaledTime + 1f;
+        }
+        catch (Exception e) { Contacts.Instance.Fail(e, nameof(ContactsList)); }
     }
 
     private void Update()
@@ -434,7 +450,7 @@ public sealed class ContactsList : MonoBehaviour
 
     private void Collect()
     {
-        var ship = GameplayManager.Instance?.spaceShip;
+        var ship = Fleet.Flagship;
         bool haveShip = ship != null;
         Vector2 from = haveShip ? (Vector2)ship.transform.position : Vector2.zero;
         distance.Clear();
@@ -534,7 +550,7 @@ public sealed class ContactsList : MonoBehaviour
         boardables.Sort(byBoardDistance);
         wrecks.Sort(byWreckDistance);
         groupList.Sort(byLootDistance);
-        var ship = GameplayManager.Instance?.spaceShip;
+        var ship = Fleet.Flagship;
         tractor = ship != null ? ship.GetModule<TractorModule>() : null;
 
         Kit.Heading(column, "Boardable ships (" + boardables.Count + ")");

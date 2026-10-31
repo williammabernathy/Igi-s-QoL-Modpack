@@ -75,9 +75,10 @@ internal static class MainMenuPatch
         if (!CoreFeature.Instance.Active) return;
         try
         {
+            SaveData.Discard();
             StartupReport.ShowOnce();
             GameEvents.RaiseMainMenuShown();
         }
-        catch (Exception e) { CoreFeature.Instance.Fail(e, nameof(MainMenuPatch)); }
+        catch (Exception e) { Plugin.Log.LogError($"[Core] {nameof(MainMenuPatch)}: {e}"); }
     }
 }

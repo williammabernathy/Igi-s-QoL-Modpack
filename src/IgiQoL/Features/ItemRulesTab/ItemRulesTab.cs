@@ -292,6 +292,32 @@ public sealed class ItemRulesTab : Feature
             else ctx.Fail("roundtrip", detail);
         }
 
+        // Per-level rules resolve by (identifier, level) and follow Edit/Remove; the unlevelled type's rule is the fallback.
+        // CreateLeveled refuses prefabs whose parts keep per-item values on the shared prefab (ores among them).
+        InventoryItemType levelBase = null;
+        foreach (var t in InventoryItemType.all)
+            if (t.itemLevel == 0 && t.identifier != null && t.definition != null
+                && Array.TrueForAll(t.definition.GetComponents<InventoryItemPart>(), p => p.usesItemState)) { levelBase = t; break; }
+        if (levelBase == null) ctx.Skip("resolve-level", "no item type the game can level");
+        else
+        {
+            var leveled = InventoryItemType.CreateLeveled(levelBase, 3);
+            string levelKey = Items.RuleKey(leveled);
+            int baseCap = ItemRules.Resolve(levelBase).tractorCap;
+            try
+            {
+                ItemRules.Edit(levelKey).tractorCap = baseCap + 2;
+                bool hit = ItemRules.Resolve(leveled).tractorCap == baseCap + 2;
+                bool otherLevel = ItemRules.Resolve(InventoryItemType.CreateLeveled(levelBase, 4)).tractorCap == baseCap;
+                ItemRules.Remove(levelKey);
+                bool gone = ItemRules.Resolve(leveled).tractorCap == baseCap;
+                string levelDetail = $"{levelKey}: baseCap={baseCap} hit={hit} otherLevel={otherLevel} afterRemove={gone}";
+                if (hit && otherLevel && gone) ctx.Pass("resolve-level", levelDetail);
+                else ctx.Fail("resolve-level", levelDetail);
+            }
+            finally { ItemRules.Remove(levelKey); }
+        }
+
         ModWindow.Open("itemrules");
         ctx.Cleanup(ModWindow.Close);
         int rows = 0;

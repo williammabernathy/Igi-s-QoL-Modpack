@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Behaviour.Ability;
 using Behaviour.Item;
 using Behaviour.Item.Usable;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Item;
 using Source.Player;
@@ -20,7 +21,7 @@ public static class EchoKitSection
     {
         Kit.Muted(content, "Every rule except \"Whenever ready\" only fires during a fight (your ship took damage in the last 10 s or has a target). Abilities need to be off cooldown; aimed abilities go on ECHO's target (hostile), your most damaged ship (friendly), the asteroid the flagship is mining (asteroid), or the nearest wreck whose credits or cargo box are still there (wreck), and wait while there is no such target. A deployable is dropped next to the flagship from its cargo, one every 2 s at most, when the game's own deploy cooldown allows.");
 
-        var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var ship = Fleet.Flagship;
         Kit.Heading(content, "Abilities" + (ship != null ? " of " + ship.spaceShipData.GetShipName() : ""));
         if (ship == null) Kit.Muted(content, "Shown while you're in space.");
         else

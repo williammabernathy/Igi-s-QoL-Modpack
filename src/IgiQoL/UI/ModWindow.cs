@@ -45,7 +45,6 @@ public static class ModWindow
     private static readonly Dictionary<string, Button> tabButtons = new();
     private static RectTransform root, body, scroll;
 
-    public static IReadOnlyList<Tab> Tabs => tabs;
     public static bool IsOpen => root != null;
     public static string CurrentTab { get; private set; }
     public static RectTransform Content { get; private set; }
@@ -66,6 +65,8 @@ public static class ModWindow
         tabs.Add(new Tab { Id = id, Title = title, Order = order, Build = build });
         tabs.Sort((a, b) => a.Order.CompareTo(b.Order));
     }
+
+    public static bool HasTab(string title) => tabs.Exists(t => t.Title == title);
 
     public static void Toggle()
     {
@@ -120,9 +121,10 @@ public static class ModWindow
     private static void Build()
     {
         var position = new Vector2(PlayerPrefs.GetFloat(PrefX, 0f), PlayerPrefs.GetFloat(PrefY, 0f));
-        // Tab captions grow with the Text size setting, and each tab needs 96 px; the window widens so they keep fitting.
+        // Tab captions grow with the Text size setting; each tab is at least 90 px and wide enough for its caption,
+        // and the window widens so they keep fitting.
         float grow = Mathf.Max(1f, Features.TextScale.TextScale.Factor);
-        root = Kit.Window("IgiQoL_Window", Mathf.Max(760f, 150f + tabs.Count * 96f) * grow, 520f, position);
+        root = Kit.Window("IgiQoL_Window", 760f * grow, 520f, position);
         root.gameObject.AddComponent<WindowRoot>();
 
         var header = Kit.Row(root, 6f, 26f);
@@ -132,13 +134,18 @@ public static class ModWindow
         FleetBarParts.AddIcon(header, Kit.Icon("Info", PoiIconKeys.Captain("Command")), ColorHelper.stationCardTitle, 16f);
         FleetBarParts.AddLine(header, "Igi's QoL", 12f, ColorHelper.stationCardTitle, TextAlignmentOptions.MidlineLeft);
         tabButtons.Clear();
+        float tabsWidth = 0f;
         foreach (var tab in tabs)
         {
             string id = tab.Id;
             var button = Kit.TextButton(header, tab.Title, () => Show(id), 90f * grow);
-            CaptainCards.SetFixedSize((RectTransform)button.transform, 90f * grow, 22f);
+            var caption = button.GetComponentInChildren<TMP_Text>();
+            float width = Mathf.Max(90f * grow, caption != null ? Mathf.Ceil(caption.GetPreferredValues(tab.Title).x) + 12f : 0f);
+            CaptainCards.SetFixedSize((RectTransform)button.transform, width, 22f);
+            tabsWidth += width + 6f;
             tabButtons[id] = button;
         }
+        root.sizeDelta = new Vector2(Mathf.Max(760f * grow, 150f * grow + tabsWidth), root.sizeDelta.y);
         CaptainCards.AddSpacer(header);
         Kit.Tile(header, PoiIconKeys.Fleet("Close"), ColorHelper.reddish, 22f, Close, "Close");
         var drag = header.gameObject.AddComponent<DragHandle>();

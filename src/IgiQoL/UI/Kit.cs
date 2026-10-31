@@ -72,6 +72,10 @@ public static class Kit
         return UiScrollView.Build(scroll, 4f, new RectOffset(8, 8, 8, 8));
     }
 
+    // Empty vertical space in a column, e.g. above a heading so it doesn't run into the rows before it.
+    public static void Gap(RectTransform parent, float height) =>
+        UiCards.NewChild("Gap", parent).gameObject.AddComponent<LayoutElement>().preferredHeight = height;
+
     public static TMP_Text Heading(RectTransform parent, string text) =>
         FleetBarParts.AddLine(parent, text, 14f, ColorHelper.stationCardTitle, TextAlignmentOptions.MidlineLeft);
 
@@ -83,6 +87,16 @@ public static class Kit
         var t = FleetBarParts.AddFlexibleLine(parent, text, 11f, ColorHelper.poiTooltipMuted);
         t.textWrappingMode = TextWrappingModes.Normal;
         t.overflowMode = TextOverflowModes.Overflow;
+        return t;
+    }
+
+    // A wrapping, rich-text line in body colour (Label is one line, Muted is grey).
+    public static TMP_Text Text(RectTransform parent, string text)
+    {
+        var t = Muted(parent, text);
+        t.color = ColorHelper.offWhite;
+        t.fontSize = 12f;
+        t.richText = true;
         return t;
     }
 

@@ -51,7 +51,9 @@ public sealed class DronesOnArrival : Feature
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
-        var bay = GameplayManager.Instance.spaceShip.droneBayModule;
+        var ship = Fleet.Flagship;
+        if (ship == null) { ctx.Skip("deploy", "not in space"); yield break; }
+        var bay = ship.droneBayModule;
         if (bay == null)
         {
             ctx.Skip("deploy", "flagship has no drone bay");

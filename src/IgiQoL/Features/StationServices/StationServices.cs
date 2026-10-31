@@ -83,6 +83,16 @@ public sealed class StationServices : Feature
                 Singleton<NotificationManager>.Instance.CreateNotification(r.problems[0]).WithColor(ColorHelper.orange75).Show();
     }
 
+    public override void OnActivated()
+    {
+        GameEvents.SaveLoaded += () =>
+        {
+            if (!Active) return;
+            try { CrewLosses.Prune(); }
+            catch (Exception e) { Fail(e, nameof(CrewLosses)); }
+        };
+    }
+
     internal void OnDocked()
     {
         if (!RepairOnDock.Value && !RestockOnDock.Value && !SellOnDock.Value && !CrewOnDock.Value && !BrigOnDock.Value) return;
@@ -94,11 +104,13 @@ public sealed class StationServices : Feature
     // EnterSpacestation loads the interior scene asynchronously; the hangar's repair jobs need it.
     private IEnumerator RunWhenInside()
     {
+        var player = GamePlayer.current;
         float until = Time.realtimeSinceStartup + 15f;
         while (SpaceStationInterior.instance == null && Time.realtimeSinceStartup < until) yield return null;
         yield return null;
         dockRunPending = false;
-        if (!Active || SpaceStationInterior.instance == null) yield break;
+        // A save loaded during the wait is a different game; the run belongs to the one that docked.
+        if (!Active || SpaceStationInterior.instance == null || GamePlayer.current != player) yield break;
         try
         {
             // Sell first so the credits are there for repairs and ammo.
@@ -108,7 +120,8 @@ public sealed class StationServices : Feature
             var restock = RestockOnDock.Value ? Services.Restock(run: true) : null;
             var crew = CrewOnDock.Value ? Services.Crew(run: true) : null;
             var brig = BrigOnDock.Value ? Services.Brig(run: true) : null;
-            if (sell != null && sell.count > 0 || restock != null && restock.count > 0) InventoryInteractionManager.Instance?.ReloadUI();
+            var iim = InventoryInteractionManager.Instance;
+            if (iim != null && (sell != null && sell.count > 0 || restock != null && restock.count > 0)) iim.ReloadUI();
             string summary = Summary(repair, restock, sell, crew, brig);
             lastDockSummary = summary ?? "";
             if (summary != null) Plugin.Log.LogInfo("[StationServices] on dock: " + summary);

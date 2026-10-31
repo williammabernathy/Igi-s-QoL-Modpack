@@ -9,6 +9,7 @@ using Behaviour.UI.Side_Menu;
 using Behaviour.Unit;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Galaxy;
 using Source.NotificationAlert;
@@ -65,7 +66,7 @@ public sealed class EventLog : Feature
         if (!Active) return;
         try
         {
-            if (ship == null || GameplayManager.Instance == null || ship != GameplayManager.Instance.spaceShip) return;
+            if (ship == null || ship != Fleet.Flagship) return;
             var poi = MapPointOfInterest.current;
             if (poi != null) Add(LogKind.Travel, "Arrived at " + poi.name + (poi.system != null ? " (" + poi.system.name + ")" : ""), TravelColor);
         }

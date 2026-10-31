@@ -43,6 +43,7 @@ public sealed class OrePreference : Feature
     {
         Load();
         GameEvents.SaveLoaded += OnSaveLoaded;
+        EchoPriority.EchoPriority.EnsureTab();
     }
 
     private void OnSaveLoaded()

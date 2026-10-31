@@ -15,6 +15,7 @@ using Behaviour.Unit;
 using Behaviour.Util;
 using BepInEx.Configuration;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using LightJson;
 using Source.Data.Persistable;
 using Source.Galaxy;
@@ -46,6 +47,7 @@ public sealed class EchoKit : Feature
     public override string Title => "ECHO abilities and deployables";
     public override string Description => "Lets ECHO use your flagship's abilities and the deployables in its cargo (turrets, shield pylons, decoys, mines) by rules you set on the ECHO tab, and pick its turrets back up after the fight. Every rule starts off.";
     public override string SettingsTab => "ECHO";
+
     public override Type[] PatchClasses => Type.EmptyTypes;
 
     public ConfigEntry<bool> AlsoWithoutEcho;
@@ -55,7 +57,7 @@ public sealed class EchoKit : Feature
     public static readonly Dictionary<string, KitRule> Deployables = new();
 
     private static readonly HashSet<string> ourToggles = new();
-    private static readonly HashSet<InventoryItemType> deployed = new();
+    private static readonly HashSet<DefensiveTurret> deployed = new();
     private static float nextDeploy, quietSince = -1f;
 
     public override void BindConfig(ConfigFile cfg)
@@ -151,7 +153,7 @@ public sealed class EchoKit : Feature
         UI.ModWindow.Close();
 
         yield return SelfCheckContext.EnsureInSpace();
-        if (!Allowed(out var ship) && (ship = GameplayManager.Instance?.spaceShip) == null || MapPointOfInterest.current == null || SpaceStationInterior.instance != null)
+        if (!Allowed(out var ship) && (ship = Fleet.Flagship) == null || MapPointOfInterest.current == null || SpaceStationInterior.instance != null)
         {
             ctx.Skip("ability", "not in space");
             yield break;
@@ -216,11 +218,13 @@ public sealed class EchoKit : Feature
 
     public override void OnActivated()
     {
-        GameEvents.SaveLoaded += Load;
+        GameEvents.SaveLoaded += OnSaveLoaded;
+        EchoPriority.EchoPriority.EnsureTab();
         Plugin.Instance.StartCoroutine(Run());
     }
 
-    public static KitRule Rule(Dictionary<string, KitRule> rules, string id) => rules.TryGetValue(id, out var r) ? r : null;
+    // Some cargo items (builder-made equipment) have no identifier.
+    public static KitRule Rule(Dictionary<string, KitRule> rules, string id) => id != null && rules.TryGetValue(id, out var r) ? r : null;
 
     public static void SetRule(Dictionary<string, KitRule> rules, string id, KitWhen when, int value)
     {
@@ -229,24 +233,37 @@ public sealed class EchoKit : Feature
         Save();
     }
 
+    private static void OnSaveLoaded()
+    {
+        if (Instance.Active) Load();
+    }
+
     private static void Load()
     {
         Abilities.Clear();
         Deployables.Clear();
         ourToggles.Clear();
         deployed.Clear();
-        var record = SaveData.Feature(Instance.Id, false);
-        if (record == null) return;
-        Read(record["abilities"], Abilities);
-        Read(record["deployables"], Deployables);
+        try
+        {
+            var record = SaveData.Feature(Instance.Id, false);
+            if (record == null) return;
+            Read(record["abilities"], Abilities);
+            Read(record["deployables"], Deployables);
+        }
+        catch (Exception e) { Instance.Fail(e, nameof(Load)); }
     }
 
     private static void Read(JsonValue v, Dictionary<string, KitRule> into)
     {
         if (!v.IsJsonObject) return;
         foreach (var kv in v.AsJsonObject)
-            if (kv.Value["when"].IsString && Enum.TryParse(kv.Value["when"].AsString, out KitWhen when) && when != KitWhen.Off)
-                into[kv.Key] = new KitRule { when = when, value = kv.Value["value"].IsNumber ? kv.Value["value"].AsInteger : 50 };
+        {
+            var entry = kv.Value;
+            if (!entry.IsJsonObject) continue;
+            if (entry["when"].IsString && Enum.TryParse(entry["when"].AsString, out KitWhen when) && when != KitWhen.Off)
+                into[kv.Key] = new KitRule { when = when, value = entry["value"].IsNumber ? entry["value"].AsInteger : 50 };
+        }
     }
 
     private static void Save()
@@ -268,6 +285,7 @@ public sealed class EchoKit : Feature
         public bool fighting;
         public float shield, armour, hull;
         public int targetedBy;
+        public CombatModule combat;
     }
 
     internal static ShipState Read(SpaceShip ship)
@@ -280,6 +298,7 @@ public sealed class EchoKit : Feature
             armour = ship.maxArmorHP > 0f ? ship.currentArmorHP / ship.maxArmorHP : 1f,
             hull = ship.maxHullHP > 0f ? ship.currentHullHP / ship.maxHullHP : 1f,
             targetedBy = ship.targetedCount,
+            combat = combat,
         };
     }
 
@@ -315,10 +334,11 @@ public sealed class EchoKit : Feature
 
     internal static bool Allowed(out SpaceShip ship)
     {
-        ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        ship = Fleet.Flagship;
         if (ship == null || GamePlayer.current == null) return false;
         if (!GamePlayer.current.autoPlay && !Instance.AlsoWithoutEcho.Value) return false;
-        return SpaceStationInterior.instance == null && !Singleton<TravelManager>.Instance.TravelActive() && MapPointOfInterest.current != null;
+        var travel = Singleton<TravelManager>.Current;
+        return SpaceStationInterior.instance == null && travel != null && !travel.TravelActive() && MapPointOfInterest.current != null;
     }
 
     private static void Tick()
@@ -342,25 +362,25 @@ public sealed class EchoKit : Feature
             bool want = Holds(rule, s);
             if (ability.toggledAbility)
             {
-                if (want && !ability.toggleActive && ability.isReady && Fire(ship, ability)) { ourToggles.Add(ability.identifier); used++; }
+                if (want && !ability.toggleActive && ability.isReady && Fire(ship, s.combat, ability)) { ourToggles.Add(ability.identifier); used++; }
                 else if (!want && ability.toggleActive && ourToggles.Remove(ability.identifier)) ability.TriggerPayload();
                 continue;
             }
-            if (want && ability.isReady && Fire(ship, ability)) used++;
+            if (want && ability.isReady && Fire(ship, s.combat, ability)) used++;
         }
         return used;
     }
 
     // Targeted abilities go on ECHO's current target (hostile), your most damaged ship (friendly), the asteroid the
     // flagship mines, or the nearest wreck the payload can still work.
-    private static bool Fire(SpaceShip ship, ActivatedAbility ability)
+    private static bool Fire(SpaceShip ship, CombatModule combat, ActivatedAbility ability)
     {
         switch (ability.targetType)
         {
             case AbilityTargetType.None:
                 return ability.TriggerPayload() != null;
             case AbilityTargetType.HostileShip:
-                var target = ship.GetModule<CombatModule>()?.priorityTarget as AbstractUnit;
+                var target = combat != null ? combat.priorityTarget as AbstractUnit : null;
                 return target != null && !target.isDestroyed && ability.TriggerPayload(target.gameObject) != null;
             case AbilityTargetType.FriendlyShip:
                 var friend = MostDamaged(ship);
@@ -421,14 +441,16 @@ public sealed class EchoKit : Feature
     internal static InventoryItemType Deploy(SpaceShip ship, ShipState s)
     {
         var cargo = ship.spaceShipData.cargo;
-        foreach (var entry in new List<Inventory.InventoryItem>(cargo.items))
+        foreach (var entry in cargo.items)
         {
             var item = entry?.item;
-            if (item == null || !item.TryGetComponent<DefensiveTurretItem>(out var dt)) continue;
-            if (!Holds(Rule(Deployables, item.identifier), s) || dt.IsOnCooldown(out _)) continue;
+            if (item == null || !Holds(Rule(Deployables, item.identifier), s)) continue;
+            if (!item.TryGetComponent<DefensiveTurretItem>(out var dt) || dt.IsOnCooldown(out _)) continue;
+            var before = new HashSet<DefensiveTurret>(Object.FindObjectsByType<DefensiveTurret>(FindObjectsInactive.Exclude));
             if (!dt.OnUse(item)) continue;
             cargo.Remove(entry, 1);
-            deployed.Add(item);
+            foreach (var turret in Object.FindObjectsByType<DefensiveTurret>(FindObjectsInactive.Exclude))
+                if (!before.Contains(turret) && turret.defensiveTurretData?.turretItem == item) deployed.Add(turret);
             nextDeploy = Time.time + 2f;
             Plugin.Log.LogInfo($"[EchoKit] deployed {item.identifier}");
             return item;
@@ -441,16 +463,13 @@ public sealed class EchoKit : Feature
     {
         var tractor = ship.GetModule<TractorModule>();
         if (tractor == null) return 0;
-        int started = 0, waiting = 0;
-        foreach (var turret in Object.FindObjectsByType<DefensiveTurret>(FindObjectsInactive.Exclude))
+        deployed.RemoveWhere(t => t == null);
+        int started = 0;
+        foreach (var turret in deployed)
         {
             var item = turret.defensiveTurretData?.turretItem;
-            if (item == null || turret.faction != Faction.player || !deployed.Contains(item) || turret.GetComponent<TractorableItem>() != null) continue;
-            if (GamePlayer.current.currentSpaceShip.IsCargoBayFull(item.m3) || tractor.GetAvailableTractorBeam(bonus: true) == null)
-            {
-                waiting++;
-                continue;
-            }
+            if (item == null || turret.faction != Faction.player || turret.GetComponent<TractorableItem>() != null) continue;
+            if (GamePlayer.current.currentSpaceShip.IsCargoBayFull(item.m3) || tractor.GetAvailableTractorBeam(bonus: true) == null) continue;
             turret.UpdateAmmoData();
             var tractorable = turret.gameObject.AddComponent<TractorableItem>();
             tractorable.SetData(new TractorableItemData { itemType = item, itemAmount = 1, jettisoned = true });
@@ -459,8 +478,6 @@ public sealed class EchoKit : Feature
             if (col != null) col.enabled = false;
             started++;
         }
-        // Nothing left out there (all on their way in, or none deployed any more): stop looking.
-        if (started == 0 && waiting == 0) deployed.Clear();
         return started;
     }
 }

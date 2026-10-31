@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Behavior.UI.GalaxyMap;
@@ -110,7 +111,8 @@ internal sealed class RollupPanel : MonoBehaviour
             return;
         }
         if (Time.unscaledTime < nextRefresh) return;
-        Show();
+        try { Show(); }
+        catch (Exception e) { CraftRollup.Instance.Fail(e, nameof(RollupPanel)); }
     }
 
     public void Show()
@@ -148,19 +150,29 @@ internal sealed class RollupPanel : MonoBehaviour
 
     private void OnClick()
     {
-        var forge = tab.forge;
-        var recipe = tab.subRecipe;
-        var plan = Rollups.Find(forge, recipe);
-        if (plan != null) Rollups.Stop(plan);
-        else if (preview != null && preview.HasWork) Rollups.Start(Rollups.Build(forge, recipe, amount));
-        Show();
+        if (!CraftRollup.Instance.Active) return;
+        try
+        {
+            var forge = tab.forge;
+            var recipe = tab.subRecipe;
+            var plan = Rollups.Find(forge, recipe);
+            if (plan != null) Rollups.Stop(plan);
+            else if (preview != null && preview.HasWork) Rollups.Start(Rollups.Build(forge, recipe, amount));
+            Show();
+        }
+        catch (Exception e) { CraftRollup.Instance.Fail(e, nameof(RollupPanel)); }
     }
 
     private void OnAmount(string text)
     {
-        amount = int.TryParse(text, out int n) ? Mathf.Clamp(n, 1, 999) : 1;
-        amountField.SetTextWithoutNotify(amount.ToString());
-        Show();
+        if (!CraftRollup.Instance.Active) return;
+        try
+        {
+            amount = int.TryParse(text, out int n) ? Mathf.Clamp(n, 1, 999) : 1;
+            amountField.SetTextWithoutNotify(amount.ToString());
+            Show();
+        }
+        catch (Exception e) { CraftRollup.Instance.Fail(e, nameof(RollupPanel)); }
     }
 
     private static string Orange => ColorUtility.ToHtmlStringRGB(ColorHelper.orange75);

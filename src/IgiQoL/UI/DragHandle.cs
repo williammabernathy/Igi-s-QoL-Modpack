@@ -5,10 +5,13 @@ using UnityEngine.EventSystems;
 namespace IgiQoL.UI;
 
 // Moves target by the drag delta (as FleetCargoSection.OnDrag). Needs a raycast-target Graphic on the same object.
-public sealed class DragHandle : MonoBehaviour, IDragHandler, IEndDragHandler
+// A drag never counts as a click, so a button can carry its own DragHandle.
+public sealed class DragHandle : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public RectTransform target;
     public Action<Vector2> onEndDrag;
+
+    public void OnBeginDrag(PointerEventData eventData) => eventData.eligibleForClick = false;
 
     public void OnDrag(PointerEventData eventData)
     {

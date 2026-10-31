@@ -37,6 +37,12 @@ public sealed class EchoGates : Feature
     public override string SettingsTab => "ECHO";
     public override Type[] PatchClasses => new[] { typeof(EchoGatePatches) };
 
+    public override void OnActivated()
+    {
+        GameEvents.SaveLoaded += EchoGatePatches.ResetQuickSteps;
+        EchoPriority.EchoPriority.EnsureTab();
+    }
+
     public const int VanillaRaidThreshold = -500;
     public const int VanillaDungeonCrewMinimum = 3;
     public const float VanillaBoardingCrewFraction = 0.5f;
@@ -777,7 +783,8 @@ internal static class EchoGatePatches
         try
         {
             if (!F.FastUnloading.Value) return true;
-            Inventory dest = dropItem.CanGoInArmory() ? GamePlayer.current.globalInventory : ss.materialStorage;
+            Inventory dest = Cargo.DepositTarget(ss, dropItem);
+            if (dest == null) return true;
             Cargo.Move(cargoShip.cargo, dest, dropItem, int.MaxValue);
             __instance.inventoryFull = false;
             __instance.SetQuickerUpdateTimer();
@@ -844,6 +851,8 @@ internal static class EchoGatePatches
     // they're full, the next decision comes after QuickStepSeconds.
     private static bool repairPending;
 
+    internal static void ResetQuickSteps() => repairPending = decidingDocked = false;
+
     [HarmonyPostfix]
     [HarmonyPatch(typeof(IdleManager), "Update")]
     internal static void IdleUpdatePostfix(IdleManager __instance)
@@ -851,8 +860,9 @@ internal static class EchoGatePatches
         if (!repairPending || !F.Active) return;
         try
         {
+            var player = GamePlayer.current;
             var unit = IdleManager.ship;
-            if (!F.QuickStationSteps.Value || !GamePlayer.current.autoPlay || SpaceStationInterior.instance == null || unit == null)
+            if (player == null || !F.QuickStationSteps.Value || !player.autoPlay || SpaceStationInterior.instance == null || unit == null)
             {
                 repairPending = false;
                 return;

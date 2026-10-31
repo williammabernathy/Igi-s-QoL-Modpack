@@ -8,6 +8,7 @@ using Behaviour.Tractoring;
 using Behaviour.Unit;
 using Behaviour.Util;
 using IgiQoL.Core;
+using IgiQoL.Game;
 using Source.Data.Persistable;
 using Source.Galaxy;
 using Source.Item;
@@ -22,7 +23,7 @@ internal static class FleetHoldsCheck
     {
         yield return SelfCheckContext.EnsureInSpace();
         var f = FleetHolds.Instance;
-        var flagship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+        var flagship = Fleet.Flagship;
         SpaceShip wing = null;
         TractorModule tractor = null;
         foreach (var d in GamePlayer.current.activeFleet)

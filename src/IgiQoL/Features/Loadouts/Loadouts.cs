@@ -34,11 +34,19 @@ public sealed class Loadouts : Feature
     // Ship switches only count once a save is up; SetSpaceShipData also runs while a save loads.
     internal static bool ready;
 
+    // Guid of the ship whose switch was last handled; refits re-run SetSpaceShipData for the same ship.
+    internal static string flownGuid;
+
     public override void OnActivated()
     {
         ModWindow.AddTab("loadouts", "Loadouts", 25, LoadoutsTab.Build);
-        GameEvents.SaveLoaded += () => ready = true;
-        GameEvents.MainMenuShown += () => ready = false;
+        GameEvents.SaveLoaded += () =>
+        {
+            ready = true;
+            var flown = GamePlayer.current != null ? GamePlayer.current.currentSpaceShip : null;
+            flownGuid = flown != null ? flown.guid : null;
+        };
+        GameEvents.MainMenuShown += () => { ready = false; flownGuid = null; };
     }
 
     // Flying another ship brings back the ECHO settings of the loadout last applied to it.
@@ -194,7 +202,8 @@ internal static class LoadoutPatches
     [HarmonyPatch(typeof(GamePlayer), nameof(GamePlayer.SetSpaceShipData))]
     private static void SetSpaceShipDataPostfix(SpaceShipData data)
     {
-        if (!F.Active || !Loadouts.ready || data == null) return;
+        if (!F.Active || !Loadouts.ready || data == null || data.guid == Loadouts.flownGuid) return;
+        Loadouts.flownGuid = data.guid;
         try { Loadouts.OnFlownShipChanged(data); }
         catch (Exception e) { F.Fail(e, nameof(LoadoutPatches)); }
     }

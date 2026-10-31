@@ -19,12 +19,7 @@ public static class CrewLosses
     private static JsonObject Ships(bool create)
     {
         var record = SaveData.Feature(StationServices.Instance.Id, create);
-        if (record == null) return null;
-        if (record[Key].IsJsonObject) return record[Key].AsJsonObject;
-        if (!create) return null;
-        var obj = new JsonObject();
-        record[Key] = obj;
-        return obj;
+        return record != null ? SaveData.Child(record, Key, create) : null;
     }
 
     public static int Pending(SpaceShipData ship, string type)
@@ -72,6 +67,21 @@ public static class CrewLosses
     {
         var ships = Ships(false);
         if (ships != null && ship != null) ships.Remove(ship.guid);
+    }
+
+    // Drops the records of ships you no longer own (sold, destroyed), so they don't pile up in the save.
+    internal static void Prune()
+    {
+        var player = GamePlayer.current;
+        var ships = Ships(false);
+        if (player == null || ships == null) return;
+        var live = new HashSet<string>();
+        foreach (var s in player.spaceShips) if (s != null) live.Add(s.guid);
+        foreach (var s in player.activeFleet) if (s != null) live.Add(s.guid);
+        var stale = new List<string>();
+        foreach (var kv in ships)
+            if (!live.Contains(kv.Key)) stale.Add(kv.Key);
+        foreach (var key in stale) ships.Remove(key);
     }
 
     // Your ship that owns this crew list (flagship, fleet or parked), or null for the reserve, stations and enemies.

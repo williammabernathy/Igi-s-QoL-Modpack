@@ -26,6 +26,12 @@ public sealed class Separation : Feature
     public override string Description => "In a fight the game flies every ship straight at its target and turns its collision avoidance off, so ships pile on top of each other. With this on, your ships keep a gap from any ship near them while they fight, and with \"Other ships keep distance too\" enemy and allied ships do the same. Set it per ship of yours with the last button on its row in the fleet panel.";
     public override Type[] PatchClasses => new[] { typeof(SeparationPatches) };
 
+    public override void OnActivated()
+    {
+        GameEvents.SaveLoaded += SeparationPatches.Reset;
+        GameEvents.MainMenuShown += SeparationPatches.Reset;
+    }
+
     public ConfigEntry<bool> Default, OtherShips;
     public ConfigEntry<float> Gap;
 
@@ -48,7 +54,8 @@ public sealed class Separation : Feature
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
-        var flagship = GameplayManager.Instance.spaceShip;
+        var flagship = Fleet.Flagship;
+        if (flagship == null) { ctx.Skip("settings-roundtrip", "not in space"); yield break; }
         var g = flagship.spaceShipData.guid;
         var before = ShipSettings.Get(g).separation;
         ctx.Cleanup(() =>
@@ -298,6 +305,9 @@ internal static class SeparationPatches
     }
 
     internal static bool TryGetState(AbstractUnit unit, out SeparationState state) => states.TryGetValue(unit, out state);
+
+    // Keys are Unity objects that die with the save; drop them on load and at the main menu.
+    internal static void Reset() => states.Clear();
 
     private static void Prune()
     {

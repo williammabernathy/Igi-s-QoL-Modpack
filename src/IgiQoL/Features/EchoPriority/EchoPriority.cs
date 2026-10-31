@@ -61,11 +61,22 @@ public sealed class EchoPriority : Feature
 
     public static List<EchoActivity> List = new List<EchoActivity>();
 
+    private static bool tabAdded;
+
+    // Every feature whose settings live on the ECHO tab calls this from OnActivated; the tab is added once. Features
+    // registered before Window find it inactive and leave the tab to the ones after it (or to the Settings tab fallback).
+    public static void EnsureTab()
+    {
+        if (tabAdded || Window.WindowFeature.Instance == null || !Window.WindowFeature.Instance.Active) return;
+        tabAdded = true;
+        ModWindow.AddTab("echo", "ECHO", 10, BuildEcho);
+    }
+
     public override void OnActivated()
     {
         LoadList();
         GameEvents.SaveLoaded += OnSaveLoaded;
-        ModWindow.AddTab("echo", "ECHO", 10, BuildEcho);
+        EnsureTab();
     }
 
     private void OnSaveLoaded()
@@ -160,6 +171,46 @@ public sealed class EchoPriority : Feature
 
     private static void BuildEcho(RectTransform content)
     {
+        if (Instance.Active) BuildPriority(content);
+        else
+        {
+            Kit.Heading(content, "Activity priority");
+            Kit.Muted(content, "Turned off on the Settings tab.");
+        }
+
+        var gates = EchoGates.EchoGates.Instance;
+        SettingRows.AddSection(content, gates);
+        if (gates.Active) SettingRows.AddEntries(content, gates.Id, SettingRows.Rows.Options);
+        else Kit.Muted(content, "Turned off on the Settings tab.");
+        Kit.Muted(content, "Stealth, ammo and buyouts for operations ECHO starts are on the Operations tab.");
+
+        var missions = EchoMissions.EchoMissions.Instance;
+        SettingRows.AddSection(content, missions);
+        if (missions.Active) SettingRows.AddEntries(content, missions.Id, SettingRows.Rows.Options);
+        else Kit.Muted(content, "Turned off on the Settings tab.");
+
+        var retreat = EchoRetreat.EchoRetreat.Instance;
+        SettingRows.AddSection(content, retreat);
+        if (retreat.Active) SettingRows.AddEntries(content, retreat.Id, SettingRows.Rows.Options);
+        else Kit.Muted(content, "Turned off on the Settings tab.");
+
+        var kit = EchoKit.EchoKit.Instance;
+        SettingRows.AddSection(content, kit);
+        if (kit.Active)
+        {
+            SettingRows.AddEntries(content, kit.Id, SettingRows.Rows.Options);
+            EchoKit.EchoKitSection.Build(content);
+        }
+        else Kit.Muted(content, "Turned off on the Settings tab.");
+
+        var ores = OrePreference.OrePreference.Instance;
+        SettingRows.AddSection(content, ores);
+        if (ores.Active) OrePreference.OrePreferenceSection.Build(content);
+        else Kit.Muted(content, "Turned off on the Settings tab.");
+    }
+
+    private static void BuildPriority(RectTransform content)
+    {
         Kit.Heading(content, "Activity priority");
         Kit.Muted(content, "When ECHO is looking for something to do (docked, or in empty space), it tries these activities from the top down and takes the first one your ship is equipped for and can find work for. The top entry is also the preferred activity on the game's Autopilot tab: picking an activity in that dropdown moves it to the top here, and picking Autodetect empties this list.");
 
@@ -199,36 +250,6 @@ public sealed class EchoPriority : Feature
             }, 60f);
         }
         Kit.Muted(content, "Leave the list empty to use the game's normal behaviour: the single preferred activity from the Autopilot tab.");
-
-        var gates = EchoGates.EchoGates.Instance;
-        SettingRows.AddSection(content, gates);
-        if (gates.Active) SettingRows.AddEntries(content, gates.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
-        Kit.Muted(content, "Stealth, ammo and buyouts for operations ECHO starts are on the Operations tab.");
-
-        var missions = EchoMissions.EchoMissions.Instance;
-        SettingRows.AddSection(content, missions);
-        if (missions.Active) SettingRows.AddEntries(content, missions.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
-
-        var retreat = EchoRetreat.EchoRetreat.Instance;
-        SettingRows.AddSection(content, retreat);
-        if (retreat.Active) SettingRows.AddEntries(content, retreat.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
-
-        var kit = EchoKit.EchoKit.Instance;
-        SettingRows.AddSection(content, kit);
-        if (kit.Active)
-        {
-            SettingRows.AddEntries(content, kit.Id, SettingRows.Rows.Options);
-            EchoKit.EchoKitSection.Build(content);
-        }
-        else Kit.Muted(content, "Turned off on the Settings tab.");
-
-        var ores = OrePreference.OrePreference.Instance;
-        SettingRows.AddSection(content, ores);
-        if (ores.Active) OrePreference.OrePreferenceSection.Build(content);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
     }
 
     private static void Edit(Action<List<EchoActivity>> change)

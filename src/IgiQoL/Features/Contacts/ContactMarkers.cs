@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using Behavior.UI.GalaxyMap;
 using Behaviour.Equipment.Module;
@@ -10,6 +9,7 @@ using Behaviour.UI.Shared;
 using Behaviour.UI.Spacestation;
 using Behaviour.Unit;
 using Behaviour.Weapons;
+using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Util;
 using Behaviour.Mining;
@@ -40,9 +40,11 @@ public sealed class ContactMarkers : MonoBehaviour
         public Kind kind;
         public Component target;
         public bool shown;
+        public int lastDist = -1;
     }
 
     private readonly List<Marker> markers = new();
+    private static readonly Kind[] Kinds = (Kind[])Enum.GetValues(typeof(Kind));
     private readonly List<(float d, Component c)> scratch = new();
     private Comparison<(float d, Component c)> byDistance;
     private float nextCollect;
@@ -70,28 +72,16 @@ public sealed class ContactMarkers : MonoBehaviour
         return false;
     }
 
-    public static IEnumerator CreateWhenReady()
+    internal static void Create()
     {
-        float deadline = Time.realtimeSinceStartup + 60f;
-        while (HudManager.Instance == null || HudManager.Instance.rootCanvasTransform == null)
-        {
-            if (Time.realtimeSinceStartup > deadline) yield break;
-            yield return null;
-        }
-        if (Instance != null) yield break;
-        try { Create(); }
-        catch (Exception e) { Contacts.Instance.Fail(e, nameof(ContactMarkers)); }
-    }
-
-    private static void Create()
-    {
+        if (Instance != null) return;
         var root = UiCards.NewChild("IgiQoL_ContactMarkers", HudManager.Instance.rootCanvasTransform);
         UiCards.Stretch(root);
         // First child: drawn under every HUD panel and window.
         root.SetAsFirstSibling();
         Instance = root.gameObject.AddComponent<ContactMarkers>();
         Instance.byDistance = (a, b) => a.d.CompareTo(b.d);
-        foreach (Kind kind in Enum.GetValues(typeof(Kind)))
+        foreach (var kind in Kinds)
             for (int i = 0; i < MaxPerKind; i++) Instance.markers.Add(Instance.NewMarker(root, kind));
     }
 
@@ -156,10 +146,16 @@ public sealed class ContactMarkers : MonoBehaviour
 
     private void Update()
     {
-        if (!Contacts.Instance.Active) return;
+        if (!Contacts.Instance.Active)
+        {
+            // Failed: park the markers and stop updating them.
+            HideAll();
+            enabled = false;
+            return;
+        }
         try
         {
-            var ship = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+            var ship = Fleet.Flagship;
             bool space = ship != null && HudManager.Instance.showHud && SpaceStationInterior.instance == null && GameplayManager.camera != null;
             if (!space)
             {
@@ -192,7 +188,7 @@ public sealed class ContactMarkers : MonoBehaviour
     private void Collect(Vector2 from)
     {
         int slot = 0;
-        foreach (Kind kind in Enum.GetValues(typeof(Kind)))
+        foreach (var kind in Kinds)
         {
             scratch.Clear();
             if (Enabled(kind)) Gather(kind, from);
@@ -203,14 +199,22 @@ public sealed class ContactMarkers : MonoBehaviour
                 if (i < scratch.Count)
                 {
                     m.target = scratch[i].c;
-                    string d = scratch[i].d.ToString("0");
-                    if (m.dist.text != d) m.dist.text = d;
+                    int d = Mathf.RoundToInt(scratch[i].d);
+                    if (m.lastDist != d)
+                    {
+                        m.lastDist = d;
+                        m.dist.text = d.ToString();
+                    }
                     if (kind == Kind.Loot && m.target is TractorableItem loot && loot.data?.itemType != null)
                         m.icon.color = loot.data.itemType.rarity.GetColor();
                     else if (kind == Kind.Ore && m.target is Asteroid rock && rock.asteroidData != null)
                         m.icon.color = PreferredOre(rock.asteroidData).item.rarity.GetColor();
                 }
-                else m.target = null;
+                else
+                {
+                    m.target = null;
+                    m.lastDist = -1;
+                }
             }
         }
     }
@@ -283,7 +287,8 @@ public sealed class ContactMarkers : MonoBehaviour
             case SalvageContainer c: Contacts.Salvage(c); break;
             case Asteroid a: Contacts.Mine(a); break;
             case TractorableItem item:
-                var tractor = GameplayManager.Instance?.spaceShip?.GetModule<TractorModule>();
+                var ship = Fleet.Flagship;
+                var tractor = ship != null ? ship.GetModule<TractorModule>() : null;
                 if (tractor != null && item.canBeTractorAssisted) tractor.SetManualTarget(item);
                 break;
         }

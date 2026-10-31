@@ -17,14 +17,16 @@ public static class Cargo
         return count;
     }
 
-    // Moves up to `max` of `item`, never more than `to` has room for. Returns the amount moved.
+    // Moves up to `max` of `item` from non-favourited stacks, never more than `to` has room for. Returns the amount moved.
     public static int Move(Inventory from, Inventory to, InventoryItemType item, int max)
     {
-        int have = from.GetCount(item);
+        int have = 0;
+        foreach (var s in from.allItems)
+            if (s != null && s.item == item && !s.favourite) have += s.count;
         int fit = item.m3 > 0f ? Mathf.FloorToInt(to.GetSpaceAvailable() / item.m3) : have;
         int want = Math.Min(Math.Min(have, fit), max);
         if (want <= 0) return 0;
-        int removed = from.Remove(item, want);
+        int removed = from.Remove(item, want, skipFavourited: true);
         if (removed > 0) to.Add(item, removed);
         return removed;
     }

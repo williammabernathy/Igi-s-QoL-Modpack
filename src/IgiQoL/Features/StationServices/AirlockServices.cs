@@ -59,7 +59,8 @@ internal sealed class AirlockServices : MonoBehaviour
         try
         {
             var r = service(true);
-            InventoryInteractionManager.Instance?.ReloadUI();
+            var iim = InventoryInteractionManager.Instance;
+            if (iim != null) iim.ReloadUI();
             string summary = summarize(r);
             if (summary != null) Plugin.Log.LogInfo("[StationServices] airlock: " + summary);
             StationServices.Notify(summary != null ? char.ToUpper(summary[0]) + summary.Substring(1) : null, r);
@@ -73,7 +74,7 @@ internal sealed class AirlockServices : MonoBehaviour
         if (Time.unscaledTime < nextRefresh) return;
         nextRefresh = Time.unscaledTime + 1f;
         var f = StationServices.Instance;
-        if (!f.Active)
+        if (!f.Active || !f.AirlockButtons.Value)
         {
             foreach (var go in buttons) go.SetActive(false);
             return;
