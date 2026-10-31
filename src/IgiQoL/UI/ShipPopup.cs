@@ -1,0 +1,266 @@
+using System.Collections.Generic;
+using System.Globalization;
+using Behaviour.UI;
+using Behaviour.UI.HUD;
+using Behaviour.UI.Shared;
+using IgiQoL.Core;
+using IgiQoL.Features.DronesOnArrival;
+using IgiQoL.Features.DroneModes;
+using IgiQoL.Features.EngagementDistance;
+using IgiQoL.Features.MissileRetarget;
+using IgiQoL.Features.Separation;
+using IgiQoL.Features.TargetPriority;
+using Source.Player;
+using Source.SpaceShip;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace IgiQoL.UI;
+
+// Per-ship settings popup (missile retarget, drones, engagement distance, target priority); opened from the fleet strip.
+public static class ShipPopup
+{
+    private static RectTransform root;
+
+    public static SpaceShipData Current { get; private set; }
+
+    public static bool IsOpen => root != null;
+
+    public static RectTransform Body { get; private set; }
+
+    public static void Open(SpaceShipData ship)
+    {
+        Close();
+        if (ship == null) return;
+        Current = ship;
+        root = UiCards.NewChild("IgiQoL_ShipPopup", HudManager.Instance.rootCanvasTransform);
+        var canvas = root.gameObject.AddComponent<Canvas>();
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 4; // above the mod window (3)
+        root.gameObject.AddComponent<GraphicRaycaster>();
+        var frame = CardPopupFrame.Build(root, 460f, Kit.CloseSprite, Close);
+        frame.title.text = ship.GetShipName() + " settings";
+        Body = frame.body;
+        string guid = ship.guid;
+        var s = ShipSettings.Edit(guid);
+
+        Kit.Muted(Body, "These apply to this ship only. 'Default' follows the setting on the mod window's Settings tab.");
+
+        var missile = MissileRetarget.Instance;
+        if (missile != null && missile.Active)
+        {
+            var row = Kit.Row(Body, 8f, 26f);
+            Kit.Tooltip(Kit.Label(row, "When a missile's target dies"), null, missile.Mode.Description.Description);
+            Kit.Dropdown(row, new[] { "Default (" + MissileNames[(int)missile.Mode.Value] + ")", MissileNames[0], MissileNames[1], MissileNames[2] },
+                s.missileRetarget.HasValue ? (int)s.missileRetarget.Value + 1 : 0, i =>
+                {
+                    s.missileRetarget = i == 0 ? null : (RetargetMode)(i - 1);
+                    ShipSettings.Save(guid);
+                });
+        }
+        else Kit.Muted(Body, "Missile retargeting is turned off on the Settings tab.");
+
+        var drones = DronesOnArrival.Instance;
+        if (drones != null && drones.Active)
+        {
+            var row = Kit.Row(Body, 8f, 26f);
+            Kit.Tooltip(Kit.Label(row, "Launch drones on arrival"), null, drones.Default.Description.Description);
+            Kit.Dropdown(row, new[] { "Default (" + (drones.Default.Value ? "on" : "off") + ")", "On", "Off" },
+                s.dronesOnArrival == null ? 0 : (s.dronesOnArrival.Value ? 1 : 2), i =>
+                {
+                    s.dronesOnArrival = i == 0 ? null : i == 1;
+                    ShipSettings.Save(guid);
+                });
+        }
+        else Kit.Muted(Body, "Drones on arrival is turned off on the Settings tab.");
+
+        var droneModes = DroneModes.Instance;
+        if (droneModes != null && droneModes.Active)
+        {
+            var row = Kit.Row(Body, 8f, 26f);
+            Kit.Tooltip(Kit.Label(row, "Drones"), null, "Follow the ship: drones without a target come back once they are further than the distance. Guard the ship: drones only take targets within the distance of the ship and stay inside it; repair drones fix the ship first. Ship's target only: combat and painter drones attack what the ship attacks and otherwise follow it; mining and salvage drones join the ship's asteroid or wreck when they can, else pick one within the distance; repair drones fix the ship first. Game toggle: the HUD's Free roam / Follow ship button decides, as in the game. Your own target clicks still reach the drones.");
+            TMP_InputField radius = null;
+            RectTransform anchorRow = null;
+            Kit.Dropdown(row, DroneModes.ModeNames, (int)s.droneMode, i =>
+            {
+                s.droneMode = (DroneMode)i;
+                radius.gameObject.SetActive(s.droneMode != DroneMode.Game);
+                anchorRow.gameObject.SetActive(s.droneMode != DroneMode.Game);
+                ShipSettings.Save(guid);
+            }, 200f);
+            radius = Kit.Input(row, s.droneRadius.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
+            {
+                if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) s.droneRadius = Mathf.Clamp(f, 2f, 40f);
+                radius.SetTextWithoutNotify(s.droneRadius.ToString("0.#", CultureInfo.InvariantCulture));
+                ShipSettings.Save(guid);
+            }, 50f);
+            radius.gameObject.SetActive(s.droneMode != DroneMode.Game);
+
+            // "The ship" in the modes above: this one, or another ship of your fleet the drones stay with.
+            anchorRow = Kit.Row(Body, 8f, 26f);
+            Kit.Tooltip(Kit.Label(anchorRow, "Drones stay with"), null, "The ship the drone mode is about: drones follow it, guard it, take its target and repair it first. When that ship isn't at the same place (travelling, docked, destroyed), the drones stay with their own ship.");
+            var names = new List<string> { "This ship" };
+            var guids = new List<string> { null };
+            var player = GamePlayer.current;
+            if (player != null)
+            {
+                var fleet = new List<SpaceShipData>();
+                if (player.currentSpaceShip != null) fleet.Add(player.currentSpaceShip);
+                fleet.AddRange(player.activeFleet);
+                foreach (var other in fleet)
+                {
+                    if (other == null || other.guid == guid || guids.Contains(other.guid)) continue;
+                    names.Add(other.GetShipName());
+                    guids.Add(other.guid);
+                }
+            }
+            int at = guids.IndexOf(s.droneAnchor);
+            if (at < 0)
+            {
+                names.Add("(a ship not in your fleet)");
+                guids.Add(s.droneAnchor);
+                at = guids.Count - 1;
+            }
+            Kit.Dropdown(anchorRow, names, at, i =>
+            {
+                s.droneAnchor = guids[i];
+                ShipSettings.Save(guid);
+            }, 200f);
+            anchorRow.gameObject.SetActive(s.droneMode != DroneMode.Game);
+        }
+
+        var engagement = EngagementDistance.Instance;
+        if (engagement != null && engagement.Active)
+        {
+            var row = Kit.Row(Body, 8f, 26f);
+            Kit.Label(row, "Engagement distance");
+            TMP_InputField field = null;
+            Kit.Dropdown(row, new[] { "Auto (game default)", "Weapons' max range", "Fixed distance" }, (int)s.engagement, i =>
+            {
+                s.engagement = (EngagementMode)i;
+                field.gameObject.SetActive(s.engagement == EngagementMode.Fixed);
+                ShipSettings.Save(guid);
+            });
+            field = Kit.Input(row, s.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
+            {
+                if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
+                    s.engagementDistance = Mathf.Clamp(f, 1f, 30f);
+                field.SetTextWithoutNotify(s.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture));
+                ShipSettings.Save(guid);
+            }, 70f);
+            field.gameObject.SetActive(s.engagement == EngagementMode.Fixed);
+            Kit.Muted(Body, "Auto: the game decides how close to get. Weapons' max range: stay as far back as the shortest-range weapon that can hit the target allows. Fixed distance: stay this many units away (1 to 30; the game never holds further than 30).");
+        }
+        else Kit.Muted(Body, "Engagement distance is turned off on the Settings tab.");
+
+        var separation = Separation.Instance;
+        if (separation != null && separation.Active)
+        {
+            var row = Kit.Row(Body, 8f, 26f);
+            Kit.Tooltip(Kit.Label(row, "Keep distance from other ships"), null, separation.Default.Description.Description);
+            Kit.Dropdown(row, new[] { "Default (" + (separation.Default.Value ? "on" : "off") + ")", "On", "Off" },
+                s.separation == null ? 0 : (s.separation.Value ? 1 : 2), i =>
+                {
+                    s.separation = i == 0 ? null : i == 1;
+                    ShipSettings.Save(guid);
+                });
+        }
+
+        var targeting = TargetPriority.Instance;
+        if (targeting != null && targeting.Active) AddTargeting(ship, guid, s, targeting);
+        else Kit.Muted(Body, "Target priority is turned off on the Settings tab.");
+
+        frame.AddButton("Close", Close, 110f);
+    }
+
+    public static void Close()
+    {
+        if (root != null) Object.Destroy(root.gameObject);
+        root = null;
+        Body = null;
+        Current = null;
+    }
+
+    private static readonly float?[] RepickValues = { null, 0f, 2f, 5f, 10f };
+    private static readonly int?[] FinishValues = { null, 0, 25, 50 };
+
+    private static void AddTargeting(SpaceShipData ship, string guid, ShipSettings s, TargetPriority targeting)
+    {
+        var row = Kit.Row(Body, 8f, 26f);
+        Kit.Tooltip(Kit.Label(row, "Target choice"), null, targeting.Rule.Description.Description);
+        var rules = new string[TargetPriority.RuleNames.Length + 1];
+        rules[0] = "Default (" + TargetPriority.RuleNames[(int)targeting.Rule.Value].Replace(" (game default)", "") + ")";
+        TargetPriority.RuleNames.CopyTo(rules, 1);
+        Kit.Dropdown(row, rules, s.targetRule.HasValue ? (int)s.targetRule.Value + 1 : 0, i =>
+        {
+            s.targetRule = i == 0 ? null : (TargetRule)(i - 1);
+            ShipSettings.Save(guid);
+        }, 230f);
+
+        row = Kit.Row(Body, 8f, 26f);
+        Kit.Tooltip(Kit.Label(row, "Re-check the target"), null, targeting.RepickSeconds.Description.Description);
+        float repick = targeting.RepickSeconds.Value;
+        Kit.Dropdown(row, new[] { "Default (" + (repick > 0f ? "every " + repick.ToString("0.#", CultureInfo.InvariantCulture) + " s" : "never") + ")", "Never", "Every 2 s", "Every 5 s", "Every 10 s" },
+            Mathf.Max(0, System.Array.IndexOf(RepickValues, s.repickSeconds)), i =>
+            {
+                s.repickSeconds = RepickValues[i];
+                ShipSettings.Save(guid);
+            }, 200f);
+
+        row = Kit.Row(Body, 8f, 26f);
+        Kit.Tooltip(Kit.Label(row, "Finish weak targets"), null, targeting.FinishBelowPercent.Description.Description);
+        int finish = targeting.FinishBelowPercent.Value;
+        Kit.Dropdown(row, new[] { "Default (" + (finish > 0 ? "below " + finish + "%" : "off") + ")", "Off", "Below 25% hull", "Below 50% hull" },
+            Mathf.Max(0, System.Array.IndexOf(FinishValues, s.finishBelow)), i =>
+            {
+                s.finishBelow = FinishValues[i];
+                ShipSettings.Save(guid);
+            }, 200f);
+
+        row = Kit.Row(Body, 8f, 26f);
+        Kit.Tooltip(Kit.Label(row, "Avoid enemies above level"), null, "Enemies above this level are only picked when nothing else is in range. 0 turns this off.");
+        TMP_InputField level = null;
+        level = Kit.Input(row, s.maxLevel.ToString(CultureInfo.InvariantCulture), TMP_InputField.ContentType.IntegerNumber, v =>
+        {
+            if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)) s.maxLevel = Mathf.Clamp(n, 0, 999);
+            level.SetTextWithoutNotify(s.maxLevel.ToString(CultureInfo.InvariantCulture));
+            ShipSettings.Save(guid);
+        }, 70f);
+
+        row = Kit.Row(Body, 8f, 26f);
+        Kit.Tooltip(Kit.Label(row, "Only attack within (units of the flagship)"), null, "Fleet ships only: they don't pick enemies further than this from the ship you fly, and drop a target that moves past it. 0 turns this off.");
+        TMP_InputField leash = null;
+        leash = Kit.Input(row, s.leash.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
+        {
+            if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f)) s.leash = Mathf.Clamp(f, 0f, 200f);
+            leash.SetTextWithoutNotify(s.leash.ToString("0.#", CultureInfo.InvariantCulture));
+            ShipSettings.Save(guid);
+        }, 70f);
+        Kit.Muted(Body, "Target choice only changes what a ship picks by itself. Your clicks on the flagship and attack orders still decide first; the Escort and Defensive stances pick the ship's target, and weapon rules still apply under them.");
+
+        var hardpoints = ship.hardpoints;
+        var follow = new string[TargetPriority.RuleNames.Length + 1];
+        follow[0] = "Follow the ship";
+        TargetPriority.RuleNames.CopyTo(follow, 1);
+        for (int h = 0; h < hardpoints.Length; h++)
+        {
+            var item = hardpoints[h];
+            if (!TargetPriority.IsCombatWeapon(item)) continue;
+            int index = h;
+            s.weaponRules.TryGetValue(index, out var rule);
+            string name = (index + 1) + ". " + item.displayName;
+            if (rule != null && rule.weapon != null && rule.weapon != item.identifier) name += " (refitted)";
+            row = Kit.Row(Body, 8f, 26f);
+            Kit.Tooltip(Kit.Label(row, name), null, "What this weapon shoots while the ship is fighting. Follow the ship: the ship's target, as in the game. Any other choice: the best enemy by that rule among those this weapon can hit and has in range; with none in range it follows the ship. The ship's re-check and finish settings apply to weapons too.");
+            Kit.Dropdown(row, follow, rule != null ? (int)rule.rule + 1 : 0, i =>
+            {
+                if (i == 0) s.weaponRules.Remove(index);
+                else s.weaponRules[index] = new WeaponRule((TargetRule)(i - 1), item.identifier);
+                ShipSettings.Save(guid);
+            }, 200f);
+        }
+    }
+
+    private static readonly string[] MissileNames = { "Fly on", "Weapon's target", "Nearest enemy" };
+}

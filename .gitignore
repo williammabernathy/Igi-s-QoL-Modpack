@@ -1,0 +1,5 @@
+bin/
+obj/
+# Decompiled game code: reference only, copyrighted, never commit.
+decompiled/
+decompiled-*/

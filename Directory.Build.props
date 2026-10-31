@@ -1,0 +1,37 @@
+<Project>
+  <!--
+    Shared build settings for every mod in this repo.
+    Override the game path per machine with:  dotnet build -p:GameDir="/path/to/Vanguard Galaxy"
+  -->
+  <PropertyGroup>
+    <GameDir Condition="'$(GameDir)' == ''">/mnt/data/SteamLibrary/steamapps/common/Vanguard Galaxy</GameDir>
+    <ManagedDir>$(GameDir)/VanguardGalaxy_Data/Managed</ManagedDir>
+    <BepInExDir>$(GameDir)/BepInEx</BepInExDir>
+
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <DebugType>portable</DebugType>
+    <!-- Deploy into the game after every build. Disable with -p:DeployToGame=false -->
+    <DeployToGame Condition="'$(DeployToGame)' == ''">true</DeployToGame>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <!-- Publicize="true" strips access modifiers at compile time so private game fields/methods can be used directly. -->
+    <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx" HintPath="$(BepInExDir)/core/BepInEx.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(BepInExDir)/core/0Harmony.dll" Private="false" />
+    <Reference Include="Assembly-CSharp" HintPath="$(ManagedDir)/Assembly-CSharp.dll" Private="false" Publicize="true" />
+    <Reference Include="$(ManagedDir)/UnityEngine*.dll;$(ManagedDir)/Unity.InputSystem.dll;$(ManagedDir)/Unity.TextMeshPro.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(DeployToGame)' == 'true'">
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb" DestinationFolder="$(BepInExDir)/plugins/$(AssemblyName)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Deployed $(AssemblyName) -> $(BepInExDir)/plugins/$(AssemblyName)" />
+  </Target>
+</Project>
