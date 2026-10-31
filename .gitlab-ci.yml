@@ -1,0 +1,103 @@
+# Runs on pushes to main and development. Every job runs on the self-hosted runner tagged vanguard-galaxy
+# (README, "CI and releases"), which mounts the installed game read-only at /game.
+# A passing main pipeline that changed the mod's sources publishes a release.
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "development"
+
+default:
+  tags: [vanguard-galaxy]
+  image: mcr.microsoft.com/dotnet/sdk:8.0
+  cache:
+    key: nuget
+    paths: [.nuget/packages]
+
+variables:
+  GIT_DEPTH: "0"
+  GAME_DIR: /game
+  NUGET_PACKAGES: $CI_PROJECT_DIR/.nuget/packages
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+stages: [build, test, release]
+
+build:
+  stage: build
+  script:
+    - git fetch --tags --force --quiet origin
+    # Major.minor come from <Version> in IgiQoL.csproj. The patch is one above the newest vMAJOR.MINOR.* tag,
+    # or <Version>'s own patch when that line has no release yet.
+    - |
+      base=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/IgiQoL/IgiQoL.csproj)
+      last=$(git tag -l "v${base%.*}.*" --sort=-v:refname | head -n 1)
+      if [ -n "$last" ]; then VERSION="${base%.*}.$(( ${last##*.} + 1 ))"; else VERSION="$base"; fi
+      echo "VERSION=$VERSION" | tee version.env
+    - dotnet build VanguardGalaxyMods.sln -c Release -p:GameDir="$GAME_DIR" -p:DeployToGame=false -p:Version="$VERSION" -p:ReleaseZip=true
+  artifacts:
+    paths:
+      - src/IgiQoL/bin/Release/IgiQoL.dll
+      - artifacts/
+    reports:
+      dotenv: version.env
+    expire_in: 1 week
+
+# Every Harmony target, game member and AccessTools/Traverse lookup the built DLL uses must resolve in the installed game.
+patch-check:
+  stage: test
+  needs: [build]
+  script:
+    - dotnet run --project tools/VersionDiff -c Release -- patches --new "$GAME_DIR/VanguardGalaxy_Data/Managed" --mod src/IgiQoL/bin/Release/IgiQoL.dll --out patch-report.md || { cat patch-report.md; exit 1; }
+  artifacts:
+    when: always
+    expose_as: Patch report
+    paths: [patch-report.md]
+    expire_in: 1 week
+
+.release-rules:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes:
+        - src/IgiQoL/**/*
+        - Directory.Build.props
+
+publish:
+  extends: .release-rules
+  stage: release
+  needs: [build, patch-check]
+  resource_group: release
+  cache: []
+  script:
+    - 'curl --fail-with-body --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "artifacts/IgiQoL-$VERSION.zip" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/igiqol/$VERSION/IgiQoL-$VERSION.zip"'
+
+release:
+  extends: .release-rules
+  stage: release
+  image:
+    name: registry.gitlab.com/gitlab-org/cli:latest
+    entrypoint: [""]
+  needs: [build, publish]
+  resource_group: release
+  cache: []
+  script:
+    - git fetch --tags --force --quiet origin
+    - |
+      last=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+      {
+        echo "Extract the zip into the Vanguard Galaxy game folder; it adds BepInEx/plugins/IgiQoL/. Needs BepInEx 5 (win_x64) installed."
+        echo
+        echo "## Changes"
+        echo
+        git log --no-merges --format='- %s' ${last:+$last..}HEAD
+      } > release-notes.md
+      cat release-notes.md
+  release:
+    tag_name: v$VERSION
+    ref: $CI_COMMIT_SHA
+    name: Igi's QoL Modpack $VERSION
+    description: release-notes.md
+    assets:
+      links:
+        - name: IgiQoL-$VERSION.zip
+          url: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/igiqol/$VERSION/IgiQoL-$VERSION.zip
+          link_type: package

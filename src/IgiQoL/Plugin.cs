@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace IgiQoL;
 
-[BepInPlugin("igi.qol", "Igi's QoL Modpack", "0.1.0")]
+[BepInPlugin("igi.qol", "Igi's QoL Modpack", PluginInfo.Version)]
 public class Plugin : BaseUnityPlugin
 {
     public const string TestedGameVersion = "0.8.3.4";
@@ -18,7 +18,7 @@ public class Plugin : BaseUnityPlugin
         Instance = this;
         Log = Logger;
         string version = Application.version;
-        Log.LogInfo($"Igi's QoL Modpack 0.1.0 on game {version} (tested on {TestedGameVersion})");
+        Log.LogInfo($"Igi's QoL Modpack {PluginInfo.Version} on game {version} (tested on {TestedGameVersion})");
         if (version != TestedGameVersion)
             Log.LogWarning($"Game version {version} differs from the tested version {TestedGameVersion}");
         FeatureRegistry.Start(Config);

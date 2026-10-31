@@ -1,5 +1,7 @@
 bin/
 obj/
+# Release zips from -p:ReleaseZip=true (src/IgiQoL/IgiQoL.csproj).
+artifacts/
 # Decompiled game code: reference only, copyrighted, never commit.
 decompiled/
 decompiled-*/

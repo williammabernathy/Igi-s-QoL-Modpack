@@ -2,6 +2,32 @@
   <PropertyGroup>
     <AssemblyName>IgiQoL</AssemblyName>
     <RootNamespace>IgiQoL</RootNamespace>
+    <!-- Major and minor of the next release. CI sets the patch from the newest release tag (.gitlab-ci.yml). -->
     <Version>0.1.0</Version>
   </PropertyGroup>
+
+  <!-- PluginInfo.Version: the build's $(Version) as a constant, for [BepInPlugin]. -->
+  <Target Name="GeneratePluginInfo" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <PluginInfoFile>$(IntermediateOutputPath)PluginInfo.g.cs</PluginInfoFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(PluginInfoFile)" Lines="namespace IgiQoL { internal static class PluginInfo { public const string Version = &quot;$(Version)&quot;%3B } }" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(PluginInfoFile)" />
+      <FileWrites Include="$(PluginInfoFile)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- -p:ReleaseZip=true also writes artifacts/IgiQoL-<Version>.zip, laid out to extract into the game folder. -->
+  <Target Name="ReleaseZip" AfterTargets="Build" Condition="'$(ReleaseZip)' == 'true'">
+    <PropertyGroup>
+      <ReleaseStageDir>$(IntermediateOutputPath)release/</ReleaseStageDir>
+      <ReleaseZipDir>$(MSBuildThisFileDirectory)../../artifacts/</ReleaseZipDir>
+    </PropertyGroup>
+    <RemoveDir Directories="$(ReleaseStageDir)" />
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb" DestinationFolder="$(ReleaseStageDir)BepInEx/plugins/$(AssemblyName)" />
+    <MakeDir Directories="$(ReleaseZipDir)" />
+    <ZipDirectory SourceDirectory="$(ReleaseStageDir)" DestinationFile="$(ReleaseZipDir)$(AssemblyName)-$(Version).zip" Overwrite="true" />
+    <Message Importance="high" Text="Release zip -> artifacts/$(AssemblyName)-$(Version).zip" />
+  </Target>
 </Project>

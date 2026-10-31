@@ -120,6 +120,25 @@ dotnet run --project tools/VersionDiff -- data $D/0.8.3.4 $D/<new version> --out
 
 That lists added and removed items, ships, recipes and so on, and every changed value as `path: old → new`.
 
+## CI and releases
+
+`.gitlab-ci.yml` runs on every push to `main` and `development`:
+
+1. `build` compiles the solution against the installed game and packs `artifacts/IgiQoL-<version>.zip`, laid out as `BepInEx/plugins/IgiQoL/IgiQoL.dll` (+ `.pdb`) so it extracts straight into the game folder.
+2. `patch-check` runs `VersionDiff patches` in manifest mode on the built DLL. It fails if a Harmony target, a game member the DLL uses, or an `AccessTools`/`Traverse` string lookup doesn't resolve in the installed game. The report is a job artifact ("Patch report").
+3. On `main` only, and only when `src/IgiQoL/` or `Directory.Build.props` changed in the push, `publish` uploads the zip to the project's generic package registry, and `release` creates the tag `v<version>` and a GitLab release linking the zip. The release notes list the commit subjects since the previous tag, without merge commits.
+
+The version is `<Version>` in `src/IgiQoL/IgiQoL.csproj` for major and minor. The patch is one above the newest `vMAJOR.MINOR.*` tag, or `<Version>`'s own patch for the first release of that line. To start 0.2, set `<Version>0.2.0</Version>`. `[BepInPlugin]` and the startup log line read the version through the generated `PluginInfo.Version`, so local builds report `<Version>` as written. `dotnet build -c Release -p:ReleaseZip=true` builds the same zip locally.
+
+The game's DLLs are copyrighted and can't go to GitLab, so jobs run only on a project runner on this PC, tagged `vanguard-galaxy`. Pipelines wait as pending while it is off.
+
+- Binary: `~/.local/bin/gitlab-runner`, config `~/.gitlab-runner/config.toml` (holds the runner token, keep it private).
+- Service: `systemctl --user {status,restart} gitlab-runner`, a user unit in `~/.config/systemd/user/`. It starts at login, not at boot.
+- Executor: docker, through rootless podman's socket (`podman.socket` user unit, `/run/user/1000/podman/podman.sock`). Job containers get the game folder read-only at `/game` (`volumes` in the config).
+- After moving the game, update the `volumes` path in the config. After losing the config, create a new runner under Settings > CI/CD > Runners with the tag `vanguard-galaxy` and "Run untagged jobs" off, then `gitlab-runner register` with the same executor, host and volume options.
+
+The in-game self-checks (`[Dev]` harness) still need the game running and stay manual.
+
 ## Igi's QoL Modpack (`src/IgiQoL`)
 
 One plugin (`igi.qol`, deployed to `BepInEx/plugins/IgiQoL/`). Every feature has a section in `BepInEx/config/igi.qol.cfg` with an `Enabled` switch; all defaults behave like vanilla except the always-visible HUD additions. `SESSION_LOG.md` (local only, not in git) records what each work session changed; read it before starting new work.
