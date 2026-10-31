@@ -89,7 +89,7 @@ The folder layout follows the namespaces. The game uses both `Behaviour.*` and `
 
 ## Igi's QoL Modpack (`src/IgiQoL`)
 
-One plugin (`igi.qol`, deployed to `BepInEx/plugins/IgiQoL/`). Every feature has a section in `BepInEx/config/igi.qol.cfg` with an `Enabled` switch; all defaults behave like vanilla except the always-visible HUD additions. [`SESSION_LOG.md`](SESSION_LOG.md) records what each work session changed; read it before starting new work.
+One plugin (`igi.qol`, deployed to `BepInEx/plugins/IgiQoL/`). Every feature has a section in `BepInEx/config/igi.qol.cfg` with an `Enabled` switch; all defaults behave like vanilla except the always-visible HUD additions. `SESSION_LOG.md` (local only, not in git) records what each work session changed; read it before starting new work.
 
 | Section | What it does |
 |---|---|
@@ -132,7 +132,7 @@ The `[Dev]` section is a test harness, off by default. With `Enabled = true` it 
 
 This comes from reading the decompiled code. Paths are relative to `decompiled/`. "Postfix" and "prefix" are Harmony patches that run after or before a game method and can change its arguments or result.
 
-All planned features ship as one plugin, Igi's QoL Modpack. The plan, build order and open questions are in [`docs/qol-modpack-plan.md`](docs/qol-modpack-plan.md); detailed designs for loadouts, combat movement, fleet targeting and the autopilot are in [`docs/mod-plans.md`](docs/mod-plans.md).
+All planned features ship as one plugin, Igi's QoL Modpack. The plan, build order and open questions are in `docs/qol-modpack-plan.md`; detailed designs for loadouts, combat movement, fleet targeting and the autopilot are in `docs/mod-plans.md`. Both are local planning notes and aren't in git.
 
 ### Startup timing
 
