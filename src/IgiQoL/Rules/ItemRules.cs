@@ -31,12 +31,15 @@ public static class ItemRules
     public static ItemRule Default { get; private set; } = new();
     public static readonly Dictionary<ItemCategory, ItemRule> ByCategory = new();
     public static readonly Dictionary<(ItemCategory, Rarity), ItemRule> ByCategoryRarity = new();
+    // "This rarity and below": the key's rarity is the highest one the rule covers. When several cover an item, the lowest wins.
+    public static readonly Dictionary<(ItemCategory, Rarity), ItemRule> ByCategoryUpTo = new();
+    public static readonly Dictionary<Rarity, ItemRule> ByRarityUpTo = new();   // any category
     // Key = Items.RuleKey(type): "identifier" or "identifier@level".
     public static readonly Dictionary<string, ItemRule> ByItem = new();
     private static readonly Dictionary<(string id, int level), ItemRule> ByItemLevel = new();   // per-level rules of ByItem by (identifier, level), so Resolve needs no key string
     public static bool HasDockRules { get; private set; }
 
-    public static int Count => ByCategory.Count + ByCategoryRarity.Count + ByItem.Count;
+    public static int Count => ByCategory.Count + ByCategoryRarity.Count + ByCategoryUpTo.Count + ByRarityUpTo.Count + ByItem.Count;
 
     public static ItemRule Resolve(InventoryItemType item)
     {
@@ -46,7 +49,13 @@ public static class ItemRules
             if (ByItem.TryGetValue(item.identifier, out var idRule)) return idRule;
         }
         if (ByCategoryRarity.Count > 0 && ByCategoryRarity.TryGetValue((item.itemCategory, item.rarity), out var crRule)) return crRule;
+        if (ByCategoryUpTo.Count > 0)
+            for (var r = item.rarity; r <= Rarity.Legendary; r++)
+                if (ByCategoryUpTo.TryGetValue((item.itemCategory, r), out var upRule)) return upRule;
         if (ByCategory.Count > 0 && ByCategory.TryGetValue(item.itemCategory, out var catRule)) return catRule;
+        if (ByRarityUpTo.Count > 0)
+            for (var r = item.rarity; r <= Rarity.Legendary; r++)
+                if (ByRarityUpTo.TryGetValue(r, out var anyRule)) return anyRule;
         return Default;
     }
 
@@ -96,6 +105,12 @@ public static class ItemRules
         var crs = new JsonObject();
         foreach (var kv in ByCategoryRarity) crs[kv.Key.Item1 + "/" + kv.Key.Item2] = ToJson(kv.Value);
         record["categoryRarity"] = crs;
+        var cups = new JsonObject();
+        foreach (var kv in ByCategoryUpTo) cups[kv.Key.Item1 + "/" + kv.Key.Item2] = ToJson(kv.Value);
+        record["categoryUpTo"] = cups;
+        var rups = new JsonObject();
+        foreach (var kv in ByRarityUpTo) rups[kv.Key.ToString()] = ToJson(kv.Value);
+        record["rarityUpTo"] = rups;
         var its = new JsonObject();
         foreach (var kv in ByItem) its[kv.Key] = ToJson(kv.Value);
         record["items"] = its;
@@ -114,6 +129,18 @@ public static class ItemRules
         return rule;
     }
 
+    public static ItemRule EditUpTo(ItemCategory c, Rarity r)
+    {
+        if (!ByCategoryUpTo.TryGetValue((c, r), out var rule)) ByCategoryUpTo[(c, r)] = rule = new ItemRule();
+        return rule;
+    }
+
+    public static ItemRule EditUpTo(Rarity r)
+    {
+        if (!ByRarityUpTo.TryGetValue(r, out var rule)) ByRarityUpTo[r] = rule = new ItemRule();
+        return rule;
+    }
+
     public static ItemRule Edit(string key)
     {
         if (!ByItem.TryGetValue(key, out var rule))
@@ -126,6 +153,8 @@ public static class ItemRules
 
     public static bool Remove(ItemCategory c) => ByCategory.Remove(c);
     public static bool Remove(ItemCategory c, Rarity r) => ByCategoryRarity.Remove((c, r));
+    public static bool RemoveUpTo(ItemCategory c, Rarity r) => ByCategoryUpTo.Remove((c, r));
+    public static bool RemoveUpTo(Rarity r) => ByRarityUpTo.Remove(r);
 
     public static bool Remove(string key)
     {
@@ -142,6 +171,8 @@ public static class ItemRules
         Default = new ItemRule();
         ByCategory.Clear();
         ByCategoryRarity.Clear();
+        ByCategoryUpTo.Clear();
+        ByRarityUpTo.Clear();
         ByItem.Clear();
         ByItemLevel.Clear();
         HasDockRules = false;
@@ -167,16 +198,17 @@ public static class ItemRules
                 else Plugin.Log.LogWarning($"[ItemRules] {source}: unknown category '{kv.Key}', entry skipped");
             }
 
-        var crs = root["categoryRarity"].AsJsonObject;
-        if (crs != null)
-            foreach (var kv in crs)
+        ParsePairs(root["categoryRarity"].AsJsonObject, ByCategoryRarity, source, "category/rarity");
+        ParsePairs(root["categoryUpTo"].AsJsonObject, ByCategoryUpTo, source, "category/rarity (and below)");
+
+        var rups = root["rarityUpTo"].AsJsonObject;
+        if (rups != null)
+            foreach (var kv in rups)
             {
                 var rule = ParseRule(kv.Value);
                 if (rule == null) continue;
-                int slash = kv.Key.IndexOf('/');
-                if (slash > 0 && TryEnum(kv.Key.Substring(0, slash), out ItemCategory cat) && TryEnum(kv.Key.Substring(slash + 1), out Rarity rarity))
-                    ByCategoryRarity[(cat, rarity)] = rule;
-                else Plugin.Log.LogWarning($"[ItemRules] {source}: unknown category/rarity '{kv.Key}', entry skipped");
+                if (TryEnum(kv.Key, out Rarity rarity)) ByRarityUpTo[rarity] = rule;
+                else Plugin.Log.LogWarning($"[ItemRules] {source}: unknown rarity '{kv.Key}' (and below), entry skipped");
             }
 
         var its = root["items"].AsJsonObject;
@@ -195,8 +227,25 @@ public static class ItemRules
         bool any = Default.dockAction != DockAction.Default;
         foreach (var r in ByCategory.Values) any |= r.dockAction != DockAction.Default;
         foreach (var r in ByCategoryRarity.Values) any |= r.dockAction != DockAction.Default;
+        foreach (var r in ByCategoryUpTo.Values) any |= r.dockAction != DockAction.Default;
+        foreach (var r in ByRarityUpTo.Values) any |= r.dockAction != DockAction.Default;
         foreach (var r in ByItem.Values) any |= r.dockAction != DockAction.Default;
         HasDockRules = any;
+    }
+
+    // "Category/Rarity" keys.
+    private static void ParsePairs(JsonObject obj, Dictionary<(ItemCategory, Rarity), ItemRule> into, string source, string what)
+    {
+        if (obj == null) return;
+        foreach (var kv in obj)
+        {
+            var rule = ParseRule(kv.Value);
+            if (rule == null) continue;
+            int slash = kv.Key.IndexOf('/');
+            if (slash > 0 && TryEnum(kv.Key.Substring(0, slash), out ItemCategory cat) && TryEnum(kv.Key.Substring(slash + 1), out Rarity rarity))
+                into[(cat, rarity)] = rule;
+            else Plugin.Log.LogWarning($"[ItemRules] {source}: unknown {what} '{kv.Key}', entry skipped");
+        }
     }
 
     private static void IndexLevels()

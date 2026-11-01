@@ -55,13 +55,15 @@ public sealed class ItemRulesTab : Feature
     private static string ItemName(InventoryItemType t) =>
         Translation.Translate(t.displayName) + (t.itemLevel > 0 ? " L" + t.itemLevel : "");
 
+    private static string UpToName(Rarity r) => r.GetDisplayName() + " and below";
+
     private static void Rebuild() => ModWindow.Show("itemrules");
 
     private static void Build(RectTransform content)
     {
         var muted = ColorHelper.poiTooltipMuted;
         Kit.Heading(content, "Item rules");
-        Kit.Muted(content, "The most specific rule wins: a specific item, then category + rarity, then category, then the default. Pickup limit: your ships stop auto-tractoring the item once they carry this many (0 = no limit, -1 = never). At dock: what ECHO does with the item when it unloads at a station. Rules are saved with this game.");
+        Kit.Muted(content, "The most specific rule wins: a specific item, then category + rarity, then category + rarity and below, then category, then any category + rarity and below, then the default. Pickup limit: your ships stop auto-tractoring the item once they carry this many (0 = no limit, -1 = never). At dock: what ECHO does with the item when it unloads at a station. Rules are saved with this game.");
 
         var header = Kit.Row(content, 6f, 22f);
         Kit.Label(header, "Rule");
@@ -134,6 +136,48 @@ public sealed class ItemRulesTab : Feature
                 int ci = catChoice.GetIndex(), ri = rarityChoice.GetIndex();
                 if (ci < 0 || ci >= Categories.Length || ri < 0 || ri >= Rarities.Length) return;
                 ItemRules.Edit(Categories[ci], Rarities[ri]);
+                ItemRules.Write();
+                Rebuild();
+            }, 60f);
+        }
+
+        Kit.Heading(content, "Rarity and below");
+        var rarityUps = new List<Rarity>(ItemRules.ByRarityUpTo.Keys);
+        rarityUps.Sort();
+        foreach (var rarity in rarityUps)
+        {
+            var r = rarity;
+            RuleRow(content, "Any category / " + UpToName(r), r.GetColor(), ItemRules.ByRarityUpTo[r],
+                () => { ItemRules.RemoveUpTo(r); ItemRules.Write(); Rebuild(); });
+        }
+        var ups = new List<(ItemCategory, Rarity)>(ItemRules.ByCategoryUpTo.Keys);
+        ups.Sort((a, b) =>
+        {
+            int c = Array.IndexOf(Categories, a.Item1).CompareTo(Array.IndexOf(Categories, b.Item1));
+            return c != 0 ? c : a.Item2.CompareTo(b.Item2);
+        });
+        foreach (var pair in ups)
+        {
+            var p = pair;
+            RuleRow(content, CategoryName(p.Item1) + " / " + UpToName(p.Item2), p.Item2.GetColor(), ItemRules.ByCategoryUpTo[p],
+                () => { ItemRules.RemoveUpTo(p.Item1, p.Item2); ItemRules.Write(); Rebuild(); });
+        }
+        {
+            var row = Kit.Row(content, 6f, 26f);
+            Kit.Tooltip(Kit.Label(row, "Add a rarity-and-below rule"), "Rarity and below",
+                "Covers the chosen rarity and every rarity under it. When several cover an item, the lowest rarity wins, so 'Standard and below: Sell' beats 'Exotic and below: Keep aboard' for a Standard item. A category's own rules win over 'Any category'.");
+            var catNames = new List<string> { "Any category" };
+            foreach (var cat in Categories) catNames.Add(CategoryName(cat));
+            var rarityNames = new List<string>();
+            foreach (var r in Rarities) rarityNames.Add(UpToName(r));
+            var catChoice = Kit.Dropdown(row, catNames, 0, _ => { }, 150f);
+            var rarityChoice = Kit.Dropdown(row, rarityNames, 0, _ => { }, 150f);
+            Kit.TextButton(row, "Add", () =>
+            {
+                int ci = catChoice.GetIndex(), ri = rarityChoice.GetIndex();
+                if (ci < 0 || ci > Categories.Length || ri < 0 || ri >= Rarities.Length) return;
+                if (ci == 0) ItemRules.EditUpTo(Rarities[ri]);
+                else ItemRules.EditUpTo(Categories[ci - 1], Rarities[ri]);
                 ItemRules.Write();
                 Rebuild();
             }, 60f);
@@ -316,6 +360,66 @@ public sealed class ItemRulesTab : Feature
                 else ctx.Fail("resolve-level", levelDetail);
             }
             finally { ItemRules.Remove(levelKey); }
+        }
+
+        // Rarity-and-below rules: placement in the resolve order, lowest covering rarity wins, and the save round trip.
+        InventoryItemType mid = null;
+        foreach (var t in InventoryItemType.all)
+            if (t.identifier != null && t.rarity > Rarity.Standard && t.rarity < Rarity.Legendary) { mid = t; break; }
+        if (mid == null) ctx.Skip("resolve-upto", "no item type between Standard and Legendary");
+        else
+        {
+            string c = mid.itemCategory.ToString(), rar = mid.rarity.ToString(), lo = (mid.rarity - 1).ToString(), hi = (mid.rarity + 1).ToString();
+            string Cap(int n) => "{\"tractorCap\":" + n + "}";
+            string Rules(string body) => "{\"default\":" + Cap(1) + "," + body + "}";
+            var cases = new (string name, string json, int want)[]
+            {
+                ("lowest-wins", Rules($"\"categoryUpTo\":{{\"{c}/{rar}\":{Cap(4)},\"{c}/{hi}\":{Cap(5)}}}"), 4),
+                ("covers-above", Rules($"\"categoryUpTo\":{{\"{c}/{hi}\":{Cap(5)}}}"), 5),
+                ("not-below", Rules($"\"categoryUpTo\":{{\"{c}/{lo}\":{Cap(5)}}},\"rarityUpTo\":{{\"{lo}\":{Cap(6)}}}"), 1),
+                ("exact-first", Rules($"\"categoryRarity\":{{\"{c}/{rar}\":{Cap(3)}}},\"categoryUpTo\":{{\"{c}/{rar}\":{Cap(4)}}}"), 3),
+                ("before-category", Rules($"\"categories\":{{\"{c}\":{Cap(2)}}},\"categoryUpTo\":{{\"{c}/{rar}\":{Cap(4)}}}"), 4),
+                ("category-before-any", Rules($"\"categories\":{{\"{c}\":{Cap(2)}}},\"rarityUpTo\":{{\"Legendary\":{Cap(6)}}}"), 2),
+                ("any", Rules($"\"rarityUpTo\":{{\"{rar}\":{Cap(6)},\"Legendary\":{Cap(7)}}}"), 6),
+            };
+            var bad = new List<string>();
+            bool dock;
+            try
+            {
+                foreach (var (name, json, want) in cases)
+                {
+                    ItemRules.UseForTest(json);
+                    int got = ItemRules.Resolve(mid).tractorCap;
+                    if (got != want) bad.Add($"{name}: got {got}, want {want}");
+                }
+                ItemRules.UseForTest($"{{\"rarityUpTo\":{{\"{rar}\":{{\"dockAction\":\"Sell\"}}}}}}");
+                dock = ItemRules.HasDockRules;
+            }
+            finally { ItemRules.Load(); }
+            string upDetail = $"{Items.RuleKey(mid)} ({c}/{rar}): {cases.Length} cases, hasDockRules={dock}" + (bad.Count > 0 ? "; " + string.Join("; ", bad) : "");
+            if (bad.Count == 0 && dock) ctx.Pass("resolve-upto", upDetail);
+            else ctx.Fail("resolve-upto", upDetail);
+
+            string snapshot = SaveData.Feature(ItemRules.FeatureKey, false)?.ToString() ?? "{}";
+            try
+            {
+                ItemRules.EditUpTo(mid.itemCategory, mid.rarity).tractorCap = 7;
+                ItemRules.EditUpTo(mid.rarity).dockAction = DockAction.Sell;
+                ItemRules.Write();
+                ItemRules.Load();
+                var record = SaveData.Feature(ItemRules.FeatureKey, false);
+                int storedCap = record != null ? record["categoryUpTo"][c + "/" + rar]["tractorCap"].AsInteger : -1;
+                string storedAction = record != null ? record["rarityUpTo"][rar]["dockAction"].AsString : null;
+                int resolved = ItemRules.Resolve(mid).tractorCap;
+                string rtDetail = $"record categoryUpTo cap={storedCap} rarityUpTo action={storedAction} resolve cap={resolved}";
+                if (storedCap == 7 && storedAction == "Sell" && resolved == 7) ctx.Pass("roundtrip-upto", rtDetail);
+                else ctx.Fail("roundtrip-upto", rtDetail);
+            }
+            finally
+            {
+                ItemRules.UseForTest(snapshot);
+                ItemRules.Write();
+            }
         }
 
         ModWindow.Open("itemrules");

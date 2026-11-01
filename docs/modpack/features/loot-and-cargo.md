@@ -11,7 +11,9 @@ The Item rules tab holds one table of rules, saved with the game. Each rule has 
 - Pickup limit: your ships stop auto-tractoring the item once they carry this many. 0 means no limit, -1 means never.
 - At dock: what ECHO (and, if you want, [Station services](stations.md#station-services)) does with the item at a station. Game default, Keep aboard, Sell, or Sell above N: deposit until the station storage holds N, sell the rest.
 
-The most specific rule wins: a specific item (optionally at one item level), then category + rarity, then category, then the default. A "Turret / Standard" rule with a pickup limit of -1, for example, makes your ships and ECHO's loot-before-leaving skip common turrets.
+The most specific rule wins: a specific item (optionally at one item level), then category + rarity, then category + rarity and below, then category, then any category + rarity and below, then the default. A "Turret / Standard" rule with a pickup limit of -1, for example, makes your ships and ECHO's loot-before-leaving skip common turrets.
+
+A "rarity and below" rule covers the chosen rarity and every rarity under it, so "Turret / High Grade and below: Sell" replaces three rows (Standard, Enhanced, High Grade). Pick "Any category" to cover every item up to that rarity. When several of these rules cover an item, the one with the lowest rarity wins: with "Standard and below: Sell" and "Exotic and below: Keep aboard", Standard items are sold and Enhanced to Exotic items stay aboard. A category's own rules win over an "Any category" rule.
 
 The pickup limit is applied by [Loot pickup limits](#loot-pickup-limits) and the dock action by [ECHO cargo rules](echo.md#echo-cargo-rules) and Station services. The same tab carries both features' settings.
 
@@ -28,6 +30,12 @@ A save without rules is seeded once from `BepInEx/config/IgiQoL/item-rules.json`
   "categoryRarity": {
     "Turret/Standard": { "tractorCap": -1 }
   },
+  "categoryUpTo": {
+    "Module/Enhanced": { "dockAction": "Sell" }
+  },
+  "rarityUpTo": {
+    "Standard": { "tractorCap": -1 }
+  },
   "items": {
     "CanisterOxide": { "dockAction": "Keep" },
     "ArtifactAnalysis@3": { "tractorCap": 2 }
@@ -39,7 +47,7 @@ A save without rules is seeded once from `BepInEx/config/IgiQoL/item-rules.json`
 - `dockAction`: `Default`, `Keep`, `Sell` or `SellAbove`.
 - `keepAmount`: N for `SellAbove`.
 - Categories: `Ore`, `Ammo`, `Turret`, `Module`, `Booster`, `Junk`, `Drone`, `RefinedProduct`, `Torpedo`, `JumpgatePass`, `TradeGoods`, `Usable`, `DefensiveTurret`, `Salvage`, `Currency`, `Crystal`, `Data`, `Blueprint`, `BossSignal`, `SignalFragment`.
-- Rarities: `Standard`, `Enhanced`, `HighGrade`, `Exotic`, `Legendary`.
+- Rarities: `Standard`, `Enhanced`, `HighGrade`, `Exotic`, `Legendary`. A `categoryUpTo` or `rarityUpTo` key names the highest rarity the rule covers.
 - Item keys are the game's item identifier (`CanisterOxide`, not the display name "Oxide Canister"), with `@level` for one item level. `[Dev] DumpGameData` lists every identifier in `InventoryItemType.allItems.txt` ([dev-harness.md](../dev-harness.md#data-dumps)).
 
 An entry with an unknown category or rarity is skipped with a warning in `LogOutput.log`. Fields you leave out take the vanilla value (0, `Default`, 0).
