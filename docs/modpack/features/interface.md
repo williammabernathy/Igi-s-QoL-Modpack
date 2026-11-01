@@ -14,9 +14,20 @@ The QoL button in space sits on top of the side menu's button column at the righ
 
 ![The QoL button on top of the side menu column](../../images/qol-button-side-menu.jpg)
 
+## Pop-out windows
+
+Some views float on their own, outside the mod window. So far that's the [combat overview](fleet-combat.md#combat-overview). Each one works like the game's fleet panel:
+
+- Drag it by its header. It stays on screen, and a layout saved at a larger resolution or text size comes back inside the screen.
+- `-` collapses it to the header and `+` opens it again. The corner at the bottom right resizes it.
+- Its Options button sets when it shows (always, or only when it's relevant, for example in combat), its opacity (20-100%), click-through, and resets its position and size. A window hidden by its show condition keeps its place and comes back when the condition holds.
+- Click-through is on by default: clicks on the window's body reach the game under it, and the header keeps working. Hold `PopoutInteractKey` (Ctrl by default; either Ctrl key counts) to use the body, or switch click-through off in Options.
+
+Each window keeps its position, size, collapsed state, opacity and options per machine, in Unity's PlayerPrefs next to the mod window's position, so they don't travel with a save. An open window comes back after loading a save and after a restart. While one is open, the mod window shows a strip along its bottom with a chip for it: click the chip to bring the window back on screen and flash its header, or `x` to close it. A chip is greyed while its window is hidden by its show condition.
+
 ## Ship settings popup
 
-Each of your ships has its own settings: missile retargeting, drones on arrival, drone mode and anchor, engagement distance, keeping distance from other ships, the hull % at which it retreats for repairs, target choice, one target rule per weapon, and which cargo stays aboard when the fleet cargo moves everything to the flagship ([pinned cargo](loot-and-cargo.md#pinned-cargo)). Open the popup with the last button on the ship's row in the fleet panel. "Default" means the ship follows the setting on the mod window's Settings tab. These per-ship settings are saved with the game.
+Each of your ships has its own settings: missile retargeting, drones on arrival, drone mode and anchor, engagement distance, keeping distance from other ships, the hull % at which it retreats for repairs, target choice with up to two "Then by" rules, one target rule per weapon, and which cargo stays aboard when the fleet cargo moves everything to the flagship ([pinned cargo](loot-and-cargo.md#pinned-cargo)). Open the popup with the last button on the ship's row in the fleet panel. "Default" means the ship follows the setting on the mod window's Settings tab. These per-ship settings are saved with the game.
 
 ![Per-ship settings for the Eclipse](../../images/ship-settings-popup.jpg)
 

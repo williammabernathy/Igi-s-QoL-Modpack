@@ -44,7 +44,8 @@ public sealed class TextScale : Feature
         Percent.SettingChanged += (_, _) =>
         {
             SetFactor(Percent.Value / 100f);
-            // The mod window sizes its tabs for the text size when it opens.
+            // The mod window and the pop-outs size their columns for the text size when they're built.
+            Popouts.RebuildAll();
             if (!ModWindow.IsOpen) return;
             string tab = ModWindow.CurrentTab;
             ModWindow.Close();

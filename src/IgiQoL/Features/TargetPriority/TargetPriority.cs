@@ -12,6 +12,8 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
 using IgiQoL.Game;
+using LightJson;
+using Source.Item;
 using Source.Galaxy;
 using Source.Player;
 using Source.SpaceShip;
@@ -31,7 +33,7 @@ public sealed class TargetPriority : Feature
 
     public override string Id => "TargetPriority";
     public override string Title => "Target priority";
-    public override string Description => "Decides which enemy your ships attack when they pick a target themselves: the nearest one (the game's choice), the most damaged, the one hurting your fleet most, and more. Single weapons can have their own rule too, for example one turret on drones while the rest follow the ship. Your clicks and attack orders always win. Set it per ship with the last button on its row in the fleet panel.";
+    public override string Description => "Decides which enemy your ships attack when they pick a target themselves: the nearest one (the game's choice), the most damaged, the one hurting your fleet most, the one your guns hurt most, and more. Each ship can chain up to three rules, so a later rule decides when an earlier one sees no real difference. Single weapons can have their own rule too, for example one turret on drones while the rest follow the ship. Your clicks and attack orders always win. Set it per ship with the last button on its row in the fleet panel.";
     public override Type[] PatchClasses => new[] { typeof(TargetPriorityPatches) };
 
     public override void OnActivated()
@@ -43,18 +45,21 @@ public sealed class TargetPriority : Feature
     public ConfigEntry<TargetRule> Rule;
     public ConfigEntry<float> RepickSeconds;
     public ConfigEntry<int> FinishBelowPercent;
+    public ConfigEntry<int> WeakestGuardPercent;
+    public ConfigEntry<int> DebuffedGuardPercent;
 
     public static readonly string[] RuleNames =
     {
         "Nearest (game default)", "Lowest hull %", "Highest hull %", "Most damage to my fleet", "Attacking my flagship",
-        "Smallest first (drones, fighters)", "Largest first", "Lowest level", "Highest level",
+        "Smallest first (drones, fighters)", "Largest first", "Lowest level", "Highest level", "Weakest to my weapons",
+        "Debuffed first",
     };
 
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
         Rule = cfg.Bind(Id, "Rule", TargetRule.Nearest, SettingInfo.Describe("Target choice",
-            "Which enemy your ships attack when they pick a target on their own. Nearest is the game's normal choice. Lowest hull %: finish off damaged enemies. Highest hull %: hit the healthiest. Most damage to my fleet: whoever has hurt your ships most in the last few seconds. Attacking my flagship: enemies shooting at or aiming at the ship you fly; a ship with this rule also switches to whoever hits your flagship. Smallest or largest first: by hull size class, drones and carrier fighters count as smallest. Lowest or highest level: by enemy level. Ties go to the nearest enemy.",
+            "Which enemy your ships attack when they pick a target on their own. Nearest is the game's normal choice. Lowest hull %: finish off damaged enemies. Highest hull %: hit the healthiest. Most damage to my fleet: whoever has hurt your ships most in the last few seconds. Attacking my flagship: enemies shooting at or aiming at the ship you fly; a ship with this rule first also switches to whoever hits your flagship. Smallest or largest first: by hull size class, drones and carrier fighters count as smallest. Lowest or highest level: by enemy level. Weakest to my weapons: the enemy that takes the most damage from the ship's guns after its resistances. Debuffed first: the enemy carrying the most debuffs. Each ship can add up to two more rules in its popup; a rule that sees only a small difference passes the choice to the next one. Ties go to the nearest enemy.",
             RuleNames));
         RepickSeconds = cfg.Bind(Id, "RepickSeconds", 0f, SettingInfo.Describe("Re-check the target every (seconds)",
             "0 keeps the game's behaviour: a ship sticks with its target until it dies or leaves. Above 0, each ship re-applies its target choice this often and switches when another enemy is clearly a better fit. It switches only when the difference is real (for example 10 points of hull, or 20% closer), so ships don't flip between two similar enemies. While a rule other than Nearest is set, ships also stop jumping to whoever just hit a nearby ally, except that \"Attacking my flagship\" still answers hits on your flagship.",
@@ -62,27 +67,41 @@ public sealed class TargetPriority : Feature
         FinishBelowPercent = cfg.Bind(Id, "FinishBelowPercent", 0, SettingInfo.Describe("Don't switch away from targets below (hull %)",
             "When re-checking, a ship keeps its current target if that target's hull is below this percentage, so nearly dead enemies get finished. 0 turns this off.",
             new AcceptableValueRange<int>(0, 100)));
+        WeakestGuardPercent = cfg.Bind(Id, "WeakestGuardPercent", 25, SettingInfo.Describe("Weakest to my weapons: needs a lead of (%)",
+            "\"Weakest to my weapons\" only prefers an enemy that takes more than this much more damage from the ship's guns than the other choice. A smaller difference counts as a tie and the next rule (or the nearest enemy) decides, so a small resistance gap never drags a ship across the field.",
+            new AcceptableValueRange<int>(0, 200)));
+        DebuffedGuardPercent = cfg.Bind(Id, "DebuffedGuardPercent", 25, SettingInfo.Describe("Debuffed first: needs a lead of (%)",
+            "\"Debuffed first\" only prefers an enemy carrying more than this much more debuffs than the other choice (any debuff beats none). A smaller difference counts as a tie and the next rule (or the nearest enemy) decides.",
+            new AcceptableValueRange<int>(0, 200)));
     }
 
     public struct Resolved
     {
-        public TargetRule rule;
+        // The rule chain, first rule first; never empty.
+        public List<TargetRule> rules;
         public float repick;
         public int finishBelow;
         public int maxLevel;
         public float leash;
         public Dictionary<int, WeaponRule> weapons;
 
+        // Only "Nearest": the game's own choice and its "help a hit ally" switch.
+        public bool NearestOnly => rules.Count == 1 && rules[0] == TargetRule.Nearest;
+
         // The ship's own target choice is the game's; weapon rules are checked separately.
-        public bool Vanilla => rule == TargetRule.Nearest && repick <= 0f && maxLevel <= 0 && leash <= 0f;
+        public bool Vanilla => NearestOnly && repick <= 0f && maxLevel <= 0 && leash <= 0f;
     }
+
+    // The chain of a ship without its own: the config rule alone. Reused, so resolving doesn't allocate.
+    private static readonly List<TargetRule> DefaultChain = new() { TargetRule.Nearest };
 
     public Resolved Resolve(SpaceShipData ship)
     {
         var s = ShipSettings.Get(ship.guid);
+        DefaultChain[0] = Rule.Value;
         return new Resolved
         {
-            rule = s.targetRule ?? Rule.Value,
+            rules = s.targetRules.Count > 0 ? s.targetRules : DefaultChain,
             repick = s.repickSeconds ?? RepickSeconds.Value,
             finishBelow = s.finishBelow ?? FinishBelowPercent.Value,
             maxLevel = s.maxLevel,
@@ -106,20 +125,12 @@ public sealed class TargetPriority : Feature
     {
         var flagship = GamePlayer.current.currentSpaceShip;
         var g = flagship.guid;
-        var before = ShipSettings.Get(g);
-        var saved = (before.targetRule, before.repickSeconds, before.finishBelow, before.maxLevel, before.leash);
-        var savedWeapons = new Dictionary<int, WeaponRule>(before.weaponRules);
-        ctx.Cleanup(() =>
-        {
-            var c = ShipSettings.Edit(g);
-            (c.targetRule, c.repickSeconds, c.finishBelow, c.maxLevel, c.leash) = saved;
-            c.weaponRules.Clear();
-            foreach (var kv in savedWeapons) c.weaponRules[kv.Key] = kv.Value;
-            ShipSettings.Save(g);
-        });
+        // The legacy and loadout steps below replace the whole record, so the cleanup puts the whole record back.
+        var full = ShipSettings.Snapshot(g);
+        ctx.Cleanup(() => ShipSettings.Restore(g, full));
 
         var e = ShipSettings.Edit(g);
-        e.targetRule = TargetRule.LowestHull;
+        SetChain(e, new[] { TargetRule.LowestHull, TargetRule.WeakestToMyWeapons });
         e.repickSeconds = 2f;
         e.finishBelow = 25;
         e.maxLevel = 0;
@@ -128,10 +139,38 @@ public sealed class TargetPriority : Feature
         ShipSettings.Invalidate();
         var r = Resolve(flagship);
         var record = SaveData.Ship(g, false);
-        string savedRule = record != null && record["targetRule"].IsString ? record["targetRule"].AsString : "none";
-        string detail = $"rule={r.rule} repick={r.repick} finish={r.finishBelow} saved={savedRule}";
-        if (r.rule == TargetRule.LowestHull && r.repick == 2f && r.finishBelow == 25 && savedRule == "LowestHull") ctx.Pass("settings-roundtrip", detail);
+        string savedRules = record != null && record["targetRules"].IsJsonArray ? record["targetRules"].ToString() : "none";
+        bool oldKey = record != null && !record["targetRule"].IsNull;
+        string detail = $"rules={Chain(r.rules)} repick={r.repick} finish={r.finishBelow} saved={savedRules} oldKey={oldKey}";
+        if (Chain(r.rules) == "LowestHull>WeakestToMyWeapons" && r.repick == 2f && r.finishBelow == 25 && savedRules.Contains("WeakestToMyWeapons") && !oldKey) ctx.Pass("settings-roundtrip", detail);
         else ctx.Fail("settings-roundtrip", detail);
+
+        // A save from before chains has one "targetRule"; it loads as a one-rule chain and is written back as an array.
+        // Then the loadout round trip: a snapshot taken now brings the chain back after it changed.
+        var legacy = new JsonObject();
+        legacy["targetRule"] = "MostDamage";
+        ShipSettings.Restore(g, legacy);
+        string legacyChain = Chain(ShipSettings.Get(g).targetRules);
+        record = SaveData.Ship(g, false);
+        bool rewritten = record != null && record["targetRules"].IsJsonArray && record["targetRule"].IsNull;
+        SetChain(ShipSettings.Edit(g), new[] { TargetRule.AttackingFlagship, TargetRule.DebuffedFirst, TargetRule.Nearest });
+        ShipSettings.Save(g);
+        var snap = ShipSettings.Snapshot(g);
+        SetChain(ShipSettings.Edit(g), new[] { TargetRule.HighestLevel });
+        ShipSettings.Restore(g, snap);
+        string restored = Chain(ShipSettings.Get(g).targetRules);
+        string legacyDetail = $"legacy={legacyChain} rewritten={rewritten} loadout={restored}";
+        if (legacyChain == "MostDamage" && rewritten && restored == "AttackingFlagship>DebuffedFirst>Nearest") ctx.Pass("settings-legacy", legacyDetail);
+        else ctx.Fail("settings-legacy", legacyDetail);
+        ShipSettings.Restore(g, full);
+        e = ShipSettings.Edit(g);
+        SetChain(e, new[] { TargetRule.LowestHull });
+        e.repickSeconds = 2f;
+        e.finishBelow = 25;
+        e.maxLevel = 0;
+        e.leash = 0f;
+        e.weaponRules.Clear();
+        ShipSettings.Save(g);
 
         var ship = Fleet.Flagship;
         var module = ship != null ? ship.GetModule<CombatModule>() : null;
@@ -177,7 +216,7 @@ public sealed class TargetPriority : Feature
         weak.currentHullHP = weak.maxHullHP * 0.2f;
         try
         {
-            var picked = TargetRanking.Pick(module, candidates, TargetRule.LowestHull, Resolve(flagship), validate: true);
+            var picked = TargetRanking.Pick(module, candidates, TargetRanking.Single(TargetRule.LowestHull), Resolve(flagship), validate: true);
             string pickDetail = $"picked={Name(picked)} weak={Name(weak)} nearest={Name(nearest)} candidates={candidates.Count}";
             if (picked == weak) ctx.Pass("pick", pickDetail);
             else ctx.Fail("pick", pickDetail);
@@ -204,6 +243,8 @@ public sealed class TargetPriority : Feature
             weak.currentHullHP = hull;
             module.ResetCurrentTargets();
         }
+
+        ChainChecks(ctx, module, candidates, flagship);
 
         // Weapon rule: the ship stays on the nearest enemy, one weapon set to "Lowest hull %" takes the weakened one.
         AbstractTurret ruled = null, other = null;
@@ -238,7 +279,8 @@ public sealed class TargetPriority : Feature
             int index = ruled.GetComponentInParent<SpaceShipHardpoint>().index;
             var item = flagship.hardpoints[index];
             var we = ShipSettings.Edit(g);
-            (we.targetRule, we.repickSeconds) = (TargetRule.Nearest, 0f);
+            SetChain(we, new[] { TargetRule.Nearest });
+            we.repickSeconds = 0f;
             we.weaponRules[index] = new WeaponRule(TargetRule.LowestHull, item != null ? item.identifier : null);
             float weakHull = weakInReach.currentHullHP;
             weakInReach.currentHullHP = weakInReach.maxHullHP * 0.2f;
@@ -294,8 +336,9 @@ public sealed class TargetPriority : Feature
                 aimer.SetManualTarget(ship);
                 var aimed = aimer.targetProvider.priorityTarget;
                 var fr = Resolve(flagship);
-                var aimPick = TargetRanking.Pick(module, new List<TargetableUnit> { calm, aimer }, TargetRule.AttackingFlagship, fr, validate: true);
-                bool better = TargetRanking.ClearlyBetter(module.transform.position, aimer, calm, TargetRule.AttackingFlagship, fr);
+                var flagshipChain = TargetRanking.Single(TargetRule.AttackingFlagship);
+                var aimPick = TargetRanking.Pick(module, new List<TargetableUnit> { calm, aimer }, flagshipChain, fr, validate: true);
+                bool better = TargetRanking.ClearlyBetter(module.transform.position, aimer, calm, flagshipChain, fr);
                 aimDetail = $"aimer={Name(aimer)} aims={Name(aimed)} calm={Name(calm)} calmAims={Name(calm.targetProvider.priorityTarget)} picked={Name(aimPick)} better={better}";
                 aimOk = aimed == ship && aimPick == aimer && better;
             }
@@ -319,9 +362,11 @@ public sealed class TargetPriority : Feature
         }
         var wg = wingData.guid;
         var wb = ShipSettings.Get(wg);
-        var wsaved = (wb.targetRule, wb.repickSeconds, wb.finishBelow);
+        var wsaved = (wb.repickSeconds, wb.finishBelow);
+        var wchain = new List<TargetRule>(wb.targetRules);
         var w = ShipSettings.Edit(wg);
-        (w.targetRule, w.repickSeconds, w.finishBelow) = ((TargetRule?)TargetRule.LowestHull, (float?)1f, (int?)0);
+        (w.repickSeconds, w.finishBelow) = (1f, 0);
+        SetChain(w, new[] { TargetRule.LowestHull });
         // The game pauses every player ship's scanner while a route is set; clear it for the test.
         var route = new List<MapPointOfInterest>(GamePlayer.current.waypoints);
         GamePlayer.current.waypoints.Clear();
@@ -346,7 +391,8 @@ public sealed class TargetPriority : Feature
         }
         finally
         {
-            (w.targetRule, w.repickSeconds, w.finishBelow) = wsaved;
+            (w.repickSeconds, w.finishBelow) = wsaved;
+            SetChain(w, wchain);
             ShipSettings.Save(wg);
             GamePlayer.current.waypoints.AddRange(route);
         }
@@ -370,11 +416,13 @@ public sealed class TargetPriority : Feature
             yield break;
         }
         var ab = ShipSettings.Get(wg);
-        var asaved = (ab.targetRule, ab.repickSeconds, ab.finishBelow, ab.maxLevel, ab.leash);
+        var asaved = (ab.repickSeconds, ab.finishBelow, ab.maxLevel, ab.leash);
+        var achain = new List<TargetRule>(ab.targetRules);
         var aw = ShipSettings.Edit(wg);
-        (aw.targetRule, aw.repickSeconds, aw.finishBelow, aw.maxLevel, aw.leash) = ((TargetRule?)TargetRule.AttackingFlagship, (float?)0f, (int?)0, 0, 0f);
-        string assistDetail;
-        bool assisted;
+        (aw.repickSeconds, aw.finishBelow, aw.maxLevel, aw.leash) = (0f, 0, 0, 0f);
+        SetChain(aw, new[] { TargetRule.AttackingFlagship });
+        string assistDetail, lowerDetail;
+        bool assisted, lowerHeld;
         try
         {
             var assist = AccessTools.Method(typeof(AbstractUnit), "AssistPlayerAgainstAttacker");
@@ -388,35 +436,219 @@ public sealed class TargetPriority : Feature
             var afterFlagship = wingModule.autoTarget;
             assistDetail = $"start={Name(startOn)} attacker={Name(attacker)} afterOtherHit={Name(afterOther)} afterFlagshipHit={Name(afterFlagship)}";
             assisted = afterOther == startOn && afterFlagship == attacker;
+
+            // Lower in the chain, "Attacking my flagship" only breaks ties: the same hit on the flagship moves nobody.
+            SetChain(aw, new[] { TargetRule.Nearest, TargetRule.AttackingFlagship });
+            wingModule.ResetCurrentTargets();
+            wingModule.SetAutoTarget(startOn);
+            assist.Invoke(ship, new object[] { wingData.unit, attacker });
+            lowerDetail = $"chain={Chain(aw.targetRules)} start={Name(startOn)} afterFlagshipHit={Name(wingModule.autoTarget)}";
+            lowerHeld = wingModule.autoTarget == startOn;
         }
         finally
         {
-            (aw.targetRule, aw.repickSeconds, aw.finishBelow, aw.maxLevel, aw.leash) = asaved;
+            (aw.repickSeconds, aw.finishBelow, aw.maxLevel, aw.leash) = asaved;
+            SetChain(aw, achain);
             ShipSettings.Save(wg);
         }
         if (assisted) ctx.Pass("flagship-assist", assistDetail);
         else ctx.Fail("flagship-assist", assistDetail);
+        if (lowerHeld) ctx.Pass("flagship-assist-lower", lowerDetail);
+        else ctx.Fail("flagship-assist-lower", lowerDetail);
     }
 
     private static string Name(TargetableUnit t) => t == null ? "none" : t.targetName + "#" + t.GetHashCode();
+
+    private static string Chain(List<TargetRule> rules) => string.Join(">", rules);
+
+    private static void SetChain(ShipSettings s, IEnumerable<TargetRule> rules)
+    {
+        s.targetRules.Clear();
+        s.targetRules.AddRange(rules);
+    }
+
+    private const string CheckBoost = "igiqol-selfcheck-";
+
+    // Rule chains on two of the spawned enemies: a gap inside a rule's margin falls through to the next rule, a real
+    // gap doesn't, and the new rules' guard turns a small lead into a tie that the nearest enemy wins.
+    private void ChainChecks(SelfCheckContext ctx, CombatModule module, List<TargetableUnit> candidates, SpaceShipData flagship)
+    {
+        var near = candidates[0] as AbstractUnit;
+        var far = candidates[candidates.Count - 1] as AbstractUnit;
+        if (near == null || far == null || near == far || near.unitData == null || far.unitData == null)
+        {
+            ctx.Skip("chain-tie", "needs two spawned enemy units");
+            return;
+        }
+        // Enemies move; order the two by distance now (nothing below waits a frame).
+        Vector2 at = module.transform.position;
+        if (Vector2.Distance(at, far.transform.position) < Vector2.Distance(at, near.transform.position)) (near, far) = (far, near);
+        var pair = new List<TargetableUnit> { near, far };
+        var r = Resolve(flagship);
+        float nearHull = near.currentHullHP, farHull = far.currentHullHP;
+        float nearShield = near.currentShieldHP, farShield = far.currentShieldHP;
+        int weakestGuard = WeakestGuardPercent.Value, debuffedGuard = DebuffedGuardPercent.Value;
+        WeakestGuardPercent.Value = 25;
+        DebuffedGuardPercent.Value = 25;
+        try
+        {
+            // Hull 45% vs 50% is inside the 10-point margin: "Debuffed first" decides, and the far one, given one debuff
+            // more than the near one, wins. 25% vs 50% is a real gap: the first rule keeps the near one. The fleet may
+            // have debuffed either already (painter drones), so the counts are set relative to what they carry.
+            var chain = new List<TargetRule> { TargetRule.LowestHull, TargetRule.DebuffedFirst };
+            near.currentHullHP = near.maxHullHP * 0.45f;
+            far.currentHullHP = far.maxHullHP * 0.5f;
+            DebuffTo(far, Effects.AllDebuffs(near) + 1);
+            var tie = TargetRanking.Pick(module, pair, chain, r, validate: true);
+            bool switchOnTie = TargetRanking.ClearlyBetter(module.transform.position, far, near, chain, r);
+            var alone = TargetRanking.Pick(module, pair, TargetRanking.Single(TargetRule.LowestHull), r, validate: true);
+            near.currentHullHP = near.maxHullHP * 0.25f;
+            var real = TargetRanking.Pick(module, pair, chain, r, validate: true);
+            string tieDetail = $"debuffs near={Effects.AllDebuffs(near)} far={Effects.AllDebuffs(far)}; tie->{Name(tie)} switch={switchOnTie}, hull alone->{Name(alone)}, real gap->{Name(real)}; near={Name(near)} far={Name(far)}";
+            if (tie == far && switchOnTie && alone == near && real == near) ctx.Pass("chain-tie", tieDetail);
+            else ctx.Fail("chain-tie", tieDetail);
+
+            // The scan postfix walks the ship's own chain on a re-check.
+            near.currentHullHP = near.maxHullHP * 0.45f;
+            var e = ShipSettings.Edit(flagship.guid);
+            SetChain(e, chain);
+            module.ResetCurrentTargets();
+            module.SetAutoTarget(near);
+            TargetPriorityPatches.Reset();
+            module.UpdateAvailableTargets(pair);
+            string repickDetail = $"chain={Chain(e.targetRules)} from={Name(near)} autoTarget={Name(module.autoTarget)} far={Name(far)}";
+            if (module.autoTarget == far) ctx.Pass("chain-repick", repickDetail);
+            else ctx.Fail("chain-repick", repickDetail);
+            SetChain(e, new[] { TargetRule.LowestHull });
+            module.ResetCurrentTargets();
+            near.currentHullHP = nearHull;
+            far.currentHullHP = farHull;
+
+            // "Debuffed first" guard at 25%: 10 debuffs against 8 is no lead (the nearest wins), 11 against 8 is.
+            RemoveDebuffs(far);
+            int nearBase = Effects.AllDebuffs(near), farBase = Effects.AllDebuffs(far);
+            if (nearBase > 8 || farBase > 10) ctx.Skip("guard-debuffed", $"the enemies already carry {nearBase} and {farBase} debuffs");
+            else
+            {
+                DebuffTo(near, 8);
+                DebuffTo(far, 10);
+                var debuffChain = TargetRanking.Single(TargetRule.DebuffedFirst);
+                var small = TargetRanking.Pick(module, pair, debuffChain, r, validate: true);
+                string counts = $"{Effects.AllDebuffs(near)} vs {Effects.AllDebuffs(far)}";
+                DebuffTo(far, 11);
+                var big = TargetRanking.Pick(module, pair, debuffChain, r, validate: true);
+                string debuffDetail = $"{counts} -> {Name(small)}, {Effects.AllDebuffs(near)} vs {Effects.AllDebuffs(far)} -> {Name(big)}; near={Name(near)} far={Name(far)}";
+                if (small == near && big == far) ctx.Pass("guard-debuffed", debuffDetail);
+                else ctx.Fail("guard-debuffed", debuffDetail);
+            }
+            RemoveDebuffs(near);
+            RemoveDebuffs(far);
+
+            // "Weakest to my weapons" guard at 25%: lower the far one's damage reduction until the guns' score on it
+            // leads by 10% (a tie: the nearest wins), then by 50% (it wins). Both on full shields, so a hit lands on
+            // the same layer.
+            float dps = 0f;
+            foreach (var t in module.turrets)
+                if (t != null) dps += t.GetExpectedDps();
+            if (dps <= 0f)
+            {
+                ctx.Skip("guard-weakest", "the flagship's guns have no expected DPS");
+                return;
+            }
+            near.currentShieldHP = near.maxShieldHP;
+            far.currentShieldHP = far.maxShieldHP;
+            var weakestChain = TargetRanking.Single(TargetRule.WeakestToMyWeapons);
+            TargetRanking.Prepare(weakestChain, module, null);
+            float nearScore = TargetRanking.WeaponScore(near), farScore = TargetRanking.WeaponScore(far);
+            far.unitData.SetStatBoost(CheckBoost + "dr", "selfcheck", EquipStat.DamageReduction, -(1.1f * nearScore - farScore) / dps, 1f);
+            var lead10 = TargetRanking.Pick(module, pair, weakestChain, r, validate: true);
+            float score10 = TargetRanking.WeaponScore(far);
+            far.unitData.SetStatBoost(CheckBoost + "dr", "selfcheck", EquipStat.DamageReduction, -(1.5f * nearScore - farScore) / dps, 1f);
+            var lead50 = TargetRanking.Pick(module, pair, weakestChain, r, validate: true);
+            float score50 = TargetRanking.WeaponScore(far);
+            string weakDetail = $"dps={dps:0.0} near={nearScore:0.0} far={farScore:0.0} -> {score10:0.0}: {Name(lead10)}, -> {score50:0.0}: {Name(lead50)}; near={Name(near)} far={Name(far)}";
+            if (lead10 == near && lead50 == far) ctx.Pass("guard-weakest", weakDetail);
+            else ctx.Fail("guard-weakest", weakDetail);
+        }
+        finally
+        {
+            WeakestGuardPercent.Value = weakestGuard;
+            DebuffedGuardPercent.Value = debuffedGuard;
+            near.currentHullHP = nearHull;
+            far.currentHullHP = farHull;
+            near.currentShieldHP = nearShield;
+            far.currentShieldHP = farShield;
+            RemoveDebuffs(near);
+            RemoveDebuffs(far);
+            far.unitData.RemoveStatBoost(CheckBoost + "dr");
+            module.ResetCurrentTargets();
+        }
+    }
+
+    private const int MaxCheckDebuffs = 20;
+
+    // Adds outside stat penalties (a tiny thrust cut, which "Debuffed first" counts) until the unit carries this many.
+    private static void DebuffTo(AbstractUnit unit, int total)
+    {
+        for (int i = 0; i < MaxCheckDebuffs && Effects.AllDebuffs(unit) < total; i++)
+            unit.unitData.SetStatBoost(CheckBoost + i, "selfcheck", EquipStat.Thrust, -0.01f, 1f);
+    }
+
+    private static void RemoveDebuffs(AbstractUnit unit)
+    {
+        for (int i = 0; i < MaxCheckDebuffs; i++) unit.unitData.RemoveStatBoost(CheckBoost + i);
+    }
 }
 
 internal static class TargetRanking
 {
     private static readonly List<AbstractUnit> fleetUnits = new();
+    // The guns' expected DPS by damage type (indexed by DamageType), for "Weakest to my weapons".
+    private static readonly float[] dpsByType = new float[Resists.Types.Length];
+    private static readonly float[] candidateKeys = new float[ShipSettings.MaxChain];
+    private static readonly float[] bestKeys = new float[ShipSettings.MaxChain];
+    private static readonly List<TargetRule> single = new() { TargetRule.Nearest };
 
-    // Best candidate under the rule, or null. Lower keys rank first; ties go to the nearest.
+    // A one-rule chain for a weapon rule. Reused: valid until the next call.
+    public static List<TargetRule> Single(TargetRule rule)
+    {
+        single[0] = rule;
+        return single;
+    }
+
+    // Gathers what the chain's rules read once per pick: the fleet's hit trackers for "Most damage to my fleet",
+    // the guns' DPS for "Weakest to my weapons" (the turret's alone with a weapon rule, else the ship's).
+    public static void Prepare(List<TargetRule> chain, AbstractTargetingModule module, AbstractTurret turret)
+    {
+        if (Has(chain, TargetRule.MostDamage)) CollectFleet();
+        if (!Has(chain, TargetRule.WeakestToMyWeapons)) return;
+        Array.Clear(dpsByType, 0, dpsByType.Length);
+        if (turret != null) AddDps(turret);
+        else if (module.turrets != null)
+            foreach (var t in module.turrets)
+                if (t != null) AddDps(t);
+    }
+
+    private static void AddDps(AbstractTurret turret)
+    {
+        int type = (int)turret.damageType;
+        if (type >= 0 && type < dpsByType.Length) dpsByType[type] += turret.GetExpectedDps();
+    }
+
+    // Best candidate under the chain, or null. Lower keys rank first. A difference within a rule's margin is a tie
+    // that the next rule decides, and the nearest wins a tie on every rule.
     // Candidates above the level cap only win when nothing else is left; candidates past the leash never do.
     // With a turret, only enemies that weapon can hit and has in range count, and distance is measured from it.
-    public static TargetableUnit Pick(AbstractTargetingModule module, List<TargetableUnit> candidates, TargetRule rule, TargetPriority.Resolved r, bool validate, AbstractTurret turret = null)
+    public static TargetableUnit Pick(AbstractTargetingModule module, List<TargetableUnit> candidates, List<TargetRule> chain, TargetPriority.Resolved r, bool validate, AbstractTurret turret = null)
     {
+        Prepare(chain, module, turret);
         var flagship = Fleet.Flagship;
         bool leashed = turret == null && r.leash > 0f && flagship != null && module.parent != flagship && module.parent.autoActions is WingmanActions;
         Vector2 from = turret != null ? turret.transform.position : module.transform.position;
 
         TargetableUnit best = null;
         int bestTier = 0;
-        float bestKey = 0f, bestDist = 0f;
+        float bestDist = 0f;
         for (int i = 0; i < candidates.Count; i++)
         {
             var t = candidates[i];
@@ -425,24 +657,44 @@ internal static class TargetRanking
             if (leashed && Vector2.Distance(t.transform.position, flagship.transform.position) > r.leash) continue;
             float dist = Vector2.Distance(from, t.transform.position);
             int tier = r.maxLevel > 0 && t is AbstractUnit u && u.level > r.maxLevel ? 1 : 0;
-            float key = Key(rule, t, dist, flagship);
-            if (best == null || tier < bestTier || (tier == bestTier && (key < bestKey || (key == bestKey && dist < bestDist))))
+            if (best != null && tier > bestTier) continue;
+            Keys(chain, t, dist, flagship, candidateKeys);
+            int c = best == null || tier < bestTier ? -1 : Compare(chain, candidateKeys, bestKeys);
+            if (c < 0 || (c == 0 && dist < bestDist))
             {
                 best = t;
                 bestTier = tier;
-                bestKey = key;
                 bestDist = dist;
+                Array.Copy(candidateKeys, bestKeys, chain.Count);
             }
         }
         return best;
+    }
+
+    private static void Keys(List<TargetRule> chain, TargetableUnit t, float dist, AbstractUnit flagship, float[] keys)
+    {
+        for (int i = 0; i < chain.Count; i++) keys[i] = Key(chain[i], t, dist, flagship);
+    }
+
+    // -1 when a beats b on the first rule that sees more than its margin of difference, 1 when b does, 0 on a tie.
+    private static int Compare(List<TargetRule> chain, float[] a, float[] b)
+    {
+        for (int i = 0; i < chain.Count; i++)
+        {
+            float m = Margin(chain[i], b[i]);
+            if (a[i] < b[i] - m) return -1;
+            if (a[i] > b[i] + m) return 1;
+        }
+        return 0;
     }
 
     // The weapon can damage the target and the target's hull edge is within its range.
     public static bool InReach(AbstractTurret turret, TargetableUnit t) =>
         turret.CanTarget(t) && Vector2.Distance(turret.transform.position, t.transform.position) - t.radius <= turret.range;
 
-    // True when the candidate beats the current target by enough to be worth switching.
-    public static bool ClearlyBetter(Vector2 from, TargetableUnit candidate, TargetableUnit current, TargetRule rule, TargetPriority.Resolved r)
+    // True when the candidate beats the current target by enough to be worth switching. Uses what the last Pick or
+    // Prepare for this chain gathered.
+    public static bool ClearlyBetter(Vector2 from, TargetableUnit candidate, TargetableUnit current, List<TargetRule> chain, TargetPriority.Resolved r)
     {
         var flagship = Fleet.Flagship;
         if (r.maxLevel > 0)
@@ -451,9 +703,9 @@ internal static class TargetRanking
             int pt = current is AbstractUnit pu && pu.level > r.maxLevel ? 1 : 0;
             if (ct != pt) return ct < pt;
         }
-        float a = Key(rule, candidate, Vector2.Distance(from, candidate.transform.position), flagship);
-        float b = Key(rule, current, Vector2.Distance(from, current.transform.position), flagship);
-        return a < b - Margin(rule, b);
+        Keys(chain, candidate, Vector2.Distance(from, candidate.transform.position), flagship, candidateKeys);
+        Keys(chain, current, Vector2.Distance(from, current.transform.position), flagship, bestKeys);
+        return Compare(chain, candidateKeys, bestKeys) < 0;
     }
 
     public static bool BelowFinish(TargetableUnit t, int finishBelow) =>
@@ -464,6 +716,8 @@ internal static class TargetRanking
         TargetRule.Nearest => Mathf.Max(2f, current * 0.2f),
         TargetRule.LowestHull or TargetRule.HighestHull => 0.1f,
         TargetRule.MostDamage => Mathf.Abs(current) * 0.25f + 1f,
+        TargetRule.WeakestToMyWeapons => Mathf.Abs(current) * TargetPriority.Instance.WeakestGuardPercent.Value / 100f,
+        TargetRule.DebuffedFirst => Mathf.Abs(current) * TargetPriority.Instance.DebuffedGuardPercent.Value / 100f,
         _ => 0.5f,
     };
 
@@ -480,8 +734,35 @@ internal static class TargetRanking
             case TargetRule.LargestFirst: return -Size(t);
             case TargetRule.LowestLevel: return u != null ? u.level : 9999f;
             case TargetRule.HighestLevel: return u != null ? -u.level : 0f;
+            case TargetRule.WeakestToMyWeapons: return u != null ? -WeaponScore(u) : 0f;
+            case TargetRule.DebuffedFirst: return u != null ? -Effects.AllDebuffs(u) : 0f;
             default: return dist;
         }
+    }
+
+    // The guns' expected DPS after this enemy's resistances, on the layer a hit lands on now: shields have no
+    // per-type resistance, armour adds its own step.
+    internal static float WeaponScore(AbstractUnit enemy)
+    {
+        bool armor = enemy.currentShieldHP <= 0f && Resists.HasArmor(enemy) && enemy.currentArmorHP > 0f;
+        float score = 0f;
+        for (int i = 0; i < dpsByType.Length; i++)
+        {
+            if (dpsByType[i] <= 0f) continue;
+            var type = Resists.Types[i];
+            float m = Resists.Multiplier(enemy, type);
+            if (armor) m *= Resists.ArmorMultiplier(enemy, type);
+            score += dpsByType[i] * m;
+        }
+        return score;
+    }
+
+    // List.Contains on an enum boxes on this runtime.
+    private static bool Has(List<TargetRule> chain, TargetRule rule)
+    {
+        for (int i = 0; i < chain.Count; i++)
+            if (chain[i] == rule) return true;
+        return false;
     }
 
     // Hit the flagship in the last few seconds, or has it as its target. Enemy combat ships aim from their threat
@@ -599,8 +880,7 @@ internal static class TargetPriorityPatches
         try
         {
             if (!Resolve(__instance, out var r) || r.Vanilla) return true;
-            if (r.rule == TargetRule.MostDamage) TargetRanking.CollectFleet();
-            __result = TargetRanking.Pick(__instance, __instance.filteredTargets, r.rule, r, validate: false);
+            __result = TargetRanking.Pick(__instance, __instance.filteredTargets, r.rules, r, validate: false);
             return false;
         }
         catch (Exception e)
@@ -641,8 +921,7 @@ internal static class TargetPriorityPatches
             module.ResetAutoTarget();
             if (list != null)
             {
-                if (r.rule == TargetRule.MostDamage) TargetRanking.CollectFleet();
-                var pick = TargetRanking.Pick(module, list, r.rule, r, validate: true);
+                var pick = TargetRanking.Pick(module, list, r.rules, r, validate: true);
                 if (pick != null) module.SetAutoTarget(pick);
             }
             return;
@@ -654,9 +933,8 @@ internal static class TargetPriorityPatches
         nextRepick[module] = now + r.repick;
 
         if (TargetRanking.BelowFinish(current, r.finishBelow)) return;
-        if (r.rule == TargetRule.MostDamage) TargetRanking.CollectFleet();
-        var best = TargetRanking.Pick(module, list, r.rule, r, validate: true);
-        if (best == null || best == current || !TargetRanking.ClearlyBetter(module.transform.position, best, current, r.rule, r)) return;
+        var best = TargetRanking.Pick(module, list, r.rules, r, validate: true);
+        if (best == null || best == current || !TargetRanking.ClearlyBetter(module.transform.position, best, current, r.rules, r)) return;
         module.SetAutoTarget(best);
         module.torpedoBayModule?.AddManualTarget(best, overrideTarget: false);
     }
@@ -669,7 +947,6 @@ internal static class TargetPriorityPatches
         if (turrets == null) return;
         bool engaged = module.priorityTarget != null && !module.blocked && !module.holdFire && !ManualWins(module);
         float now = Time.time;
-        bool fleetCollected = false;
         for (int i = 0; i < turrets.Length; i++)
         {
             var turret = turrets[i];
@@ -695,18 +972,14 @@ internal static class TargetPriorityPatches
                 pick.due = now + r.repick;
                 continue;
             }
-            if (rule.rule == TargetRule.MostDamage && !fleetCollected)
-            {
-                TargetRanking.CollectFleet();
-                fleetCollected = true;
-            }
-            var best = TargetRanking.Pick(module, list, rule.rule, r, validate: true, turret);
+            var chain = TargetRanking.Single(rule.rule);
+            var best = TargetRanking.Pick(module, list, chain, r, validate: true, turret);
             if (best == null)
             {
                 if (!keep) WeaponPicks.Remove(turret);
                 continue;
             }
-            if (keep && best != current && !TargetRanking.ClearlyBetter(turret.transform.position, best, current, rule.rule, r))
+            if (keep && best != current && !TargetRanking.ClearlyBetter(turret.transform.position, best, current, chain, r))
             {
                 pick.due = now + r.repick;
                 continue;
@@ -746,8 +1019,9 @@ internal static class TargetPriorityPatches
     }
 
     // Vanilla moves a player ship's auto target to whoever just hit a nearby ally (__instance, the ally that was hit).
-    // With a rule set, the rule decides instead; a ship without a target still answers the attack. "Attacking my
-    // flagship" still answers hits on the flagship, so a ship defends it without a re-check timer.
+    // With a chain other than Nearest alone, the chain decides instead; a ship without a target still answers the
+    // attack. A chain that starts with "Attacking my flagship" still answers hits on the flagship, so a ship defends it
+    // without a re-check timer.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(AbstractUnit), "AssistPlayerAgainstAttacker")]
     private static bool AssistPrefix(AbstractUnit __instance, AbstractUnit playerShip, AbstractUnit attacker)
@@ -758,8 +1032,9 @@ internal static class TargetPriorityPatches
         {
             var module = playerShip != null ? playerShip.GetModule<CombatModule>() : null;
             if (module == null || module.autoTarget == null) return true;
-            if (!Resolve(module, out var r) || r.rule == TargetRule.Nearest) return true;
-            return r.rule == TargetRule.AttackingFlagship && attacker != null && __instance == Fleet.Flagship && FlagshipAssist(module, attacker, r);
+            if (!Resolve(module, out var r) || r.NearestOnly) return true;
+            // Only a chain that starts with "Attacking my flagship" answers the hit; lower down that rule only breaks ties.
+            return r.rules[0] == TargetRule.AttackingFlagship && attacker != null && __instance == Fleet.Flagship && FlagshipAssist(module, attacker, r);
         }
         catch (Exception e)
         {
@@ -777,6 +1052,7 @@ internal static class TargetPriorityPatches
         var flagship = Fleet.Flagship;
         if (r.leash > 0f && module.parent != flagship && module.parent.autoActions is WingmanActions
             && Vector2.Distance(attacker.transform.position, flagship.transform.position) > r.leash) return false;
-        return TargetRanking.ClearlyBetter(module.transform.position, attacker, current, r.rule, r);
+        TargetRanking.Prepare(r.rules, module, null);
+        return TargetRanking.ClearlyBetter(module.transform.position, attacker, current, r.rules, r);
     }
 }

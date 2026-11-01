@@ -35,6 +35,7 @@ public static class FeatureRegistry
         new Features.CraftRollup.CraftRollup(),
         new Features.CombatLog.CombatLog(),
         new Features.ShipStats.ShipStats(),
+        new Features.CombatOverview.CombatOverview(),
         new Features.EventLog.EventLog(),
         new Features.Guide.Guide(),
         new Features.EchoKit.EchoKit(),

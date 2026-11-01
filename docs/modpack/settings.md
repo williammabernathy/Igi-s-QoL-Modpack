@@ -10,12 +10,13 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[Window]`
 
-[Mod window](features/interface.md#mod-window)
+[Mod window](features/interface.md#mod-window), [pop-out windows](features/interface.md#pop-out-windows)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `Hotkey` | Hotkey | `F6` | a key name: `F6`, `F7`, `Backquote`, `K`, ... |
 | `ButtonPlace` | QoL button in space | `SideMenu` | `SideMenu`, `DockButton` |
+| `PopoutInteractKey` | Pop-out windows: key to use a click-through window | `LeftCtrl` | a key name: `LeftCtrl`, `LeftShift`, `LeftAlt`, `F8`, ...; either Ctrl, Shift or Alt key counts |
 
 ### `[TextScale]`
 
@@ -150,9 +151,11 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `Rule` | Target choice | `Nearest` | `Nearest`, `LowestHull`, `HighestHull`, `MostDamage`, `AttackingFlagship`, `SmallestFirst`, `LargestFirst`, `LowestLevel`, `HighestLevel` |
+| `Rule` | Target choice | `Nearest` | `Nearest`, `LowestHull`, `HighestHull`, `MostDamage`, `AttackingFlagship`, `SmallestFirst`, `LargestFirst`, `LowestLevel`, `HighestLevel`, `WeakestToMyWeapons`, `DebuffedFirst` |
 | `RepickSeconds` | Re-check the target every (seconds) | `0` | 0 to 30 |
 | `FinishBelowPercent` | Don't switch away from targets below (hull %) | `0` | 0 to 100 |
+| `WeakestGuardPercent` | Weakest to my weapons: needs a lead of (%) | `25` | 0 to 200 |
+| `DebuffedGuardPercent` | Debuffed first: needs a lead of (%) | `25` | 0 to 200 |
 
 ### `[EngagementDistance]`
 
@@ -175,6 +178,14 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 ### `[ShipStats]`
 
 [Ship stats on hover](features/fleet-combat.md#ship-stats-on-hover): only `Enabled`.
+
+### `[CombatOverview]`
+
+[Combat overview](features/fleet-combat.md#combat-overview). Its show condition, opacity, click-through and "Ships shown" are per machine, in the window's Options.
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `Hotkey` | Hotkey | `F7` | a key name: `F7`, `F8`, ...; `None` turns it off |
 
 ### `[MissileRetarget]`
 

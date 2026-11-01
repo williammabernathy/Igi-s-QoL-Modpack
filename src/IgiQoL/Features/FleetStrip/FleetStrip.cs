@@ -69,7 +69,7 @@ public sealed class FleetStrip : Feature
             int expected = (MissileRetarget.MissileRetarget.Instance.Active ? 1 : 0) + (DronesOnArrival.DronesOnArrival.Instance.Active ? 1 : 0)
                 + (EngagementDistance.EngagementDistance.Instance.Active ? 1 : 0) + (DroneModes.DroneModes.Instance.Active ? 2 : 0)
                 + (Separation.Separation.Instance.Active ? 1 : 0) + (FleetRetreat.FleetRetreat.Instance.Active ? 1 : 0)
-                + (TargetPriority.TargetPriority.Instance.Active ? 3 + TargetPriority.TargetPriority.CombatWeaponCount(ship) : 0)
+                + (TargetPriority.TargetPriority.Instance.Active ? 5 + TargetPriority.TargetPriority.CombatWeaponCount(ship) : 0)
                 + (CargoPins.CargoPins.Instance.Active ? 1 : 0);
             string detail = $"open={ShipPopup.IsOpen} controls={controls} expected={expected} ship={ship.GetShipName()}";
             if (ShipPopup.IsOpen && controls == expected) ctx.Pass("popup", detail);

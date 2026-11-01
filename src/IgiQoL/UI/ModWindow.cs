@@ -159,6 +159,7 @@ public static class ModWindow
         body = UiCards.NewChild("Body", root);
         body.gameObject.AddComponent<LayoutElement>().flexibleHeight = 1f;
         UiCards.SetColumn(body.gameObject.AddComponent<VerticalLayoutGroup>());
+        PopoutStrip.Add(root);
         scroll = null;
     }
 }

@@ -27,6 +27,7 @@ public sealed class WindowFeature : Feature
 
     public ConfigEntry<Key> Hotkey;
     public ConfigEntry<ButtonPlace> Place;
+    public ConfigEntry<Key> PopoutInteractKey;
 
     public override void BindConfig(ConfigFile cfg)
     {
@@ -37,6 +38,8 @@ public sealed class WindowFeature : Feature
             "Where the QoL button sits while you fly. On top of the side menu: above the column of side menu buttons at the right, moving with them when the side panel opens and closes. Above the Dock button: the bottom middle of the HUD, where it stays put. " +
             "You can also drag the button; it keeps that distance from its place until you press Reset below.",
             "On top of the side menu", "Above the Dock button"));
+        PopoutInteractKey = cfg.Bind(Id, "PopoutInteractKey", Key.LeftCtrl, SettingInfo.Describe("Pop-out windows: key to use a click-through window",
+            "A pop-out window with click-through on lets your clicks on its body reach the game. Hold this key to use the window itself instead; its header always works. Type a key name such as LeftCtrl, LeftShift or LeftAlt; either Ctrl, Shift or Alt key counts. Ignored while you type in a text field."));
     }
 
     public override void OnActivated()

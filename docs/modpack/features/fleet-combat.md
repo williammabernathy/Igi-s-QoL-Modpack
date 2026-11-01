@@ -16,12 +16,20 @@ Which enemy your ships attack when they pick a target on their own. `Rule`:
 | Attacking my flagship | Enemies shooting at or aiming at the ship you fly |
 | Smallest first / Largest first | By hull class |
 | Lowest level / Highest level | By enemy level |
+| Weakest to my weapons | The enemy that takes the most damage from the ship's guns: each gun's expected DPS times what the enemy lets through of its damage type, on the layer a hit lands on now (shields have no per-type resistance, armour adds its own resistance or weakness, paint strip included) |
+| Debuffed first | The enemy carrying the most debuffs: the ones the game's buff bar marks red, plus stat penalties applied from outside such as the painter drone's strip, plus an armour paint strip |
 
-`RepickSeconds` (0-30, default 0) is how often a ship re-applies its rule. 0 keeps the game's stickiness: a ship stays on its target until it dies or leaves. Above 0, a ship switches when another enemy is clearly better (for example 10 points of hull, or 20% closer), so ships don't flicker between two similar targets. `FinishBelowPercent` (0-100, default 0) keeps a ship on a target below that hull %, so nearly dead enemies get finished. With any rule other than Nearest, ships also stop jumping to whoever just hit a nearby ally. "Attacking my flagship" is the exception for hits on the flagship: a ship with that rule switches to whoever hits the ship you fly, even at `RepickSeconds` 0, unless it's already on another enemy attacking the flagship, is finishing a target below `FinishBelowPercent`, or the attacker is past its "Only attack within" distance.
+The two newest rules only prefer an enemy that leads by more than `WeakestGuardPercent` or `DebuffedGuardPercent` (0-200, default 25): "only when it takes more than 25% more damage than the other choice". A smaller lead counts as a tie, so a small resistance gap never drags a ship across the field. Any debuff beats none.
+
+`RepickSeconds` (0-30, default 0) is how often a ship re-applies its rule. 0 keeps the game's stickiness: a ship stays on its target until it dies or leaves. Above 0, a ship switches when another enemy is clearly better (for example 10 points of hull, or 20% closer), so ships don't flicker between two similar targets. `FinishBelowPercent` (0-100, default 0) keeps a ship on a target below that hull %, so nearly dead enemies get finished. With any rule other than Nearest alone, ships also stop jumping to whoever just hit a nearby ally. "Attacking my flagship" is the exception for hits on the flagship: a ship whose first rule it is switches to whoever hits the ship you fly, even at `RepickSeconds` 0, unless it's already on an enemy at least as good by its rules, is finishing a target below `FinishBelowPercent`, or the attacker is past its "Only attack within" distance.
+
+In the popup a ship can chain up to three rules: "Target choice", then two "Then by" rows, for example "Attacking my flagship, then Weakest to my weapons, then Nearest". Enemies are compared rule by rule. A difference within a rule's margin (10 points of hull, 20% of the distance, the lead above for the two newest rules, an exact tie for size, level and "Attacking my flagship") counts as a tie and the next rule decides; after the last rule the nearest enemy wins. So a rule placed first wins over the ones after it, and a rule placed later is a fallback. Re-checks walk the same chain.
+
+"Attacking my flagship" only pulls a ship onto whoever hits your flagship when it's the chain's first rule; further down it breaks ties like any other rule. Weapon rules stay one rule each, and the Settings tab's `Rule` stays the one rule for ships without their own. Choosing "None" in a "Then by" row ends the chain there. Saves from before rule chains load each ship's rule as a one-rule chain.
 
 The ship settings popup adds, per ship:
 
-- its own rule, re-check interval and finish threshold;
+- its own rule chain, re-check interval and finish threshold;
 - "Avoid enemies above level": enemies above it are only picked when nothing else is in range (0 = off);
 - "Only attack within (units of the flagship)": fleet ships don't pick enemies further than this from the ship you fly, and drop a target that moves past it (0 = off);
 - one rule per combat weapon (hardpoint). A weapon with a rule shoots the best enemy by that rule among those it can hit and has in range, and follows the ship's target otherwise. For example, one turret on drones while the rest follow the ship.
@@ -68,6 +76,19 @@ The card also says what the ship is targeting right now ("Targeting", next to th
 Each block shows 5 rows, then "+N more".
 
 The card rebuilds twice a second while you hover it, so timers count down, the resistance figures follow debuffs as they land and expire, and the threat shares and attackers stay current.
+
+## Combat overview
+
+A pop-out window (see [pop-out windows](interface.md#pop-out-windows)) that lists every ship at your location, enemies first, then yours, then everyone else, nearest first within each. Open and close it with F7 (`Hotkey`) or the "Combat overview" button on the DPS parser tab. Carrier fighters and drones aren't listed.
+
+Each ship gets one row: its level, shield, armour and hull as a share of the maximum, how many buffs and debuffs it carries (debuffs counted as for "Debuffed first", in red when there are any) and what it's targeting. Names are red for enemies, green for your ships. Click a ship's name for its details, the same figures the [hover card](#ship-stats-on-hover) shows:
+
+- Resists: the share of a hit it resists by damage type, and after the `|` the total on armour.
+- Effects: every buff and debuff with stacks and time left, plus the number of stat penalties that have no buff-bar entry.
+- Weapons: its combat weapons by damage type and their range.
+- Threat (enemy combat ships) and Attacked by.
+
+The list refreshes twice a second while the window shows. It rebuilds only when a ship arrives or leaves, and a ship's details stay open until you close them. By default the window shows only while you're in combat: a hit in the last `FightGapSeconds` of the DPS parser, or any of your ships holding a target. Its Options button has "Show: Always", the opacity, click-through and "Ships shown" (all ships, enemies only, or enemies and your fleet).
 
 ## Missile retargeting
 

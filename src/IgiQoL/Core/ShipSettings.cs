@@ -8,7 +8,7 @@ public enum RetargetMode { Off, WeaponTarget, Nearest }
 
 public enum EngagementMode { Auto, MaxRange, Fixed }
 
-public enum TargetRule { Nearest, LowestHull, HighestHull, MostDamage, AttackingFlagship, SmallestFirst, LargestFirst, LowestLevel, HighestLevel }
+public enum TargetRule { Nearest, LowestHull, HighestHull, MostDamage, AttackingFlagship, SmallestFirst, LargestFirst, LowestLevel, HighestLevel, WeakestToMyWeapons, DebuffedFirst }
 
 // Game = the game's own Free roam / Follow ship toggle decides.
 public enum DroneMode { Game, Follow, Guard, ShipTarget }
@@ -20,7 +20,9 @@ public sealed class ShipSettings
     public bool? dronesOnArrival;
     public EngagementMode engagement = EngagementMode.Auto;
     public float engagementDistance = 10f;
-    public TargetRule? targetRule;
+    // The ship's target rule chain, first rule first (at most MaxChain); empty = the feature's config rule.
+    public readonly List<TargetRule> targetRules = new();
+    public const int MaxChain = 3;
     public float? repickSeconds;
     public int? finishBelow;
     public int maxLevel;
@@ -89,8 +91,14 @@ public sealed class ShipSettings
         else record.Remove("engagement");
         if (s.engagementDistance != Default.engagementDistance) record["engagementDistance"] = s.engagementDistance;
         else record.Remove("engagementDistance");
-        if (s.targetRule.HasValue) record["targetRule"] = s.targetRule.Value.ToString();
-        else record.Remove("targetRule");
+        if (s.targetRules.Count > 0)
+        {
+            var list = new JsonArray();
+            foreach (var rule in s.targetRules) list.Add(rule.ToString());
+            record["targetRules"] = list;
+        }
+        else record.Remove("targetRules");
+        record.Remove("targetRule");
         if (s.repickSeconds.HasValue) record["repickSeconds"] = s.repickSeconds.Value;
         else record.Remove("repickSeconds");
         if (s.finishBelow.HasValue) record["finishBelow"] = s.finishBelow.Value;
@@ -147,8 +155,18 @@ public sealed class ShipSettings
         if (v.IsString && Enum.TryParse(v.AsString, out EngagementMode engagement)) s.engagement = engagement;
         v = record["engagementDistance"];
         if (v.IsNumber) s.engagementDistance = (float)v.AsNumber;
-        v = record["targetRule"];
-        if (v.IsString && Enum.TryParse(v.AsString, out TargetRule rule)) s.targetRule = rule;
+        v = record["targetRules"];
+        if (v.IsJsonArray)
+        {
+            foreach (var item in v.AsJsonArray)
+                if (item.IsString && Enum.TryParse(item.AsString, out TargetRule chained) && s.targetRules.Count < MaxChain) s.targetRules.Add(chained);
+        }
+        else
+        {
+            // Saves from before rule chains kept one rule.
+            v = record["targetRule"];
+            if (v.IsString && Enum.TryParse(v.AsString, out TargetRule rule)) s.targetRules.Add(rule);
+        }
         v = record["repickSeconds"];
         if (v.IsNumber) s.repickSeconds = (float)v.AsNumber;
         v = record["finishBelow"];

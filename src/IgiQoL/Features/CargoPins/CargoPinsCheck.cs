@@ -216,6 +216,10 @@ internal static class CargoPinsCheck
         // A stack aboard, so the pin row has an item to pin.
         var ore = FreeOre(ship);
         if (ore != null) ship.cargo.Add(ore, 3);
+        // The tallest popup: a full target rule chain shows both "Then by" rows. "before" puts the ship's own back.
+        var chain = ShipSettings.Edit(ship.guid).targetRules;
+        chain.Clear();
+        chain.AddRange(new[] { TargetRule.AttackingFlagship, TargetRule.WeakestToMyWeapons, TargetRule.Nearest });
         try
         {
             ShipPopup.Open(ship);

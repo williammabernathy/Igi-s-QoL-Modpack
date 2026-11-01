@@ -17,7 +17,7 @@ public static class Resists
         DamageType.Cold, DamageType.Corrosion, DamageType.Explosive,
     };
 
-    private static readonly AccessTools.FieldRef<ArmorModule, float> PaintStrip =
+    internal static readonly AccessTools.FieldRef<ArmorModule, float> PaintStrip =
         AccessTools.FieldRefAccess<ArmorModule, float>("_paintStripAmount");
 
     // Applies to every hit before shields, armour and hull (private AbstractUnit.DamageResistMultiplier).

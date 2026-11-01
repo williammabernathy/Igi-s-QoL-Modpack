@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Behaviour.Ability;
 using Behaviour.Unit;
+using Source.Item;
 
 namespace IgiQoL.Game;
 
@@ -35,6 +36,52 @@ public static class Effects
         AllEffects.Clear();
         return n;
     }
+
+    // DebuffCount plus the debuffs that have no buff-bar effect: stat boosts from outside the unit that lower a stat
+    // (the painter drone's damage-reduction strip) and an armour paint strip. Boosts a buff-bar effect or one of
+    // the unit's own abilities applied are left out, so an effect counts once and a self-buff's drawback not at all.
+    public static int AllDebuffs(AbstractUnit unit)
+    {
+        int n = DebuffCount(unit);
+        var boosts = unit.unitData != null ? unit.unitData.statBoosts : null;
+        if (boosts != null && boosts.Count > 0)
+        {
+            unit.GetComponentsInChildren(AllEffects);
+            unit.GetComponentsInChildren(OwnAbilities);
+            foreach (var b in boosts)
+                if (!b.derived && Lowers(b) && !FromUnit(b.sourceId)) n++;
+            AllEffects.Clear();
+            OwnAbilities.Clear();
+        }
+        var armor = unit.armorModule;
+        if (armor != null && Resists.PaintStrip(armor) > 0f) n++;
+        return n;
+    }
+
+    private static readonly List<AbstractAbility> OwnAbilities = new();
+
+    // A longer shield recharge delay is worse; for every other stat, less is worse.
+    private static bool Lowers(StatBoostEntry b)
+    {
+        bool down = b.amount < 0f || b.multiplier < 1f;
+        bool up = b.amount > 0f || b.multiplier > 1f;
+        return b.stat == EquipStat.ShieldRechargeDelay ? up : down;
+    }
+
+    // Effects and abilities name their boosts after themselves: "id" or "id:index".
+    private static bool FromUnit(string sourceId)
+    {
+        if (sourceId == null) return false;
+        foreach (var e in AllEffects)
+            if (e.showInBuffHud && Named(sourceId, e.abilityIdentifier)) return true;
+        foreach (var a in OwnAbilities)
+            if (Named(sourceId, a.identifier)) return true;
+        return false;
+    }
+
+    private static bool Named(string sourceId, string id) =>
+        !string.IsNullOrEmpty(id) && sourceId.StartsWith(id, System.StringComparison.Ordinal)
+        && (sourceId.Length == id.Length || sourceId[id.Length] == ':');
 
     private static bool HasEffect(List<TemporaryEffect> effects, string abilityId)
     {
