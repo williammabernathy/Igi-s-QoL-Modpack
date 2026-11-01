@@ -27,7 +27,7 @@ public sealed class SelfCheckContext
         yield return new WaitForEndOfFrame();
         string path = Application.persistentDataPath + "/igiqol-" + name + ".png";
         ScreenCapture.CaptureScreenshot(path);
-        yield return new WaitForSeconds(2f);
+        yield return new WaitForSecondsRealtime(2f); // realtime: a check may capture while an AlertPopup pauses the game
         Plugin.Log.LogInfo($"[Dev] screenshot -> {path}");
     }
 

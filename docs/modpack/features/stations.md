@@ -74,4 +74,4 @@ Operations are the game's boarding and installation raids. The tab has three sec
 
 - Operations you start: the stealth, ammo and automatic-movement choices the operation panel starts with. The game remembers these between operations; changing them here is the same as changing them on the panel. `PlayerAutoBuyOut` (off) also ticks "Auto Accept Buyouts" on every new operation, which the game doesn't remember.
 - Operations ECHO starts: see [ECHO's operations](echo.md#echos-operations).
-- Running operations: yours and ECHO's, with their live options. Changes apply to the running operation at once.
+- Running operations: yours and ECHO's, with their live options. Changes apply to the running operation at once. Each operation has the same exit button as the game's operation panel. After a victory it reads Extract, and your crew heads back to your ship with what it collected. Before that it reads Abandon: it asks first, then your crew retreats (or the approach is called off) and the operation ends. The button goes away once the crew is already leaving.

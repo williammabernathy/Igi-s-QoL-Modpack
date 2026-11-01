@@ -3,12 +3,15 @@ using System.Collections;
 using System.Collections.Generic;
 using Behaviour.Dungeon;
 using Behaviour.Managers;
+using Behaviour.UI;
 using Behaviour.UI.Dungeon;
 using Behaviour.Util;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
 using IgiQoL.UI;
+using Source.CompartmentSystem;
+using Source.Data.Persistable;
 using Source.Dungeon;
 using Source.Galaxy;
 using Source.Player;
@@ -97,6 +100,7 @@ public sealed class Operations : Feature
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
         CheckPlayerBuyOut(ctx);
+        CheckExitStates(ctx);
 
         ModWindow.Open("operations");
         ctx.Cleanup(ModWindow.Close);
@@ -106,6 +110,107 @@ public sealed class Operations : Feature
             ctx.Pass("tab", detail);
         else ctx.Fail("tab", detail + $" open={ModWindow.IsOpen}");
         yield return ctx.Screenshot("window-operations");
+
+        yield return CheckExitButton(ctx);
+    }
+
+    // ExitFor on bare operations in each state the button distinguishes.
+    private void CheckExitStates(SelfCheckContext ctx)
+    {
+        var fails = new List<string>();
+        void Expect(string name, DungeonOperation op, OperationsList.ExitAction want)
+        {
+            var got = OperationsList.ExitFor(op);
+            if (got != want) fails.Add($"{name}: {got}, want {want}");
+        }
+        DungeonOperation Op(DungeonSimulation sim)
+        {
+            var op = new DungeonOperation(null, new DungeonLocationData(), new DungeonOptions(), false);
+            if (sim != null) { op.simulation = sim; op.phase = MissionPhase.Active; }
+            return op;
+        }
+
+        Expect("approach", Op(null), OperationsList.ExitAction.Abandon);
+        Expect("fighting", Op(new DungeonSimulation()), OperationsList.ExitAction.Abandon);
+        Expect("victory", Op(new DungeonSimulation { outcome = MissionOutcome.FriendlyVictory }), OperationsList.ExitAction.Extract);
+        var awaiting = new DungeonSimulation { outcome = MissionOutcome.FriendlyVictory };
+        awaiting.RequestExtraction();
+        Expect("extract-requested", Op(awaiting), OperationsList.ExitAction.None);
+        var retreating = new DungeonSimulation();
+        retreating.isRetreating = true;
+        Expect("retreating", Op(retreating), OperationsList.ExitAction.None);
+        Expect("lost", Op(new DungeonSimulation { outcome = MissionOutcome.HostileVictory }), OperationsList.ExitAction.None);
+        var extraction = Op(null);
+        extraction.phase = MissionPhase.Extraction;
+        Expect("extraction-phase", extraction, OperationsList.ExitAction.None);
+        var pods = Op(null);
+        pods._awaitingPodReturn = true;
+        Expect("pods-returning", pods, OperationsList.ExitAction.None);
+
+        if (fails.Count == 0) ctx.Pass("exit-states", "8 of 8 states");
+        else ctx.Fail("exit-states", string.Join("; ", fails));
+    }
+
+    // A walk-approach operation with no ship (its tick returns at once) in the real list: the row's Abandon button
+    // asks first, "Keep going" leaves it running, "Abandon" ends it and the row goes.
+    private IEnumerator CheckExitButton(SelfCheckContext ctx)
+    {
+        var ops = CurrentOperations();
+        var type = DungeonType.PirateBase;
+        bool found = false;
+        foreach (DungeonType t in Enum.GetValues(typeof(DungeonType)))
+        {
+            var def = DungeonDefinition.Get(t);
+            if (def != null && def.approachStyle != ApproachStyle.Pods) { type = t; found = true; break; }
+        }
+        if (ops == null || !found)
+        {
+            ctx.Skip("exit-button", ops == null ? "no DungeonManager" : "no walk-approach dungeon definition");
+            yield break;
+        }
+        var op = new DungeonOperation(null, new DungeonLocationData { dungeonType = type }, new DungeonOptions(), false);
+        ops.Add(op);
+        try
+        {
+            ModWindow.Open("operations");
+            yield return null;
+            yield return null;
+            Button button = null;
+            foreach (var b in ModWindow.Content.GetComponentInChildren<OperationsList>().GetComponentsInChildren<Button>())
+            {
+                var label = b.GetComponentInChildren<TMP_Text>();
+                if (label != null && label.text == "Abandon") { button = b; break; }
+            }
+            if (button == null) { ctx.Fail("exit-button", $"no Abandon button for {type}"); yield break; }
+            yield return ctx.Screenshot("window-operations-abandon");
+
+            button.onClick.Invoke();
+            yield return null;
+            var popup = AlertPopup.activeInstance;
+            if (popup != null) yield return ctx.Screenshot("operations-abandon-confirm");
+            if (popup == null || op.isComplete) { ctx.Fail("exit-button", $"no confirmation (popup={popup != null} complete={op.isComplete})"); yield break; }
+            popup.cancelButton.onClick.Invoke();
+            yield return null;
+            if (op.isComplete || !ops.Contains(op)) { ctx.Fail("exit-button", "Keep going ended the operation"); yield break; }
+
+            button.onClick.Invoke();
+            yield return null;
+            popup = AlertPopup.activeInstance;
+            if (popup == null) { ctx.Fail("exit-button", "no confirmation on the second click"); yield break; }
+            popup.submitButton.onClick.Invoke();
+            bool complete = op.isComplete;
+            yield return null;
+            yield return null;
+            bool removed = !ops.Contains(op);
+            bool rowGone = button == null;
+            if (complete && removed && rowGone) ctx.Pass("exit-button", $"{type}: confirm asked, Keep going kept it, Abandon ended it, row removed");
+            else ctx.Fail("exit-button", $"complete={complete} removed={removed} rowGone={rowGone}");
+        }
+        finally
+        {
+            ops.Remove(op);
+            if (AlertPopup.activeInstance != null) UnityEngine.Object.Destroy(AlertPopup.activeInstance.gameObject);
+        }
     }
 
     private void CheckPlayerBuyOut(SelfCheckContext ctx)
@@ -167,12 +272,48 @@ internal static class DungeonPanelPatch
 // Lists the operations in DungeonManager; rows are rebuilt only when the set of operations changes, labels refresh once per second.
 public sealed class OperationsList : MonoBehaviour
 {
+    // What the row's button does, mirroring the game panel's extract button (DungeonPanel.OnExtractClicked).
+    public enum ExitAction { None, Extract, Abandon }
+
+    public const string ExitHelp = "Extract (after a victory): your crew heads back to your ship with what it collected. Abandon: your crew retreats and the operation ends. Same as the extract button on the game's operation panel; Abandon asks first.";
+
     private sealed class OpRow
     {
         public DungeonOperation op;
         public TMP_Text summary;
         public Kit.Choice stealth, ammo;
         public Button autoMove, buyOut;
+        public Button exit;
+        public TMP_Text exitLabel;
+        public ExitAction shown;
+    }
+
+    // None once the crew is already leaving or the operation is over; the game's own calls are no-ops then.
+    public static ExitAction ExitFor(DungeonOperation op)
+    {
+        if (op.isComplete || op._awaitingPodReturn || op.phase == MissionPhase.Extraction || op.phase == MissionPhase.Complete) return ExitAction.None;
+        var sim = op.simulation;
+        if (sim == null) return ExitAction.Abandon;
+        if (sim.isRetreating || sim.awaitingPlayerExtraction) return ExitAction.None;
+        if (sim.canRequestExtraction) return ExitAction.Extract;
+        return sim.isComplete ? ExitAction.None : ExitAction.Abandon;
+    }
+
+    public static string ExitText(ExitAction a) => a == ExitAction.Extract ? "Extract" : "Abandon";
+
+    private void OnExit(DungeonOperation op)
+    {
+        switch (ExitFor(op))
+        {
+            case ExitAction.Extract:
+                op.RequestExtraction();
+                Refresh();
+                break;
+            case ExitAction.Abandon:
+                string name = MapPointOfInterest.GetDungeonPoiName(op.location.dungeonType, op.location.faction);
+                AlertPopup.ShowQuery($"Abandon the {name} operation? Crew already aboard retreat to your ship.", "Abandon", "Keep going", op.Abandon);
+                break;
+        }
     }
 
     private readonly List<OpRow> rows = new();
@@ -236,6 +377,10 @@ public sealed class OperationsList : MonoBehaviour
             var r = new OpRow { op = op };
             var line1 = Kit.Row(column, 6f, 22f);
             r.summary = Kit.Label(line1, "", 12f);
+            r.exit = Kit.TextButton(line1, "Abandon", () => OnExit(op), 80f);
+            r.exitLabel = r.exit.GetComponentInChildren<TMP_Text>();
+            Kit.Tooltip(r.exit.targetGraphic, "Extract or abandon", ExitHelp);
+            r.shown = ExitAction.Abandon;
             var line2 = Kit.Row(column, 6f, 26f);
             Kit.Label(line2, "Stealth");
             r.stealth = Kit.Dropdown(line2, Operations.StealthNames, (int)op.options.stealthMode, v => SetStealth(op, (StealthMode)v), 110f);
@@ -290,6 +435,14 @@ public sealed class OperationsList : MonoBehaviour
                 text += " | " + GameMath.FormatTime((int)sim.elapsed, true) + "/" + GameMath.FormatTime((int)sim.estimatedDuration, true)
                     + " | kills " + sim.hostileKilled + " | lost " + sim.friendlyKilled + " | wounded " + sim.friendlyWounded;
             if (r.summary.text != text) r.summary.text = text;
+
+            var exit = ExitFor(op);
+            if (exit != r.shown)
+            {
+                r.shown = exit;
+                r.exit.gameObject.SetActive(exit != ExitAction.None);
+                if (exit != ExitAction.None) r.exitLabel.text = ExitText(exit);
+            }
 
             // Follow changes made elsewhere (the vanilla panel edits the same options object).
             var o = sim?.options ?? op.options;
