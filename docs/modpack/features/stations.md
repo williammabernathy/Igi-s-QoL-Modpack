@@ -22,7 +22,7 @@ Crew losses: every hull hit of 2% or more can kill one crew member, on every shi
 
 `FuelCells` (0-50, 0 = off) makes restocking also keep that many warp fuel cells in the ship you fly (the only ship that burns fuel): armory first, then bought, fastest kind first. A part-used cell counts as one, as the game counts it. The button reads "Restock fuel" when only fuel is missing.
 
-The same services can run every time you dock, ECHO included: `RepairOnDock`, `RestockOnDock`, `SellOnDock`, `CrewOnDock` and `BrigOnDock` (all off). With ECHO on, selling is left to [ECHO cargo rules](echo.md#echo-cargo-rules). `AirlockButtons` (on) shows the buttons.
+The same services can run every time you dock, ECHO included: `RepairOnDock`, `RestockOnDock`, `SellOnDock`, `CrewOnDock` and `BrigOnDock` (all off). With ECHO on, selling is left to [ECHO cargo rules](echo.md#echo-cargo-rules). With `SellOnDock` on, the game's fleet auto-deposit waits until the sale is done, so it can use the room the sale frees in station storage and the armory. `AirlockButtons` (on) shows the buttons.
 
 Hired mercenaries are left out of every service. Repair skips ships that are away for repairs, since the game brings those back repaired for free. Favourites, mission items, usables the game keeps aboard and the ammo a ship uses are never sold. Selling from the armory also keeps warp fuel, every ammo type your fleet fires and the pieces your saved loadouts use.
 

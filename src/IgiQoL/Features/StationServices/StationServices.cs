@@ -8,6 +8,7 @@ using Behaviour.Util;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Rules;
 using Source.Player;
 using Source.Util;
 using UnityEngine;
@@ -31,6 +32,8 @@ public sealed class StationServices : Feature
     // The last on-dock run, for the self-check.
     internal static string lastDockSummary;
     private static bool dockRunPending;
+    // The fleet auto-deposit of a dock that sells is held back (depositPending) and runs right after the sell (depositing).
+    private static bool depositPending, depositing;
     // AutoDepositOnDock can run several times in one station visit (docking callbacks; a harness run showed the same
     // "station brig full" notice 10 times in 10 s), so each problem notice is shown once per visit.
     private static SpaceStationInterior problemsShownFor;
@@ -44,7 +47,7 @@ public sealed class StationServices : Feature
         RestockOnDock = cfg.Bind(Id, "RestockOnDock", false, SettingInfo.Describe("Restock ammo when you dock",
             "Tops up the ammo of every ship in your fleet when you dock, to the \"ammo minutes\" target in ECHO's Autopilot tab: from your armory first, then bought from the station's shops (credits only). Vanilla ECHO only restocks the ship you fly."));
         SellOnDock = cfg.Bind(Id, "SellOnDock", false, SettingInfo.Describe("Sell by item rules when you dock",
-            "When you dock yourself, sells cargo whose Item rules dock action is Sell, and for Sell above N stores up to N and sells the rest. With ECHO on, the ECHO cargo rules feature does this instead. Favourites, mission items and the ammo a ship uses are never sold."));
+            "When you dock yourself, sells cargo whose Item rules dock action is Sell, and for Sell above N stores up to N and sells the rest. It sells before the game's fleet auto-deposit, so the deposit gets the room the sale frees in station storage and the armory. With ECHO on, the ECHO cargo rules feature does this instead. Favourites, mission items and the ammo a ship uses are never sold."));
         FuelCells = cfg.Bind(Id, "FuelCells", 0, SettingInfo.Describe("Warp fuel cells to keep aboard",
             "Restock (the airlock button, and on dock with \"Restock ammo when you dock\") also tops up the ship you fly to this many warp fuel cells: from your armory first, then bought, fastest cells first (Hyper, then Ion, then Plasma). Only the ship you fly burns warp fuel. A part-used cell counts as one, as it does for ECHO. 0 turns this off. ECHO by itself keeps 2 cells, and only with the Prompt Engineering warp fuel skill.",
             new AcceptableValueRange<int>(0, 50)));
@@ -93,8 +96,27 @@ public sealed class StationServices : Feature
         };
     }
 
+    private static bool EchoSells() => GamePlayer.current.autoPlay && EchoCargo.EchoCargo.Instance != null && EchoCargo.EchoCargo.Instance.Active;
+
+    // The fleet auto-deposit runs at docking, before the interior the sell needs exists. Selling from station storage or
+    // the armory frees room the deposit could use, so a dock that sells holds the deposit back and runs it after the sale.
+    internal bool DeferDeposit()
+    {
+        if (depositing || !SellOnDock.Value || EchoSells() || !ItemRules.HasDockRules) return false;
+        depositPending = true;
+        return true;
+    }
+
+    private static void DepositNow()
+    {
+        depositing = true;
+        try { PlayerCargo.AutoDepositOnDock(); }
+        finally { depositing = false; }
+    }
+
     internal void OnDocked()
     {
+        if (depositing) return;
         if (!RepairOnDock.Value && !RestockOnDock.Value && !SellOnDock.Value && !CrewOnDock.Value && !BrigOnDock.Value) return;
         if (dockRunPending) return;
         dockRunPending = true;
@@ -109,19 +131,28 @@ public sealed class StationServices : Feature
         while (SpaceStationInterior.instance == null && Time.realtimeSinceStartup < until) yield return null;
         yield return null;
         dockRunPending = false;
+        bool deposit = depositPending;
+        depositPending = false;
         // A save loaded during the wait is a different game; the run belongs to the one that docked.
-        if (!Active || SpaceStationInterior.instance == null || GamePlayer.current != player) yield break;
+        if (GamePlayer.current != player) yield break;
+        if (!Active || SpaceStationInterior.instance == null)
+        {
+            // Nothing sells without the interior, but the held-back deposit still runs.
+            if (deposit) DepositNow();
+            yield break;
+        }
         try
         {
-            // Sell first so the credits are there for repairs and ammo.
-            bool echoSells = GamePlayer.current.autoPlay && EchoCargo.EchoCargo.Instance != null && EchoCargo.EchoCargo.Instance.Active;
-            var sell = SellOnDock.Value && !echoSells ? Services.Sell(run: true) : null;
+            // Sell first so the credits are there for repairs and ammo, and the fleet deposit gets the room the sale frees.
+            ServiceReport sell;
+            try { sell = SellOnDock.Value && !EchoSells() ? Services.Sell(run: true) : null; }
+            finally { if (deposit) DepositNow(); }
             var repair = RepairOnDock.Value ? Services.Repair(run: true) : null;
             var restock = RestockOnDock.Value ? Services.Restock(run: true) : null;
             var crew = CrewOnDock.Value ? Services.Crew(run: true) : null;
             var brig = BrigOnDock.Value ? Services.Brig(run: true) : null;
             var iim = InventoryInteractionManager.Instance;
-            if (iim != null && (sell != null && sell.count > 0 || restock != null && restock.count > 0)) iim.ReloadUI();
+            if (iim != null && (deposit || sell != null && sell.count > 0 || restock != null && restock.count > 0)) iim.ReloadUI();
             string summary = Summary(repair, restock, sell, crew, brig);
             lastDockSummary = summary ?? "";
             if (summary != null) Plugin.Log.LogInfo("[StationServices] on dock: " + summary);
@@ -144,6 +175,17 @@ public sealed class StationServices : Feature
 internal static class StationServicesPatches
 {
     private static StationServices F => StationServices.Instance;
+
+    // Runs before EchoCargo's prefix, which deposits by item rules: returning false skips that prefix and the game's deposit.
+    [HarmonyPrefix]
+    [HarmonyPriority(Priority.First)]
+    [HarmonyPatch(typeof(PlayerCargo), nameof(PlayerCargo.AutoDepositOnDock))]
+    private static bool AutoDepositOnDockPrefix()
+    {
+        if (!F.Active) return true;
+        try { return !F.DeferDeposit(); }
+        catch (Exception e) { F.Fail(e, nameof(StationServicesPatches)); return true; }
+    }
 
     // Runs right after the game docks your ship (EnterSpacestation), for you and for ECHO; loading a save inside a station doesn't call it.
     [HarmonyPostfix]
