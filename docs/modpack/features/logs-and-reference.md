@@ -33,7 +33,7 @@ Every hit between your side (ships, drones, fighters) and anyone else, as it lan
 
 ![The Stat reference tab](../../images/tab-stat-reference.jpg)
 
-Read from the game's data and formulas, so it follows game updates:
+At the top, while ["Used in" tooltips](stations.md#used-in-tooltips) is on, a search lists every forge recipe you can craft that uses an item. Below it, read from the game's data and formulas, so it follows game updates:
 
 - how a hit is reduced on its way to the hull: the damage roll, crits, type bonuses, the 80% resistance cap, shields, armour, paint strip;
 - every damage type with the weapons that deal it;

@@ -6,11 +6,13 @@ using Behaviour.Mining;
 using Behaviour.UI;
 using Behaviour.UI.Tooltip;
 using IgiQoL.Core;
+using IgiQoL.UI;
 using Source.Item;
 using Source.Player;
 using Source.Util;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace IgiQoL.Features.UsedIn;
 
@@ -117,6 +119,57 @@ internal static class UsedInCheck
             UITooltip.Hide(source);
             Object.Destroy(holder);
         }
+
+        yield return CheckSearch(ctx, most);
+    }
+
+    // The Stat reference search: the most-used ingredient's full list, every recipe and no cap, then Hide closes it.
+    private static IEnumerator CheckSearch(SelfCheckContext ctx, InventoryItemType item)
+    {
+        if (Guide.Guide.Instance == null || !Guide.Guide.Instance.Active)
+        {
+            ctx.Skip("search", "the Stat reference tab is off");
+            yield break;
+        }
+        ModWindow.Open("guide");
+        yield return null;
+        try
+        {
+            string name = Translation.Translate(item.displayName) + (item.itemLevel > 0 ? " L" + item.itemLevel : "");
+            UsedInSearch.Run(name);
+            // Several items can match the name (the one item opens by itself); open it with its own Show button.
+            Button toggle = Toggle(name);
+            if (UsedInSearch.ListText == null) toggle?.onClick.Invoke();
+
+            var recipes = UsedIn.Index()[item.identifier];
+            int expected = UsedIn.LineCount(recipes);
+            string text = UsedInSearch.ListText != null ? UsedInSearch.ListText.text : null;
+            int lines = text == null ? 0 : text.Split('\n').Length, missingNames = 0;
+            if (text != null)
+                foreach (var r in recipes)
+                    if (!text.Contains(Translation.Translate(r.displayName))) missingNames++;
+            string detail = $"{name}: {lines} of {expected} lines (tooltip cap {UsedIn.MaxLines}), recipes missing by name={missingNames}";
+            if (text != null && lines == expected && missingNames == 0 && !text.Contains(" more")) ctx.Pass("search", detail);
+            else ctx.Fail("search", detail);
+            yield return ctx.Screenshot("used-in-search");
+
+            Toggle(name)?.onClick.Invoke();
+            if (UsedInSearch.ListText == null) ctx.Pass("hide", "Hide closed the list");
+            else ctx.Fail("hide", "the list is still open after Hide");
+        }
+        finally
+        {
+            UsedInSearch.Run("");
+            ModWindow.Close();
+        }
+    }
+
+    // The Show/Hide button on the result row whose name is exactly this.
+    private static Button Toggle(string name)
+    {
+        foreach (var t in ModWindow.Content.GetComponentsInChildren<TMP_Text>())
+            if (t.text == name) return t.transform.parent.GetComponentInChildren<Button>();
+        return null;
     }
 
     // Learning a blueprint adds its recipe without a reload; forgetting it (the cleanup) takes it out again.

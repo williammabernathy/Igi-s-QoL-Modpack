@@ -24,7 +24,7 @@ public sealed class UsedIn : Feature
 
     public override string Id => "UsedIn";
     public override string Title => "Used in";
-    public override string Description => "Item tooltips list the forge recipes you can craft that use the item, with how many one craft takes.";
+    public override string Description => "Item tooltips list the forge recipes you can craft that use the item, with how many one craft takes. The Stat reference tab searches the full list.";
     public override Type[] PatchClasses => new[] { typeof(UsedInPatches) };
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx) => UsedInCheck.Run(ctx);
@@ -91,14 +91,22 @@ public sealed class UsedIn : Feature
         return GameMath.FormatNumber(amount, amount == Mathf.Floor(amount) ? 0 : 1);
     }
 
-    // The tooltip block for an item, or null when no recipe you can craft takes it. One line per recipe; when you
-    // have more than one rarity of it, each rarity's count is shown in that rarity's colour.
+    // The tooltip block for an item, or null when no recipe you can craft takes it.
     internal static string Describe(InventoryItemType item)
     {
         if (item == null || string.IsNullOrEmpty(item.identifier) || GamePlayer.current == null) return null;
         if (!Index().TryGetValue(item.identifier, out var recipes)) return null;
 
         var sb = new StringBuilder(Header);
+        AppendLines(sb, item, recipes, MaxLines);
+        return sb.ToString();
+    }
+
+    // One "\n  name xN" line per recipe, at most maxLines, then "+N more". When you have more than one rarity of a
+    // recipe, each rarity's count is shown in that rarity's colour. Variants of one recipe sit next to each other in
+    // the index, so a new line starts whenever the parent recipe changes.
+    internal static void AppendLines(StringBuilder sb, InventoryItemType item, List<CraftingRecipe> recipes, int maxLines)
+    {
         CraftingRecipe line = null;
         int lines = 0;
         foreach (var r in recipes)
@@ -107,16 +115,28 @@ public sealed class UsedIn : Feature
             if (parent != line)
             {
                 line = parent;
-                if (++lines <= MaxLines) sb.Append("\n  ").Append(Translation.Translate(r.displayName));
+                if (++lines <= maxLines) sb.Append("\n  ").Append(Translation.Translate(r.displayName));
             }
-            if (lines > MaxLines) continue;
+            if (lines > maxLines) continue;
             if (parent.subRecipes.Count > 1)
                 sb.Append(" <color=#").Append(ColorUtility.ToHtmlStringRGB(r.craftingRarity.GetColor())).Append(">x")
                   .Append(PerCraft(r, item)).Append("</color>");
             else sb.Append(" x").Append(PerCraft(r, item));
         }
-        if (lines > MaxLines) sb.Append("\n  +").Append(lines - MaxLines).Append(" more");
-        return sb.ToString();
+        if (lines > maxLines) sb.Append("\n  +").Append(lines - maxLines).Append(" more");
+    }
+
+    // How many lines AppendLines writes without a cap: one per recipe, whatever rarities you have of it.
+    internal static int LineCount(List<CraftingRecipe> recipes)
+    {
+        CraftingRecipe line = null;
+        int lines = 0;
+        foreach (var r in recipes)
+        {
+            var parent = r.parentRecipe ?? r;
+            if (parent != line) { line = parent; lines++; }
+        }
+        return lines;
     }
 }
 

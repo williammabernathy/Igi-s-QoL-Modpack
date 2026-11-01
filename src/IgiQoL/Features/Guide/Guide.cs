@@ -114,7 +114,10 @@ public sealed class Guide : Feature
     {
         Collect();
 
-        var hit = Section(content, "How a hit lands", first: true);
+        bool usedIn = UsedIn.UsedIn.Instance != null && UsedIn.UsedIn.Instance.Active;
+        if (usedIn) UsedIn.UsedInSearch.Build(Section(content, "Forge recipes that use an item", first: true));
+
+        var hit = Section(content, "How a hit lands", first: !usedIn);
         Kit.Text(hit, "1. The weapon rolls its damage: power / 5, times 0.8 to 1.25, spread over its shots per second. A critical hit multiplies it by 2 plus the weapon's critical damage bonus; with the Mega crit skill one hit can crit more than once.");
         Kit.Text(hit, "2. The weapon's bonus for its damage type and its general damage bonus are added on top.");
         Kit.Text(hit, "3. The target's damage reduction and its resistance to that damage type take their share off. Together they never remove more than 80%.");

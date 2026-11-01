@@ -64,6 +64,8 @@ Click a material in the refinery's left column to show only the ore that refines
 
 Hover a forge ingredient (a refined product, a canister, a signal fragment) and its tooltip lists the forge recipes that use it, with how many one craft takes, the same number the forge's ingredient list shows. Only recipes you can craft are listed, the ones the forge offers you, so a blueprint shows up as soon as you learn it. When you have a recipe in more than one rarity, its line has one count per rarity, in that rarity's colour. The list stops at 8 recipes and says how many more there are. The comparison tooltip for your fitted item doesn't get the list.
 
+For the full list, type part of the item's name into the search at the top of the Stat reference tab. Each matching ingredient gets a row with its recipe count. Show opens every recipe that uses it, in the same format as the tooltip, with no cap, and Hide closes it again. A search with only one match opens by itself.
+
 ## Operations tab
 
 ![The Operations tab](../../images/tab-operations.jpg)
