@@ -9,7 +9,7 @@ What your ships pick up, where it goes, and finding what's left at a location. S
 The Item rules tab holds one table of rules, saved with the game. Each rule has two parts:
 
 - Pickup limit: your ships stop auto-tractoring the item once they carry this many. 0 means no limit, -1 means never.
-- At dock: what ECHO (and, if you want, [Station services](stations.md#station-services)) does with the item at a station. Game default, Keep aboard, Sell, or Sell above N: deposit until the station storage holds N, sell the rest.
+- At dock: what ECHO (and, if you want, [Station services](stations.md#station-services)) does with the item at a station. Game default, Keep aboard, Sell, or Sell above N: deposit until the station storage holds N, sell the rest. The part above N sells even when the storage is full.
 
 The most specific rule wins: a specific item (optionally at one item level), then category + rarity, then category + rarity and below, then category, then any category + rarity and below, then the default. A "Turret / Standard" rule with a pickup limit of -1, for example, makes your ships and ECHO's loot-before-leaving skip common turrets.
 

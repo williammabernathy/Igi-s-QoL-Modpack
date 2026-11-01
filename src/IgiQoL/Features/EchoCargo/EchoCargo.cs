@@ -56,6 +56,7 @@ public sealed class EchoCargo : Feature
         CheckPlan(ctx);
         CheckMoveCap(ctx);
         CheckLiveKeep(ctx);
+        CheckSellFirst(ctx);
         CheckDataPlan(ctx);
         CheckDataEcho(ctx);
         yield break;
@@ -77,15 +78,21 @@ public sealed class EchoCargo : Feature
         var f = CargoRules.Plan(sell, 5, 0, 0, false);
         var g = CargoRules.Plan(keep, 5, 0, 0, true);
         var h = CargoRules.Plan(def, 5, 0, 0, true);
-        bool ok = a.action == DockAction.SellAbove && a.deposit == 3 && a.sell == 0
+        var i = CargoRules.Plan(sellAbove, 8, 7, 2, true);
+        var j = CargoRules.Plan(sellAbove, 2, 7, 0, true);
+        var k = CargoRules.Plan(sellAbove, 8, 7, 0, false);
+        bool ok = a.action == DockAction.SellAbove && a.deposit == 3 && a.sell == 5
             && b.action == DockAction.SellAbove && b.sell == 5 && b.deposit == 0
             && c.action == DockAction.Default
             && d.action == DockAction.Sell && d.sell == 3
             && e.action == DockAction.Keep
             && f.action == DockAction.Default
             && g.action == DockAction.Keep
-            && h.action == DockAction.Default;
-        string detail = $"above(8,7)={Show(a)} above(5,10)={Show(b)} above-unsellable={Show(c)} sell(5,res2)={Show(d)} sell(2,res2)={Show(e)} sell-unsellable={Show(f)} keep={Show(g)} default={Show(h)}";
+            && h.action == DockAction.Default
+            && i.deposit == 3 && i.sell == 3
+            && j.deposit == 2 && j.sell == 0
+            && k.deposit == 3 && k.sell == 0;
+        string detail = $"above(8,7)={Show(a)} above(5,10)={Show(b)} above-unsellable={Show(c)} sell(5,res2)={Show(d)} sell(2,res2)={Show(e)} sell-unsellable={Show(f)} keep={Show(g)} default={Show(h)} above(8,7,res2)={Show(i)} above(2,7)={Show(j)} above(8,7)-unsellable={Show(k)}";
         if (ok) ctx.Pass("plan", detail);
         else ctx.Fail("plan", detail);
     }
@@ -137,6 +144,79 @@ public sealed class EchoCargo : Feature
         string detail = $"{Items.RuleKey(item)} result={result} count {before}->{after}";
         if (!result && after == before) ctx.Pass("live-keep", detail);
         else ctx.Fail("live-keep", detail);
+    }
+
+    // Two sellable ores no cargo ship carries, so the check's stacks are the only ones its rules touch.
+    private static void TwoTestOres(out InventoryItemType first, out InventoryItemType second)
+    {
+        first = second = null;
+        var player = GamePlayer.current;
+        foreach (var t in InventoryItemType.all)
+        {
+            if (t.itemCategory != ItemCategory.Ore || !t.canSell || t.sellValue <= 0 || player.RequiredItemCountForMissions(t) > 0) continue;
+            bool carried = false;
+            foreach (var s in player.GetCargoShips()) carried |= s.cargo.GetCount(t) > 0;
+            if (carried) continue;
+            if (first == null) first = t;
+            else { second = t; return; }
+        }
+    }
+
+    // Sell before deposit: with a "Game default" stack ahead of it, ECHO's first unload step sells the part of a Sell above N
+    // stack above N instead of depositing anything.
+    private static void CheckSellFirst(SelfCheckContext ctx)
+    {
+        var ss = SpaceStation.current;
+        if (ss == null || SpaceStationInterior.instance == null || !Singleton<IdleManager>.HasInstance)
+        {
+            ctx.Skip("sell-first", "not docked");
+            return;
+        }
+        TwoTestOres(out var deposit, out var sold);
+        if (sold == null || !CargoRules.CanSellHere(ss, sold))
+        {
+            ctx.Skip("sell-first", sold == null ? "fewer than two sellable ore types the fleet doesn't carry" : "station has no shop");
+            return;
+        }
+        var player = GamePlayer.current;
+        var cargo = player.currentSpaceShip.cargo;
+        var storeA = Cargo.DepositTarget(ss, deposit);
+        var storeB = Cargo.DepositTarget(ss, sold);
+        int storedA0 = storeA.GetCount(deposit), storedB0 = storeB.GetCount(sold);
+        long credits0 = player.credits;
+        try
+        {
+            cargo.Add(deposit, 5);
+            cargo.Add(sold, 5);
+            int slotA = -1, slotB = -1;
+            foreach (var s in cargo.items)
+            {
+                if (s.item == deposit) slotA = s.slot;
+                if (s.item == sold) slotB = s.slot;
+            }
+            if (cargo.GetCount(deposit) != 5 || cargo.GetCount(sold) != 5 || slotA >= slotB)
+            {
+                ctx.Skip("sell-first", $"test stacks didn't land in order (slots {slotA}, {slotB}; flagship hold full?)");
+                return;
+            }
+            ItemRules.UseForTest("{\"items\":{\"" + Items.RuleKey(sold) + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + (storedB0 + 2) + "}}}");
+            bool result = Singleton<IdleManager>.Instance.TryDropCargo(ss);
+            string detail = $"default {Items.RuleKey(deposit)} slot {slotA}: cargo 5->{cargo.GetCount(deposit)} stored {storedA0}->{storeA.GetCount(deposit)}; "
+                + $"above N {Items.RuleKey(sold)} slot {slotB}: cargo 5->{cargo.GetCount(sold)} stored {storedB0}->{storeB.GetCount(sold)} "
+                + $"credits +{player.credits - credits0} (expected {sold.sellValue * 3}) result={result}";
+            if (result && cargo.GetCount(deposit) == 5 && storeA.GetCount(deposit) == storedA0 && cargo.GetCount(sold) == 2
+                && storeB.GetCount(sold) == storedB0 && player.credits - credits0 == sold.sellValue * 3) ctx.Pass("sell-first", detail);
+            else ctx.Fail("sell-first", detail);
+        }
+        finally
+        {
+            ItemRules.Load();
+            cargo.Remove(deposit, cargo.GetCount(deposit));
+            cargo.Remove(sold, cargo.GetCount(sold));
+            storeA.Remove(deposit, storeA.GetCount(deposit) - storedA0);
+            storeB.Remove(sold, storeB.GetCount(sold) - storedB0);
+            player.credits = credits0;
+        }
     }
 
     // A sellable Data-category type, preferring one the player holds none of so the check leaves real stacks alone.
@@ -241,10 +321,12 @@ public static class CargoRules
             }
             case DockAction.SellAbove:
             {
+                // The part above N (and above the missions' reserve) sells at once, beside the deposit up to N, so a full
+                // storage only ever holds up the deposit.
                 int room = Math.Max(0, rule.keepAmount - stored);
-                if (room > 0) return new Step { action = DockAction.SellAbove, deposit = Math.Min(room, count) };
+                int sell = sellable ? count - room - reserved : 0;
+                if (room > 0) return new Step { action = DockAction.SellAbove, deposit = Math.Min(room, count), sell = Math.Max(0, sell) };
                 if (!sellable) return default;
-                int sell = count - reserved;
                 return sell > 0 ? new Step { action = DockAction.SellAbove, sell = sell } : new Step { action = DockAction.Keep };
             }
             default:
@@ -375,8 +457,20 @@ internal static class EchoCargoPatches
 {
     private static EchoCargo F => EchoCargo.Instance;
 
-    // Data items never reach cargo, so the cargo walk below never sees them. Sell one data-inventory stack per tick before
-    // any cargo is unloaded, so a full storage can't hold up a sale.
+    // The rule's step for one cargo stack. Stacks vanilla keeps aboard come back as Keep, "Game default" as Default.
+    private static CargoRules.Step StepFor(IdleManager im, SpaceStation ss, SpaceShipData ship, Inventory.InventoryItem stack)
+    {
+        if (im.ShouldKeepInCargo(ship, stack)) return new CargoRules.Step { action = DockAction.Keep };   // vanilla protections always win
+        var item = stack.item;
+        var rule = ItemRules.Resolve(item);
+        if (rule.dockAction == DockAction.Default) return default;
+        var dest = Cargo.DepositTarget(ss, item);
+        return CargoRules.Plan(rule, stack.count, dest != null ? dest.GetCount(item) : 0,
+            GamePlayer.current.RequiredItemCountForMissions(item), CargoRules.CanSellHere(ss, item));
+    }
+
+    // Sell before deposit: one sale per tick, from every cargo ship's hold and then the data inventory, ahead of the vanilla
+    // unload walk. That walk stops at the first stack a full storage can't take, so a full storage only ever holds up deposits.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryDropCargo))]
     private static bool TryDropCargoPrefix(IdleManager __instance, SpaceStation ss, ref bool __result)
@@ -384,18 +478,27 @@ internal static class EchoCargoPatches
         if (!F.Active) return true;
         try
         {
-            if (!F.SellFromData.Value || !ItemRules.HasDockRules) return true;
-            foreach (var stack in GamePlayer.current.dataInventory.items)
-            {
-                int n = CargoRules.DataSell(ss, stack, 0);
-                if (n > 0 && CargoRules.Sell(__instance, ss, stack, n)) { __result = true; return false; }
-            }
+            if (!ItemRules.HasDockRules) return true;
+            foreach (var ship in GamePlayer.current.GetCargoShips())
+                foreach (var stack in ship.cargo.items)
+                {
+                    int n = StepFor(__instance, ss, ship, stack).sell;
+                    if (n > 0 && CargoRules.Sell(__instance, ss, stack, n)) { __result = true; return false; }
+                }
+            // Data items never reach cargo, so they get their own walk.
+            if (F.SellFromData.Value)
+                foreach (var stack in GamePlayer.current.dataInventory.items)
+                {
+                    int n = CargoRules.DataSell(ss, stack, 0);
+                    if (n > 0 && CargoRules.Sell(__instance, ss, stack, n)) { __result = true; return false; }
+                }
             return true;
         }
         catch (Exception e) { F.Fail(e, nameof(EchoCargoPatches)); return true; }
     }
 
     // Vanilla body (IdleManager.TryDropCargoOf) with the dock action of each stack's rule applied before the deposit branch.
+    // Sales already ran in TryDropCargoPrefix.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryDropCargoOf))]
     private static bool TryDropCargoOfPrefix(IdleManager __instance, SpaceStation ss, SpaceShipData cargoShip, ref bool __result)
@@ -407,26 +510,15 @@ internal static class EchoCargoPatches
             var player = GamePlayer.current;
             foreach (var stack in cargoShip.cargo.items)
             {
-                if (__instance.ShouldKeepInCargo(cargoShip, stack)) continue;   // vanilla protections always win
+                var step = StepFor(__instance, ss, cargoShip, stack);
+                if (step.action == DockAction.Keep) continue;
                 var item = stack.item;
-                var rule = ItemRules.Resolve(item);
-                if (rule.dockAction != DockAction.Default)
+                if (step.deposit > 0)
                 {
-                    var dest = Cargo.DepositTarget(ss, item);
-                    var step = CargoRules.Plan(rule, stack.count, dest != null ? dest.GetCount(item) : 0,
-                        player.RequiredItemCountForMissions(item), CargoRules.CanSellHere(ss, item));
-                    if (step.action == DockAction.Keep) continue;
-                    if (step.deposit > 0)
-                    {
-                        if (CargoRules.DepositUpTo(__instance, ss, cargoShip, item, step.deposit) > 0) { __result = true; return false; }
-                        // Storage full: the vanilla branch below reports it (or sells the cheapest stored material when auto-sell is on).
-                    }
-                    else if (step.sell > 0)
-                    {
-                        if (CargoRules.Sell(__instance, ss, stack, step.sell)) { __result = true; return false; }
-                        continue;   // refused this tick; the stack stays aboard
-                    }
+                    if (CargoRules.DepositUpTo(__instance, ss, cargoShip, item, step.deposit) > 0) { __result = true; return false; }
+                    // Storage full: the vanilla branch below reports it (or sells the cheapest stored material when auto-sell is on).
                 }
+                else if (step.sell > 0) continue;   // the sell pass was refused this tick; the stack stays aboard
                 if (item.CanGoInMaterials())
                 {
                     if (ss.materialStorage.IsFull(item.m3))

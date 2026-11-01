@@ -358,16 +358,11 @@ public static class Services
                         plannedM3[dest] = m + deposit * item.m3;
                     }
                     if (deposit < step.deposit)
-                    {
-                        r.problems.Add($"{Name(item)}: storage is full, kept {count - deposit} aboard {s.GetShipName()}.");
-                        continue;
-                    }
-                    count -= deposit;
-                    if (count <= 0) continue;
-                    step = CargoRules.Plan(rule, count, stored + deposit, reserved, sellable);
+                        r.problems.Add($"{Name(item)}: storage is full, kept {count - deposit - step.sell} aboard {s.GetShipName()}.");
                 }
+                // Sell above N's part above N sells whether or not the deposit fit.
                 if (step.sell <= 0) continue;
-                int n = Math.Min(step.sell, count);
+                int n = step.sell;
                 long value = item.sellValue * n;
                 if (run)
                 {
