@@ -58,11 +58,22 @@ Applies the Item rules pickup limits: your ships stop pulling in an item automat
 
 Items your missions need and ammo a ship uses are exempt from both, and clicking an item yourself always picks it up.
 
+Loot none of your ships at the location will pick up says why, on its tooltip in space and on its [Scanner](#scanner) row: "limit 50 reached", "never pick up" or "below 12 cr/m3". When several ships with a tractor beam are held back for different reasons, the first one's reason is shown, starting with the ship you fly. The reason only covers these filters; loot the game itself won't tractor (your own jettisoned cargo, for example) has no line.
+
 ## Shared fleet holds
 
 `Overflow` (off): when a ship's tractor beam reaches for loot its hold can't take whole, the ship moves cargo to your other ships at the same location (the flagship first, then the one with the most room), biggest stacks first, until the stack plus a quarter of its hold is free. It does this at most once per 2 s per ship. Favourites, ammo the ship uses, usable items, warp fuel and items your missions need stay where they are.
 
 Without it, a single full ship sets ECHO's "inventory full" and the whole fleet flies home even when the others have room. With it, ECHO heads home once every ship is full.
+
+## Pinned cargo
+
+The gold crown button of the fleet cargo window moves a fleet ship's whole hold to the flagship, including the ammo that ship fires. Pinned item types stay aboard; everything else still moves in one click. Two ways to pin:
+
+- Hover over a stack in a fleet ship's cargo and press `PinKey` (P), as F marks a favourite. Pinned stacks get a gold lock in the bottom left corner, and the item's tooltip says whether it's pinned.
+- In the ship's [settings popup](interface.md#ship-settings-popup): "Keep the ammo this ship fires on board" keeps whatever ammo and torpedoes its current fit uses, and "Pin an item" pins or unpins an item aboard (or a pin for an item that's no longer aboard).
+
+A pin covers every stack and level of the item type, on that ship only. Pins are saved with the ship's other settings, so a [loadout](stations.md#ship-loadouts) carries them; after a refit to another ammo type, a pin on the old ammo stays until you remove it, while the ammo switch follows the fit. The "flagship full" notice only counts stacks the button tried to move. ECHO's unloading, the fleet auto-deposit and the Deposit button ignore pins.
 
 ## Scanner
 

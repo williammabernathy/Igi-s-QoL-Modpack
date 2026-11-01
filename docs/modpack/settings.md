@@ -218,6 +218,14 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 |---|---|---|---|
 | `Overflow` | Pass cargo to ships with room | `false` | `true`, `false` |
 
+### `[CargoPins]`
+
+[Pinned cargo](features/loot-and-cargo.md#pinned-cargo)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `PinKey` | Pin key | `P` | a key name: `P`, `K`, `F7`, ... |
+
 ### `[Contacts]`
 
 [Scanner](features/loot-and-cargo.md#scanner)

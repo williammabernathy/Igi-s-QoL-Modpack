@@ -16,11 +16,11 @@ The QoL button in space sits on top of the side menu's button column at the righ
 
 ## Ship settings popup
 
-Each of your ships has its own settings: missile retargeting, drones on arrival, drone mode and anchor, engagement distance, keeping distance from other ships, the hull % at which it retreats for repairs, target choice and one target rule per weapon. Open the popup with the last button on the ship's row in the fleet panel. "Default" means the ship follows the setting on the mod window's Settings tab. These per-ship settings are saved with the game.
+Each of your ships has its own settings: missile retargeting, drones on arrival, drone mode and anchor, engagement distance, keeping distance from other ships, the hull % at which it retreats for repairs, target choice, one target rule per weapon, and which cargo stays aboard when the fleet cargo moves everything to the flagship ([pinned cargo](loot-and-cargo.md#pinned-cargo)). Open the popup with the last button on the ship's row in the fleet panel. "Default" means the ship follows the setting on the mod window's Settings tab. These per-ship settings are saved with the game.
 
 ![Per-ship settings for the Eclipse](../../images/ship-settings-popup.jpg)
 
-The features behind these rows are described in [fleet-combat.md](fleet-combat.md).
+The features behind these rows are described in [fleet-combat.md](fleet-combat.md) and, for pinned cargo, [loot-and-cargo.md](loot-and-cargo.md#pinned-cargo).
 
 ## Fleet command strip
 

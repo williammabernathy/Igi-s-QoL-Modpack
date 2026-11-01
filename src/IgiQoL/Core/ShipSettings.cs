@@ -35,6 +35,10 @@ public sealed class ShipSettings
     public bool? separation;
     // Hull % below which a fleet ship leaves for repairs; null = the game's 10%.
     public int? retreatBelow;
+    // Item identifiers that stay aboard when the fleet cargo's "move all to flagship" button empties this ship.
+    public readonly HashSet<string> pins = new();
+    // The ammo this ship's fit fires stays aboard on "move all to flagship" too.
+    public bool keepAmmo;
 
     public static readonly ShipSettings Default = new();
 
@@ -119,6 +123,15 @@ public sealed class ShipSettings
         else record.Remove("separation");
         if (s.retreatBelow.HasValue) record["retreatBelow"] = s.retreatBelow.Value;
         else record.Remove("retreatBelow");
+        if (s.pins.Count > 0)
+        {
+            var list = new JsonArray();
+            foreach (var id in s.pins) list.Add(id);
+            record["pins"] = list;
+        }
+        else record.Remove("pins");
+        if (s.keepAmmo) record["keepAmmo"] = true;
+        else record.Remove("keepAmmo");
     }
 
     public static void Invalidate() => cache.Clear();
@@ -163,6 +176,12 @@ public sealed class ShipSettings
         if (v.IsBoolean) s.separation = v.AsBoolean;
         v = record["retreatBelow"];
         if (v.IsNumber) s.retreatBelow = (int)v.AsNumber;
+        v = record["pins"];
+        if (v.IsJsonArray)
+            foreach (var id in v.AsJsonArray)
+                if (id.IsString) s.pins.Add(id.AsString);
+        v = record["keepAmmo"];
+        if (v.IsBoolean) s.keepAmmo = v.AsBoolean;
         return s;
     }
 }

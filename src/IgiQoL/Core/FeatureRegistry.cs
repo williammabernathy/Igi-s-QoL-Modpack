@@ -40,6 +40,7 @@ public static class FeatureRegistry
         new Features.EchoKit.EchoKit(),
         new Features.OrePreference.OrePreference(),
         new Features.FleetHolds.FleetHolds(),
+        new Features.CargoPins.CargoPins(),
         new Features.Loadouts.Loadouts(),
         new Features.StationServices.StationServices(),
         new Features.RefineryFilter.RefineryFilter(),

@@ -10,6 +10,7 @@ using Behaviour.Tractoring;
 using Behaviour.UI;
 using Behaviour.UI.HUD;
 using Behaviour.UI.Movement;
+using Behaviour.UI.Tooltip;
 using Behaviour.Unit;
 using Behaviour.Util;
 using Behaviour.Weapons;
@@ -22,6 +23,7 @@ using Source.Data.Persistable;
 using Source.Galaxy;
 using Source.Item;
 using Source.MissionSystem;
+using Source.Player;
 using Source.Util;
 using TMPro;
 using UnityEngine;
@@ -176,7 +178,73 @@ public sealed class Contacts : Feature
         ModWindow.Close();
 
         yield return CheckMarkers(ctx);
+        yield return CheckLootReason(ctx);
         yield return CheckOres(ctx);
+    }
+
+    // Loot your ships won't pick up says why on its Scanner row and on the row's tooltip.
+    private static IEnumerator CheckLootReason(SelfCheckContext ctx)
+    {
+        yield return SelfCheckContext.EnsureInSpace();
+        var ship = Fleet.Flagship;
+        if (ship == null || !Singleton<LootManager>.HasInstance || ship.GetModule<TractorModule>() == null || !TractorCaps.TractorCaps.Instance.Active)
+        {
+            ctx.Skip("loot-reason", "not in space, no tractor beam on the flagship, or Loot pickup limits is off");
+            yield break;
+        }
+        InventoryItemType ore = null;
+        foreach (var t in InventoryItemType.all)
+            if (t.itemCategory == ItemCategory.Ore && GamePlayer.current.RequiredItemCountForMissions(t) == 0) { ore = t; break; }
+        if (ore == null)
+        {
+            ctx.Skip("loot-reason", "no ore item type");
+            yield break;
+        }
+        var item = Singleton<LootManager>.Instance.SpawnLootItem(new TractorableItemData
+        {
+            itemType = ore,
+            itemAmount = 3,
+            jettisoned = true,
+            ownerFaction = Faction.player,
+            position = (Vector2)ship.transform.position + new Vector2(0f, 30f),
+        }, null);
+        ItemTooltipSource source = null;
+        try
+        {
+            Rules.ItemRules.UseForTest("{\"default\":{\"tractorCap\":-1}}");
+            ModWindow.Open("contacts");
+            yield return new WaitForSeconds(1.5f);
+            var list = ModWindow.IsOpen ? ModWindow.Content.GetComponentInChildren<ContactsList>() : null;
+            string expected = Translation.Translate(ore.displayName) + " x3 | never pick up";
+            TMP_Text row = null;
+            if (list != null)
+                foreach (var t in list.GetComponentsInChildren<TMP_Text>())
+                    if (t.text == expected) { row = t; break; }
+            if (row != null) ctx.Pass("loot-reason", "row '" + row.text + "'");
+            else ctx.Fail("loot-reason", "no row '" + expected + "'");
+
+            source = row != null ? row.GetComponent<ItemTooltipSource>() : null;
+            if (source == null || !UITooltip.TooltipEnabled) ctx.Skip("loot-reason-tooltip", "no row tooltip or tooltips are off");
+            else
+            {
+                UITooltip.Show(source, source.Prefab);
+                string line = null;
+                if (UITooltip._current != null)
+                    foreach (var t in UITooltip._current.Content.GetComponentsInChildren<TMP_Text>(true))
+                        if (t.text.StartsWith("Not picked up automatically: ", StringComparison.Ordinal)) line = t.text;
+                if (line == "Not picked up automatically: never pick up") ctx.Pass("loot-reason-tooltip", line);
+                else ctx.Fail("loot-reason-tooltip", "line '" + line + "'");
+                yield return ctx.Screenshot("window-contacts-loot-reason");
+            }
+        }
+        finally
+        {
+            if (source != null) UITooltip.Hide(source);
+            Rules.ItemRules.Load();
+            ModWindow.Close();
+            if (item != null) Object.DestroyImmediate(item.gameObject);
+            PruneLoot();
+        }
     }
 
     // Two Cerrax asteroids and one Amberic spawned next to the ship show up as two ore rows, the listed ore marked.
@@ -587,7 +655,8 @@ public sealed class ContactsList : MonoBehaviour
             var row = Kit.Row(column, 6f, 22f);
             var r = new Row { kind = Kind.Loot, key = type, main = Kit.Label(row, "") };
             r.main.color = type.rarity.GetColor();
-            Kit.ItemTooltip(r.main, type);
+            // Loot in space: the tooltip says why your ships leave it (see TractorCaps), without the inventory click hints.
+            Kit.ItemTooltip(r.main, type, ItemTooltipContext.InSpace, interactive: false);
             r.value = Kit.Fixed(row, "", 70f, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
             r.dist = Kit.Fixed(row, "", 50f, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
             if (tractor != null) Kit.TextButton(row, "Tractor", () => Contacts.Tractor(type), 70f);
@@ -642,7 +711,8 @@ public sealed class ContactsList : MonoBehaviour
                 default:
                 {
                     var g = groups[(InventoryItemType)r.key];
-                    main = Translation.Translate(g.type.displayName) + " x" + g.total + (g.pieces > 1 ? " (" + g.pieces + " stacks)" : "");
+                    string why = TractorCaps.TractorCaps.WhySkipped(g.type);
+                    main = Translation.Translate(g.type.displayName) + " x" + g.total + (g.pieces > 1 ? " (" + g.pieces + " stacks)" : "") + (why != null ? " | " + why : "");
                     value = GameMath.FormatNumber(g.type.sellValue * g.total) + " cr";
                     break;
                 }

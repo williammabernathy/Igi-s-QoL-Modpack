@@ -12,7 +12,9 @@ using IgiQoL.Features.MissileRetarget;
 using IgiQoL.Features.FleetRetreat;
 using IgiQoL.Features.Separation;
 using IgiQoL.Features.TargetPriority;
+using IgiQoL.Features.CargoPins;
 using Source.SpaceShip;
+using Source.Util;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -179,6 +181,9 @@ public static class ShipPopup
         if (targeting != null && targeting.Active) AddTargeting(ship, guid, s, targeting);
         else Kit.Muted(Body, "Target priority is turned off on the Settings tab.");
 
+        var pins = CargoPins.Instance;
+        if (pins != null && pins.Active) AddPins(ship, guid, s);
+
         frame.AddButton("Close", Close, 110f);
     }
 
@@ -270,6 +275,56 @@ public static class ShipPopup
                 ShipSettings.Save(guid);
             }, 200f);
         }
+    }
+
+    // Two controls and a line: the ammo switch, then one pick-and-toggle row so the popup's height doesn't grow with the pins.
+    private static void AddPins(SpaceShipData ship, string guid, ShipSettings s)
+    {
+        Kit.Toggle(Body, "Keep the ammo this ship fires on board", s.keepAmmo, on =>
+        {
+            ShipSettings.Edit(guid).keepAmmo = on;
+            ShipSettings.Save(guid);
+            CargoPins.RefreshMarks(ship);
+        });
+
+        var aboard = CargoPins.PinChoices(ship, out var orphans);
+        var ids = new List<string>();
+        var names = new List<string>();
+        foreach (var item in aboard)
+        {
+            ids.Add(item.identifier);
+            names.Add(Translation.Translate(item.displayName) + (s.pins.Contains(item.identifier) ? " (pinned)" : ""));
+        }
+        foreach (var id in orphans)
+        {
+            ids.Add(id);
+            names.Add(CargoPins.PinName(id) + " (pinned, not aboard)");
+        }
+        if (names.Count == 0) names.Add("Nothing aboard");
+
+        var row = Kit.Row(Body, 8f, 26f);
+        Kit.Tooltip(Kit.Label(row, "Pin an item"), null, "Pinned items stay aboard when the fleet cargo's crown button moves everything to the flagship. Pick an item aboard, or a pin to remove.");
+        Button toggle = null;
+        var choice = Kit.Dropdown(row, names, 0, i =>
+        {
+            if (i < ids.Count) toggle.GetComponentInChildren<TMP_Text>().text = ShipSettings.Get(guid).pins.Contains(ids[i]) ? "Unpin" : "Pin";
+        }, 200f);
+        toggle = Kit.TextButton(row, ids.Count > 0 && s.pins.Contains(ids[0]) ? "Unpin" : "Pin", () =>
+        {
+            int i = choice.GetIndex();
+            if (i >= ids.Count) return;
+            var e = ShipSettings.Edit(guid);
+            if (!e.pins.Remove(ids[i])) e.pins.Add(ids[i]);
+            ShipSettings.Save(guid);
+            CargoPins.RefreshMarks(ship);
+            Open(ship);
+        }, 70f);
+
+        var pinned = new List<string>();
+        foreach (var id in s.pins) pinned.Add(CargoPins.PinName(id));
+        pinned.Sort(System.StringComparer.CurrentCulture);
+        Kit.Muted(Body, (pinned.Count > 0 ? "Pinned: " + string.Join(", ", pinned) + ". " : "")
+            + "Applies while this ship is in your fleet. In its fleet cargo, " + CargoPins.Instance.PinKey.Value + " over a stack pins or unpins it.");
     }
 
     private static readonly string[] MissileNames = { "Fly on", "Weapon's target", "Nearest enemy" };

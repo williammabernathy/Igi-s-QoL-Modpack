@@ -1,7 +1,10 @@
 using System;
 using System.Collections;
+using Behaviour.Equipment.Module;
 using Behaviour.Item;
 using Behaviour.Tractoring;
+using Behaviour.UI;
+using Behaviour.UI.Tooltip;
 using Behaviour.Unit;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -11,6 +14,7 @@ using IgiQoL.Rules;
 using Source.Item;
 using Source.Player;
 using Source.SpaceShip;
+using Source.Util;
 using UnityEngine;
 
 namespace IgiQoL.Features.TractorCaps;
@@ -23,9 +27,9 @@ public sealed class TractorCaps : Feature
 
     public override string Id => "TractorCaps";
     public override string Title => "Loot pickup limits";
-    public override string Description => "Your ships stop pulling in an item automatically once they carry the limit set for it on the Item rules tab (or never pull it in, with -1), and can leave cheap bulky loot alone. Clicking the item yourself still picks it up.";
+    public override string Description => "Your ships stop pulling in an item automatically once they carry the limit set for it on the Item rules tab (or never pull it in, with -1), and can leave cheap bulky loot alone. Loot they leave says why on its tooltip and on its Scanner row. Clicking the item yourself still picks it up.";
     public override string SettingsTab => "Item rules";
-    public override Type[] PatchClasses => new[] { typeof(TractorCapsPatch) };
+    public override Type[] PatchClasses => new[] { typeof(TractorCapsPatch), typeof(TractorCapsTooltipPatch) };
 
     public ConfigEntry<int> MinCreditsPerM3;
 
@@ -37,12 +41,18 @@ public sealed class TractorCaps : Feature
             new AcceptableValueRange<int>(0, 1000000)));
     }
 
-    public static bool Allows(SpaceShipData ship, InventoryItemType item, AbstractUnit unit = null)
+    // Why the filters hold an item back from a ship's auto-tractor. None = they let it through.
+    public enum Skip { None, Limit, Never, Cheap }
+
+    public static bool Allows(SpaceShipData ship, InventoryItemType item, AbstractUnit unit = null) => Check(ship, item, unit) == Skip.None;
+
+    // Runs inside the tractor gate on every scan, so it returns an enum and builds no text.
+    public static Skip Check(SpaceShipData ship, InventoryItemType item, AbstractUnit unit = null)
     {
         int cap = ItemRules.Resolve(item).tractorCap;
-        if (cap == ItemRule.Never) return Exempt(unit, item);
-        if (cap > 0 && Cargo.Count(ship, item) >= cap) return false;
-        return !TooCheap(unit, item);
+        if (cap == ItemRule.Never) return Exempt(unit, item) ? Skip.None : Skip.Never;
+        if (cap > 0 && Cargo.Count(ship, item) >= cap) return Skip.Limit;
+        return TooCheap(unit, item) ? Skip.Cheap : Skip.None;
     }
 
     public static bool TooCheap(AbstractUnit unit, InventoryItemType item)
@@ -50,6 +60,32 @@ public sealed class TractorCaps : Feature
         int min = Instance.MinCreditsPerM3.Value;
         if (min <= 0 || item.m3 <= 0f || item.sellValue >= min * item.m3) return false;
         return !Exempt(unit, item);
+    }
+
+    public static string Describe(Skip skip, InventoryItemType item) => skip switch
+    {
+        Skip.Limit => "limit " + ItemRules.Resolve(item).tractorCap + " reached",
+        Skip.Never => "never pick up",
+        Skip.Cheap => "below " + Instance.MinCreditsPerM3.Value + " cr/m3",
+        _ => null,
+    };
+
+    // Why none of your ships here auto-tractors the item, or null when one of them would, or none has a tractor beam.
+    // With several ships held back, the first one's reason (the ship you fly comes first). Called when a Scanner row
+    // refreshes or a loot tooltip opens, not from the gate.
+    public static string WhySkipped(InventoryItemType item)
+    {
+        if (Instance == null || !Instance.Active || item == null) return null;
+        string why = null;
+        foreach (var data in Fleet.Ships(withMercenaries: true))
+        {
+            var unit = Fleet.Unit(data);
+            if (unit == null || !unit.gameObject.activeInHierarchy || unit.GetModule<TractorModule>() == null) continue;
+            var skip = Check(data, item, unit);
+            if (skip == Skip.None) return null;
+            why ??= Describe(skip, item);
+        }
+        return why;
     }
 
     // Loot the filters never hold back: items your missions need and ammo the ship fires.
@@ -74,16 +110,18 @@ public sealed class TractorCaps : Feature
             yield break;
         }
         bool capped, uncapped;
+        string cappedWhy;
         try
         {
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":1}}");
             capped = Allows(ship, stack.item);
+            cappedWhy = Describe(Check(ship, stack.item), stack.item);
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":0}}");
             uncapped = Allows(ship, stack.item);
         }
         finally { ItemRules.Load(); }
-        string detail = $"{Items.RuleKey(stack.item)} count={Cargo.Count(ship, stack.item)} cap1 allows={capped} cap0 allows={uncapped}";
-        if (!capped && uncapped) ctx.Pass("gate", detail);
+        string detail = $"{Items.RuleKey(stack.item)} count={Cargo.Count(ship, stack.item)} cap1 allows={capped} ('{cappedWhy}') cap0 allows={uncapped}";
+        if (!capped && cappedWhy == "limit 1 reached" && uncapped) ctx.Pass("gate", detail);
         else ctx.Fail("gate", detail);
 
         // Value per m3: a stack type below the line is skipped, the same type with the line at 0 or under its value isn't.
@@ -99,14 +137,16 @@ public sealed class TractorCaps : Feature
         float perM3 = bulky.sellValue / bulky.m3;
         try
         {
-            Instance.MinCreditsPerM3.Value = Mathf.CeilToInt(perM3) + 1;
+            int line = Mathf.CeilToInt(perM3) + 1;
+            Instance.MinCreditsPerM3.Value = line;
             bool above = Allows(ship, bulky);
+            string aboveWhy = Describe(Check(ship, bulky), bulky);
             Instance.MinCreditsPerM3.Value = Mathf.Max(1, Mathf.FloorToInt(perM3));
             bool below = Allows(ship, bulky);
             Instance.MinCreditsPerM3.Value = 0;
             bool off = Allows(ship, bulky);
-            string vd = $"{bulky.identifier}: {bulky.sellValue} cr per {bulky.m3} m3 = {perM3:0.##}/m3; line above it allows={above}, at or under it allows={below}, off allows={off}";
-            if (!above && below && off) ctx.Pass("value", vd);
+            string vd = $"{bulky.identifier}: {bulky.sellValue} cr per {bulky.m3} m3 = {perM3:0.##}/m3; line above it allows={above} ('{aboveWhy}'), at or under it allows={below}, off allows={off}";
+            if (!above && aboveWhy == "below " + line + " cr/m3" && below && off) ctx.Pass("value", vd);
             else ctx.Fail("value", vd);
         }
         finally { Instance.MinCreditsPerM3.Value = min0; }
@@ -118,15 +158,17 @@ public sealed class TractorCaps : Feature
             foreach (var t in InventoryItemType.all)
                 if (t.itemCategory == ItemCategory.Ammo && unit.DoWeUseAmmo(t)) { usedAmmo = t; break; }
         bool neverOre, neverAmmo;
+        string neverWhy;
         try
         {
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":-1}}");
             neverOre = Allows(ship, bulky, unit);
+            neverWhy = Describe(Check(ship, bulky, unit), bulky);
             neverAmmo = usedAmmo == null || Allows(ship, usedAmmo, unit);
         }
         finally { ItemRules.Load(); }
-        string nd = $"cap -1: {bulky.identifier} allows={neverOre}, used ammo {usedAmmo?.identifier ?? "(none fitted)"} allows={neverAmmo}";
-        if (!neverOre && neverAmmo) ctx.Pass("never", nd);
+        string nd = $"cap -1: {bulky.identifier} allows={neverOre} ('{neverWhy}'), used ammo {usedAmmo?.identifier ?? "(none fitted)"} allows={neverAmmo}";
+        if (!neverOre && neverWhy == "never pick up" && neverAmmo) ctx.Pass("never", nd);
         else ctx.Fail("never", nd);
     }
 }
@@ -143,5 +185,21 @@ internal static class TractorCapsPatch
                 __result = false;
         }
         catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(TractorCapsPatch)); }
+    }
+}
+
+// Tooltips of loot in space (and of the Scanner's loot rows) say why your ships leave the item alone.
+[HarmonyPatch(typeof(CompareTooltip), "AddContextualFooterHints")]
+internal static class TractorCapsTooltipPatch
+{
+    private static void Postfix(CompareTooltip __instance, InventoryItemType item, ItemTooltipContext context)
+    {
+        if (!TractorCaps.Instance.Active || context != ItemTooltipContext.InSpace) return;
+        try
+        {
+            string why = TractorCaps.WhySkipped(item);
+            if (why != null) __instance.AddTextLine("Not picked up automatically: " + why).Text.color = ColorHelper.reddish;
+        }
+        catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(TractorCapsTooltipPatch)); }
     }
 }
