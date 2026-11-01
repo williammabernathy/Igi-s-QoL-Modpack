@@ -13,11 +13,11 @@ Which enemy your ships attack when they pick a target on their own. `Rule`:
 | Nearest | The closest enemy (the game's choice) |
 | Lowest hull % / Highest hull % | The most damaged or the healthiest enemy |
 | Most damage to my fleet | Whoever has hurt your ships most in the last few seconds |
-| Attacking my flagship | Enemies shooting at the ship you fly |
+| Attacking my flagship | Enemies shooting at or aiming at the ship you fly |
 | Smallest first / Largest first | By hull class |
 | Lowest level / Highest level | By enemy level |
 
-`RepickSeconds` (0-30, default 0) is how often a ship re-applies its rule. 0 keeps the game's stickiness: a ship stays on its target until it dies or leaves. Above 0, a ship switches when another enemy is clearly better (for example 10 points of hull, or 20% closer), so ships don't flicker between two similar targets. `FinishBelowPercent` (0-100, default 0) keeps a ship on a target below that hull %, so nearly dead enemies get finished. With any rule other than Nearest, ships also stop jumping to whoever just hit a nearby ally.
+`RepickSeconds` (0-30, default 0) is how often a ship re-applies its rule. 0 keeps the game's stickiness: a ship stays on its target until it dies or leaves. Above 0, a ship switches when another enemy is clearly better (for example 10 points of hull, or 20% closer), so ships don't flicker between two similar targets. `FinishBelowPercent` (0-100, default 0) keeps a ship on a target below that hull %, so nearly dead enemies get finished. With any rule other than Nearest, ships also stop jumping to whoever just hit a nearby ally. "Attacking my flagship" is the exception for hits on the flagship: a ship with that rule switches to whoever hits the ship you fly, even at `RepickSeconds` 0, unless it's already on another enemy attacking the flagship, is finishing a target below `FinishBelowPercent`, or the attacker is past its "Only attack within" distance.
 
 The ship settings popup adds, per ship:
 
