@@ -41,6 +41,7 @@ public static class FeatureRegistry
         new Features.FleetHolds.FleetHolds(),
         new Features.Loadouts.Loadouts(),
         new Features.StationServices.StationServices(),
+        new Features.RefineryFilter.RefineryFilter(),
         new Features.MissionDistance.MissionDistance(),
         new Features.EchoRetreat.EchoRetreat(),
         new Features.Mods.Mods(),

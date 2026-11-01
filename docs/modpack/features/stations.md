@@ -52,6 +52,12 @@ When the station has a refinery, missing canisters are covered by refining ore f
 
 Starting a roll-up starts each refinery job and queues each part job as soon as its ingredients (or ore), a free slot and the credits are there, then the recipe itself. That's checked every second where you are and every 10 s at other stations, also while you're away. Parts and roll-up canisters go into the station's materials storage even with "deposit in cargo" on. Running roll-ups are saved; the same button stops one (jobs already queued keep running). A notification says when the recipe is queued. Ingredients that no recipe makes (drops) still have to be at the station.
 
+## Refinery filter
+
+![The refinery filtered to Carbon: two ores left, best yield first](../../images/refinery-filter.jpg)
+
+Click a material in the refinery's left column to show only the ore that refines into it, sorted by how much of that material one unit yields. The other materials dim while the filter is on. Click the material again to show all ore, or click another one to switch. When no ore at the station yields the material, the ore row says so. If the selected ore gets hidden, the first ore left is selected. Leaving the refinery clears the filter. It changes only what the screen shows.
+
 ## Operations tab
 
 ![The Operations tab](../../images/tab-operations.jpg)

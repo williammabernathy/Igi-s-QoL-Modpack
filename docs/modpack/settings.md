@@ -230,6 +230,10 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 [Crafting roll-up](features/stations.md#crafting-roll-up): only `Enabled`.
 
+### `[RefineryFilter]`
+
+[Refinery filter](features/stations.md#refinery-filter): only `Enabled`.
+
 ### `[Operations]`
 
 [Operations tab](features/stations.md#operations-tab)

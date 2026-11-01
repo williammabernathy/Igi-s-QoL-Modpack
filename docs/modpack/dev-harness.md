@@ -46,7 +46,7 @@ flowchart LR
 
    In PowerShell: `Select-String -Path "$G\BepInEx\LogOutput.log" -Pattern "startup:|switched off|Self-check complete|CHECK .* (FAIL|SKIP)"`.
 
-   A clean run ends with `Self-check complete: 165 pass, 0 fail, 5 skip` on the reference save. The five skips need a situation the test save doesn't reach: a dungeon at the location (`EchoGates/dungeon-min`), a target while docked (`EngagementDistance/live`), the game's Autopilot tab in the scene (`EchoPriority/dropdown-to-list`), being docked at that point of the run (`EchoCargo/live-keep`) and a salvage module (`DroneModes/gatherer-assist`).
+   A clean run ends with `Self-check complete: 165 pass, 0 fail, 5 skip` on the reference save. The five skips need a situation the test save doesn't reach: a dungeon at the location (`EchoGates/dungeon-min`), a target while docked (`EngagementDistance/live`), the game's Autopilot tab in the scene (`EchoPriority/dropdown-to-list`), being docked at that point of the run (`EchoCargo/live-keep`) and a salvage module (`DroneModes/gatherer-assist`). `RefineryFilter/filter` adds a sixth skip when the save's station has no refinery; at a station with one, the refinery filter adds 7 passes.
 5. Set `Enabled = false` again and delete the copy. Steam Cloud sometimes restores a deleted save; delete it again if it comes back.
 
 Each check writes one line:
