@@ -71,3 +71,11 @@ The missions window (the side panel's Missions tab) has its own sort button unde
 - Distance: nearest first. The location you're at comes first, then this system, then other systems by jumps. Missions without a location or a known route go last.
 
 The window sorts "ready to turn in" and "in progress" separately. Under Level, a row's level chip takes the place of its jump count, because the 190 px list has no room for both beside the progress bar. Some story missions name no location at all, so they have no level: they get no level chip and sort last. When the mission you had selected is gone, the window selects the first row shown instead of the first one in the game's order.
+
+## Mission fit
+
+Greys out station mission board offers that none of your ships has the equipment for. A typical case is a mining mission when no ship carries a mining turret, mining drones or a hangar bay that mines. The offer's icon, name and chips are dimmed, and a red "No fit" chip is added. Its tooltip names the missing work, for example "Mining (Core)" or "Salvage (Structural)". The offer keeps its place in the list, and you can still pick and accept it.
+
+The test is the game's own (`SpaceShipData.HasLoadout`): a turret, drone bay, torpedo bay or hangar bay for the mission's work, on the layer the mission asks for. Generated mining and salvage missions ask for surface or core. Your flagship and every ship in your active fleet count, even while they're away from you. Hired mercenaries don't count, because their contracts end. Cargo and delivery missions are never greyed out, and neither are missions you already hold.
+
+ECHO checks only the flagship before it takes a mission, so it can still answer "no suitable loadout" for an offer that isn't greyed out, when the gear for it is on a fleet ship.

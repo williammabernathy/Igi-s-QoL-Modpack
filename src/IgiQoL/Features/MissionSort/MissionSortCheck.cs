@@ -319,7 +319,8 @@ internal static class MissionSortCheck
         _ => m.difficulty.ToString(),
     };
 
-    private static IEnumerator OpenBoard(SelfCheckContext ctx, Action<Board> found)
+    // Docks if needed and opens the station's mission board; skips or fails under the given check name.
+    internal static IEnumerator OpenBoard(SelfCheckContext ctx, Action<Board> found, string check = "order")
     {
         if (SpaceStationInterior.instance == null && Behaviour.Managers.BasePoiManager.current is SpacestationExteriorManager exterior)
         {
@@ -332,7 +333,7 @@ internal static class MissionSortCheck
         var interior = SpaceStationInterior.instance;
         if (interior == null || !interior.HasMissionBoard())
         {
-            ctx.Skip("order", "not docked at a station with a mission board: " + MapPointOfInterest.current?.name);
+            ctx.Skip(check, "not docked at a station with a mission board: " + MapPointOfInterest.current?.name);
             yield break;
         }
         interior.GoToLocation(SpaceStationFacility.MissionBoard);
@@ -341,7 +342,9 @@ internal static class MissionSortCheck
         Board board = null;
         while ((board = interior.GetComponentInChildren<Board>()) == null && Time.realtimeSinceStartup < until) yield return null;
         yield return new WaitForSeconds(1.5f);
-        if (board == null) ctx.Fail("order", "mission board did not open");
+        // A board already open (an earlier check's) may have been replaced by GoToLocation and destroyed since.
+        board = interior.GetComponentInChildren<Board>();
+        if (board == null) ctx.Fail(check, "mission board did not open");
         else found(board);
     }
 }

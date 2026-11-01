@@ -22,7 +22,7 @@ The features, by area:
 
 | Area | Features |
 |---|---|
-| [Window and HUD](features/interface.md) | Mod window, ship settings popup, fleet command strip, fleet shield and armor bars, text size, jumps remaining, mission distance, mission sort |
+| [Window and HUD](features/interface.md) | Mod window, ship settings popup, fleet command strip, fleet shield and armor bars, text size, jumps remaining, mission distance, mission sort, mission fit |
 | [ECHO, the autopilot](features/echo.md) | Activity priority, ECHO decisions, missions, retreat, abilities and deployables, preferred ores, ECHO's operations, cargo rules |
 | [Fleet and combat](features/fleet-combat.md) | Target priority, engagement distance, keep distance in combat, retreat for repairs, ship stats on hover, missile retargeting, drone modes, drones on arrival |
 | [Loot and cargo](features/loot-and-cargo.md) | Item rules, loot pickup limits, shared fleet holds, Scanner |

@@ -46,6 +46,7 @@ public static class FeatureRegistry
         new Features.UsedIn.UsedIn(),
         new Features.MissionDistance.MissionDistance(),
         new Features.MissionSort.MissionSort(),
+        new Features.MissionFit.MissionFit(),
         new Features.EchoRetreat.EchoRetreat(),
         new Features.FleetRetreat.FleetRetreat(),
         new Features.Mods.Mods(),

@@ -54,6 +54,10 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | `Board` | Mission board order | `GameOrder` | `GameOrder`, `Type`, `Level`, `Difficulty` |
 | `Window` | Missions window order | `GameOrder` | `GameOrder`, `Type`, `Level`, `Difficulty`, `Distance` |
 
+### `[MissionFit]`
+
+[Mission fit](features/interface.md#mission-fit): only `Enabled`.
+
 ## ECHO, the autopilot
 
 ### `[EchoPriority]`
