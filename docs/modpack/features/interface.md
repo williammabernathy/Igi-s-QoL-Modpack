@@ -64,4 +64,10 @@ The station mission board gets a sort button in its header, left of the refresh 
 - Level: highest first. Each row gets a level chip ("L62") while this order is on, since the game shows the level nowhere on the row.
 - Difficulty: hardest first (Insane, Hard, Challenging, Normal, Easy), then faction and story missions.
 
-Each section of the board (ready to turn in, in progress, available) is sorted on its own, and missions that tie keep the game's order. The button and `Board` in the Settings tab are the same setting, so the order holds between visits. The missions window keeps the game's order.
+Each section of the board (ready to turn in, in progress, available) is sorted on its own, and missions that tie keep the game's order. The button and `Board` in the Settings tab are the same setting, so the order holds between visits.
+
+The missions window (the side panel's Missions tab) has its own sort button under its list, above the "N / 20 slots used" line, saved as `Window`. It has the same four orders plus one more:
+
+- Distance: nearest first. The location you're at comes first, then this system, then other systems by jumps. Missions without a location or a known route go last.
+
+The window sorts "ready to turn in" and "in progress" separately. Under Level, a row's level chip takes the place of its jump count, because the 190 px list has no room for both beside the progress bar. Some story missions name no location at all, so they have no level: they get no level chip and sort last. When the mission you had selected is gone, the window selects the first row shown instead of the first one in the game's order.

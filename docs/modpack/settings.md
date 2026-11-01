@@ -52,6 +52,7 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `Board` | Mission board order | `GameOrder` | `GameOrder`, `Type`, `Level`, `Difficulty` |
+| `Window` | Missions window order | `GameOrder` | `GameOrder`, `Type`, `Level`, `Difficulty`, `Distance` |
 
 ## ECHO, the autopilot
 
