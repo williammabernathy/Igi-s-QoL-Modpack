@@ -45,6 +45,14 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 [Mission distance](features/interface.md#mission-distance): only `Enabled`.
 
+### `[MissionSort]`
+
+[Mission sort](features/interface.md#mission-sort)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `Board` | Mission board order | `GameOrder` | `GameOrder`, `Type`, `Level`, `Difficulty` |
+
 ## ECHO, the autopilot
 
 ### `[EchoPriority]`

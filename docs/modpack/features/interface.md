@@ -54,3 +54,14 @@ Board missions have so far always been in the station's own system, so the row i
 ![Mission board details: the location is in this system](../../images/mission-board-distance.jpg)
 
 ![Missions window: a story mission 38 jumps away](../../images/missions-window-distance.jpg)
+
+## Mission sort
+
+The station mission board gets a sort button in its header, left of the refresh timer. Each click moves to the next order and re-sorts the board, keeping the mission you had selected:
+
+- Game order: as the game lists them (the default).
+- Type: story, combat, mining, salvage, cargo, repair, then generic missions.
+- Level: highest first. Each row gets a level chip ("L62") while this order is on, since the game shows the level nowhere on the row.
+- Difficulty: hardest first (Insane, Hard, Challenging, Normal, Easy), then faction and story missions.
+
+Each section of the board (ready to turn in, in progress, available) is sorted on its own, and missions that tie keep the game's order. The button and `Board` in the Settings tab are the same setting, so the order holds between visits. The missions window keeps the game's order.
