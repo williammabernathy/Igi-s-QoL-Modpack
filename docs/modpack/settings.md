@@ -126,6 +126,7 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 |---|---|---|---|
 | `ApplyToAutoDeposit` | Apply when fleet cargo auto-deposits on dock | `true` | `true`, `false` |
 | `SellFromData` | Sell from the data inventory | `true` | `true`, `false` |
+| `SellFromStorage` | Sell from station storage | `false` | `true`, `false` |
 
 ## Fleet and combat
 

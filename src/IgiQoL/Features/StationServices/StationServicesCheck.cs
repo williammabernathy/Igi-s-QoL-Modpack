@@ -51,6 +51,7 @@ internal static class StationServicesCheck
         CheckFuel(ctx);
         CheckSell(ctx);
         CheckSellData(ctx);
+        CheckSellStorage(ctx);
         CheckCrewTrack(ctx);
         CheckCrew(ctx);
         CheckBrig(ctx);
@@ -373,6 +374,60 @@ internal static class StationServicesCheck
             ItemRules.Load();
             data.Remove(item, data.GetCount(item));
             if (count0 > 0) data.Add(item, count0);
+        }
+    }
+
+    // Station storage with SellFromStorage on: Sell above N trims the storage to N in the same run that sells the cargo
+    // stack, the quote matches the run, and the setting turns it off.
+    private static void CheckSellStorage(SelfCheckContext ctx)
+    {
+        var ss = Services.Docked();
+        var ore = TestOre();
+        if (ore == null || !EchoCargo.CargoRules.CanSellHere(ss, ore) || Cargo.DepositTarget(ss, ore) != ss.materialStorage)
+        {
+            ctx.Skip("sell-storage", ore == null ? "no sellable ore type" : "station has no shop, or ore doesn't go to material storage");
+            return;
+        }
+        var player = GamePlayer.current;
+        var ship = player.currentSpaceShip;
+        var storage = ss.materialStorage;
+        var setting = EchoCargo.EchoCargo.Instance.SellFromStorage;
+        bool setting0 = setting.Value;
+        int cargo0 = ship.cargo.GetCount(ore), stored0 = storage.GetCount(ore);
+        string key = Items.RuleKey(ore);
+        try
+        {
+            setting.Value = true;
+            if (cargo0 > 0) ship.cargo.Remove(ore, cargo0);
+            ship.cargo.Add(ore, 5);
+            storage.Add(ore, 6);
+            int held = storage.GetCount(ore);
+            int keep = Mathf.Max(held - 3, player.RequiredItemCountForMissions(ore));
+            long expected = ore.sellValue * (ship.cargo.GetCount(ore) + held - keep);
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}}}");
+            long before = player.credits;
+            var quote = Services.Sell(false);
+            var run = Services.Sell(true);
+            string detail = $"{key}: keep={keep} stored {held}->{storage.GetCount(ore)} cargo 5->{ship.cargo.GetCount(ore)} credits +{player.credits - before} (expected {expected}) quote={quote.credits} run={run.credits} lines=[{string.Join("; ", run.lines)}]";
+            if (held > keep && quote.credits == expected && run.credits == expected && player.credits - before == expected && storage.GetCount(ore) == keep
+                && ship.cargo.GetCount(ore) == 0 && run.lines.Exists(l => l.StartsWith("Station storage: "))) ctx.Pass("sell-storage", detail);
+            else ctx.Fail("sell-storage", detail);
+
+            setting.Value = false;
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"Sell\"}}}");
+            var off = Services.Sell(true);
+            detail = $"setting off: sold {off.credits} cr, stored {keep}->{storage.GetCount(ore)}";
+            if (off.credits == 0 && storage.GetCount(ore) == keep) ctx.Pass("sell-storage-off", detail);
+            else ctx.Fail("sell-storage-off", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            ship.cargo.Remove(ore, ship.cargo.GetCount(ore));
+            if (cargo0 > 0) ship.cargo.Add(ore, cargo0);
+            storage.Remove(ore, storage.GetCount(ore));
+            if (stored0 > 0) storage.Add(ore, stored0);
         }
     }
 

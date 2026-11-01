@@ -376,31 +376,36 @@ public static class Services
                 r.lines.Add($"{s.GetShipName()}: {n} {Name(item)}, {Money(value)}");
             }
         }
-        // Data items never sit in cargo: the game keeps them in the player-wide data inventory.
-        if (EchoCargo.EchoCargo.Instance.SellFromData.Value)
-        {
-            var data = player.dataInventory;
-            var quoted = new Dictionary<InventoryItemType, int>();   // quotes only: what earlier stacks of the type would sell
-            foreach (var stack in new List<Inventory.InventoryItem>(data.items))
-            {
-                var item = stack.item;
-                quoted.TryGetValue(item, out int q);
-                int n = CargoRules.DataSell(ss, stack, q);
-                if (n <= 0) continue;
-                long value = item.sellValue * n;
-                if (run)
-                {
-                    player.credits += value;
-                    if (item.itemCategory != ItemCategory.Data) ss.shopInventory.Add(item, n, item.buyBack);
-                    data.Remove(stack, n);
-                }
-                else quoted[item] = q + n;
-                r.credits += value;
-                r.count++;
-                r.lines.Add($"Data inventory: {n} {Name(item)}, {Money(value)}");
-            }
-        }
+        // Data items never sit in cargo: the game keeps them in the player-wide data inventory. Station storage holds what
+        // earlier visits deposited here.
+        var echo = EchoCargo.EchoCargo.Instance;
+        if (echo.SellFromData.Value) SellStored(r, run, ss, player.dataInventory, "Data inventory");
+        if (echo.SellFromStorage.Value) SellStored(r, run, ss, ss.materialStorage, "Station storage");
         return r;
+    }
+
+    private static void SellStored(ServiceReport r, bool run, SpaceStation ss, Inventory storage, string label)
+    {
+        var player = GamePlayer.current;
+        var quoted = new Dictionary<InventoryItemType, int>();   // quotes only: what earlier stacks of the type would sell
+        foreach (var stack in new List<Inventory.InventoryItem>(storage.items))
+        {
+            var item = stack.item;
+            quoted.TryGetValue(item, out int q);
+            int n = CargoRules.StoredSell(ss, stack, q);
+            if (n <= 0) continue;
+            long value = item.sellValue * n;
+            if (run)
+            {
+                player.credits += value;
+                if (item.itemCategory != ItemCategory.Data) ss.shopInventory.Add(item, n, item.buyBack);
+                storage.Remove(stack, n);
+            }
+            else quoted[item] = q + n;
+            r.credits += value;
+            r.count++;
+            r.lines.Add($"{label}: {n} {Name(item)}, {Money(value)}");
+        }
     }
 
     // ---- Crew: replace the crew your ships lost to hull hits (CrewLosses): from the crew reserve (free), then willing

@@ -33,7 +33,7 @@ public sealed class EchoCargo : Feature
     public override string SettingsTab => "Item rules";
     public override Type[] PatchClasses => new[] { typeof(EchoCargoPatches) };
 
-    public ConfigEntry<bool> ApplyToAutoDeposit, SellFromData;
+    public ConfigEntry<bool> ApplyToAutoDeposit, SellFromData, SellFromStorage;
 
     public override void BindConfig(ConfigFile cfg)
     {
@@ -42,6 +42,8 @@ public sealed class EchoCargo : Feature
             "With the game's fleet auto-deposit on, fleet holds are emptied the moment you dock. On: your rules apply there too: Keep aboard stays aboard, Sell stays aboard until ECHO unloads it, Sell above N deposits up to N. When you dock yourself nothing is sold, unless Station services' \"Sell by item rules when you dock\" is on or you press the airlock's Sell by rules button. Off: the game deposits everything as usual, so fleet-ship rules only matter with auto-deposit off."));
         SellFromData = cfg.Bind(Id, "SellFromData", true, SettingInfo.Describe("Sell from the data inventory",
             "Data items (intel and records, blueprint pieces, jumpgate passes, claims) never sit in cargo: the game puts them straight into your data inventory. On: a Sell or Sell above N rule that names the item or its category sells them from there when ECHO unloads, when you dock with Station services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. Sell above N keeps N there. The default rule and the any-category \"rarity and below\" rules never sell from the data inventory. Favourites and items your missions need stay. Off: data items are never sold."));
+        SellFromStorage = cfg.Bind(Id, "SellFromStorage", false, SettingInfo.Describe("Sell from station storage",
+            "Material storage is kept per station. On: a Sell or Sell above N rule that names the item or its category also sells what is already stored at the station you're docked at: when ECHO unloads (after the cargo and data inventory sales, before any deposit), when you dock with Station services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. Sell above N keeps N in that station's storage. The default rule and the any-category \"rarity and below\" rules never sell from storage. Favourites and items your missions need stay. Off: stored materials are never sold by rules."));
     }
 
     private static InventoryItemType FirstOre()
@@ -59,6 +61,7 @@ public sealed class EchoCargo : Feature
         CheckSellFirst(ctx);
         CheckDataPlan(ctx);
         CheckDataEcho(ctx);
+        CheckStorageEcho(ctx);
         yield break;
     }
 
@@ -236,9 +239,9 @@ public sealed class EchoCargo : Feature
     {
         var sell = new ItemRule { dockAction = DockAction.Sell };
         var above = new ItemRule { dockAction = DockAction.SellAbove, keepAmount = 3 };
-        int a = CargoRules.DataSellCount(sell, 5, 2), b = CargoRules.DataSellCount(sell, 2, 2), c = CargoRules.DataSellCount(above, 5, 0),
-            d = CargoRules.DataSellCount(above, 5, 4), e = CargoRules.DataSellCount(above, 2, 0),
-            f = CargoRules.DataSellCount(new ItemRule { dockAction = DockAction.Keep }, 5, 0), g = CargoRules.DataSellCount(new ItemRule(), 5, 0);
+        int a = CargoRules.StoredSellCount(sell, 5, 2), b = CargoRules.StoredSellCount(sell, 2, 2), c = CargoRules.StoredSellCount(above, 5, 0),
+            d = CargoRules.StoredSellCount(above, 5, 4), e = CargoRules.StoredSellCount(above, 2, 0),
+            f = CargoRules.StoredSellCount(new ItemRule { dockAction = DockAction.Keep }, 5, 0), g = CargoRules.StoredSellCount(new ItemRule(), 5, 0);
         string detail = $"sell(5,res2)={a} sell(2,res2)={b} above3(5)={c} above3(5,res4)={d} above3(2)={e} keep={f} default={g}";
         if (a == 3 && b == 0 && c == 2 && d == 1 && e == 0 && f == 0 && g == 0) ctx.Pass("data-plan", detail);
         else ctx.Fail("data-plan", detail);
@@ -275,12 +278,12 @@ public sealed class EchoCargo : Feature
             int after = data.GetCount(item);
             int left = 0;
             foreach (var s in data.items)
-                if (s.item == item) left += CargoRules.DataSell(ss, s, 0);
+                if (s.item == item) left += CargoRules.StoredSell(ss, s, 0);
             // An any-category rule resolves to Sell for the item but never reaches the data inventory.
             ItemRules.UseForTest("{\"rarityUpTo\":{\"Legendary\":{\"dockAction\":\"Sell\"}}}");
             int catchAll = 0;
             foreach (var s in data.items)
-                if (s.item == item) catchAll += CargoRules.DataSell(ss, s, 0);
+                if (s.item == item) catchAll += CargoRules.StoredSell(ss, s, 0);
             bool resolves = ItemRules.Resolve(item).dockAction == DockAction.Sell;
             string detail = $"{Items.RuleKey(item)} keep={keep} result={result} held {held}->{after} credits +{player.credits - before} (expected {item.sellValue * expect}) left={left} catchAll={catchAll} resolvesSell={resolves}";
             if (result && expect > 0 && after == keep && player.credits - before == item.sellValue * expect && left == 0 && catchAll == 0 && resolves) ctx.Pass("data-echo", detail);
@@ -291,6 +294,70 @@ public sealed class EchoCargo : Feature
             ItemRules.Load();
             data.Remove(item, data.GetCount(item));
             if (count0 > 0) data.Add(item, count0);
+            player.credits = credits0;
+        }
+    }
+
+    // ECHO's unload sells from this station's material storage with SellFromStorage on: Sell above N keeps N there, a
+    // favourite stack stays, an any-category rule sells nothing.
+    private static void CheckStorageEcho(SelfCheckContext ctx)
+    {
+        var ss = SpaceStation.current;
+        if (ss == null || SpaceStationInterior.instance == null || !Singleton<IdleManager>.HasInstance)
+        {
+            ctx.Skip("storage-echo", "not docked");
+            return;
+        }
+        TwoTestOres(out var ore, out _);
+        if (ore == null || !CargoRules.CanSellHere(ss, ore) || Cargo.DepositTarget(ss, ore) != ss.materialStorage)
+        {
+            ctx.Skip("storage-echo", ore == null ? "no sellable ore type the fleet doesn't carry" : "station has no shop, or ore doesn't go to material storage");
+            return;
+        }
+        var player = GamePlayer.current;
+        var storage = ss.materialStorage;
+        var setting = Instance.SellFromStorage;
+        bool setting0 = setting.Value;
+        int count0 = storage.GetCount(ore);
+        long credits0 = player.credits;
+        try
+        {
+            setting.Value = true;
+            storage.Add(ore, 5);
+            int held = storage.GetCount(ore);
+            int keep = Math.Max(held - 3, player.RequiredItemCountForMissions(ore));
+            int expect = held - keep;
+            string key = Items.RuleKey(ore);
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}}}");
+            long before = player.credits;
+            bool result = Singleton<IdleManager>.Instance.TryDropCargo(ss);
+            int after = storage.GetCount(ore);
+            long earned = player.credits - before;
+            int left = 0, favLeft = 0, catchAll = 0;
+            foreach (var s in storage.items)
+                if (s.item == ore) left += CargoRules.StoredSell(ss, s, 0);
+            // A favourite stack stays even under a plain Sell rule.
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"Sell\"}}}");
+            var marked = new List<Inventory.InventoryItem>();
+            foreach (var s in storage.items)
+                if (s.item == ore && !s.favourite) { s.favourite = true; marked.Add(s); }
+            foreach (var s in storage.items)
+                if (s.item == ore) favLeft += CargoRules.StoredSell(ss, s, 0);
+            foreach (var s in marked) s.favourite = false;
+            // An any-category rule resolves to Sell for the ore but never reaches station storage.
+            ItemRules.UseForTest("{\"rarityUpTo\":{\"Legendary\":{\"dockAction\":\"Sell\"}}}");
+            foreach (var s in storage.items)
+                if (s.item == ore) catchAll += CargoRules.StoredSell(ss, s, 0);
+            bool resolves = ItemRules.Resolve(ore).dockAction == DockAction.Sell;
+            string detail = $"{key} keep={keep} result={result} stored {held}->{after} credits +{earned} (expected {ore.sellValue * expect}) left={left} favourite={favLeft} catchAll={catchAll} resolvesSell={resolves}";
+            if (result && expect > 0 && after == keep && earned == ore.sellValue * expect && left == 0 && favLeft == 0 && catchAll == 0 && resolves) ctx.Pass("storage-echo", detail);
+            else ctx.Fail("storage-echo", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            storage.Remove(ore, storage.GetCount(ore) - count0);
             player.credits = credits0;
         }
     }
@@ -334,9 +401,9 @@ public static class CargoRules
         }
     }
 
-    // Pure. Data-inventory items are already in their storage, so Sell above N keeps N there. held: everything of the type
-    // in the data inventory, favourites included; reserved: GamePlayer.RequiredItemCountForMissions.
-    public static int DataSellCount(ItemRule rule, int held, int reserved)
+    // Pure. Stored items (data inventory, station storage) are already in their storage, so Sell above N keeps N there.
+    // held: everything of the type in that storage, favourites included; reserved: GamePlayer.RequiredItemCountForMissions.
+    public static int StoredSellCount(ItemRule rule, int held, int reserved)
     {
         int keep = rule.dockAction == DockAction.Sell ? reserved
             : rule.dockAction == DockAction.SellAbove ? Math.Max(rule.keepAmount, reserved)
@@ -344,16 +411,16 @@ public static class CargoRules
         return Math.Max(0, held - keep);
     }
 
-    // How many of this data-inventory stack the rules sell here. Only a rule that names the item or its category counts.
-    // Favourite stacks are never sold but count toward N. quoted: amount of the type earlier stacks were already quoted for.
-    public static int DataSell(SpaceStation ss, Inventory.InventoryItem stack, int quoted)
+    // How many of this stored stack (data inventory or station storage) the rules sell here. Only a rule that names the
+    // item or its category counts. Favourite stacks are never sold but count toward N. quoted: amount of the type earlier
+    // stacks of the same storage were already quoted for.
+    public static int StoredSell(SpaceStation ss, Inventory.InventoryItem stack, int quoted)
     {
         if (stack.favourite) return 0;
         var item = stack.item;
         var rule = ItemRules.Explicit(item);
         if (rule == null || !CanSellHere(ss, item)) return 0;
-        var player = GamePlayer.current;
-        return Math.Min(stack.count, DataSellCount(rule, player.dataInventory.GetCount(item) - quoted, player.RequiredItemCountForMissions(item)));
+        return Math.Min(stack.count, StoredSellCount(rule, stack.inventory.GetCount(item) - quoted, GamePlayer.current.RequiredItemCountForMissions(item)));
     }
 
     public static bool CanSellHere(SpaceStation ss, InventoryItemType item) =>
@@ -469,8 +536,9 @@ internal static class EchoCargoPatches
             GamePlayer.current.RequiredItemCountForMissions(item), CargoRules.CanSellHere(ss, item));
     }
 
-    // Sell before deposit: one sale per tick, from every cargo ship's hold and then the data inventory, ahead of the vanilla
-    // unload walk. That walk stops at the first stack a full storage can't take, so a full storage only ever holds up deposits.
+    // Sell before deposit: one sale per tick, from every cargo ship's hold, then the data inventory, then this station's
+    // storage, ahead of the vanilla unload walk. That walk stops at the first stack a full storage can't take, so a full
+    // storage only ever holds up deposits.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryDropCargo))]
     private static bool TryDropCargoPrefix(IdleManager __instance, SpaceStation ss, ref bool __result)
@@ -485,16 +553,26 @@ internal static class EchoCargoPatches
                     int n = StepFor(__instance, ss, ship, stack).sell;
                     if (n > 0 && CargoRules.Sell(__instance, ss, stack, n)) { __result = true; return false; }
                 }
-            // Data items never reach cargo, so they get their own walk.
-            if (F.SellFromData.Value)
-                foreach (var stack in GamePlayer.current.dataInventory.items)
-                {
-                    int n = CargoRules.DataSell(ss, stack, 0);
-                    if (n > 0 && CargoRules.Sell(__instance, ss, stack, n)) { __result = true; return false; }
-                }
+            // Data items never reach cargo, and stored materials are already off the ships, so they get their own walks.
+            if (F.SellFromData.Value && SellOneStored(__instance, ss, GamePlayer.current.dataInventory)
+                || F.SellFromStorage.Value && SellOneStored(__instance, ss, ss.materialStorage))
+            {
+                __result = true;
+                return false;
+            }
             return true;
         }
         catch (Exception e) { F.Fail(e, nameof(EchoCargoPatches)); return true; }
+    }
+
+    private static bool SellOneStored(IdleManager im, SpaceStation ss, Inventory storage)
+    {
+        foreach (var stack in storage.items)
+        {
+            int n = CargoRules.StoredSell(ss, stack, 0);
+            if (n > 0 && CargoRules.Sell(im, ss, stack, n)) return true;
+        }
+        return false;
     }
 
     // Vanilla body (IdleManager.TryDropCargoOf) with the dock action of each stack's rule applied before the deposit branch.
