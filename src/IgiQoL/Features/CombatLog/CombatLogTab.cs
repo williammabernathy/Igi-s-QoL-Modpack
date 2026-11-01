@@ -38,6 +38,19 @@ public static class CombatLogTab
                 ModWindow.Show("combat");
             }, 170f);
 
+        var meters = Kit.Row(content);
+        PopoutTabButton.Add(meters, "Pop out meters", "Dock back all", () => Popouts.AnyOpen(DpsMeter.KindId), DpsMeter.PopOutAll,
+            () => Popouts.CloseAll(DpsMeter.KindId), 150f,
+            "Bar meters that float over the game, as many as you like, each with its own view, scope and look. Their Options button changes them.");
+        var presets = new List<string> { "Add a meter..." };
+        presets.AddRange(DpsMeter.PresetNames);
+        Kit.Choice add = null;
+        add = Kit.Dropdown(meters, presets, 0, i =>
+        {
+            if (i > 0) DpsMeter.AddPreset(i - 1);
+            add.SetIndex(0);
+        }, 220f);
+
         Kit.Column(content, 2f).gameObject.AddComponent<CombatTable>();
     }
 

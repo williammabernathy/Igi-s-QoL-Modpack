@@ -99,6 +99,86 @@ internal static class EventLogCheck
         else ctx.Fail("tab", d);
         yield return ctx.Screenshot("window-log");
         ModWindow.Close();
+
+        yield return CheckPopout(ctx);
+    }
+
+    // The pop-out lists the newest lines first, keeps to its own line count and filter, and docks back into the tab.
+    private static IEnumerator CheckPopout(SelfCheckContext ctx)
+    {
+        const string id = EventLogTab.PopoutId;
+        string pref = PlayerPrefs.GetString(PopoutState.Pref(id), "");
+        bool wasOpen = Popouts.IsOpen(id);
+        ctx.Cleanup(() =>
+        {
+            Popouts.Close(id);
+            PlayerPrefs.SetString(PopoutState.Pref(id), pref);
+            Popouts.ForgetState(id);
+            if (wasOpen) Popouts.Open(id);
+        });
+        Popouts.Close(id);
+        var state = Popouts.State(id);
+        state.show = PopoutShow.Always;
+        state.collapsed = false;
+        state.options[EventLogTab.FilterOption] = -1;
+        state.options[EventLogTab.LinesOption] = 10;
+        for (int i = 0; i < 12; i++) Singleton<EventLogManager>.Instance.NewEvent("igi", "IgiQoL check pop-out line " + i);
+        Popouts.Open(id);
+        var p = Popouts.Get(id);
+        if (p == null)
+        {
+            ctx.Fail("popout", "the pop-out did not open");
+            yield break;
+        }
+        yield return null;
+        yield return null;
+        var list = p.GetComponentInChildren<EventLogTab.LogList>();
+        string first = FirstLine(list, 2);
+        string d = $"rows={(list != null ? list.RowCount : -1)} first='{first}'";
+        if (list != null && list.RowCount == 10 && first == "IgiQoL check pop-out line 11") ctx.Pass("popout", d);
+        else ctx.Fail("popout", d);
+        yield return ctx.Screenshot("log-popout");
+
+        // Its own filter: notifications only, while the tab keeps showing everything.
+        int rows = 0;
+        bool onlyNotices = true;
+        if (list != null)
+        {
+            list.filterKind = (int)LogKind.Notice;
+            list.Invalidate();
+            yield return null;
+            rows = list.RowCount;
+            var column = list.transform;
+            for (int i = 0; i < column.childCount; i++)
+            {
+                var row = column.GetChild(i);
+                if (!row.gameObject.activeSelf || row.childCount < 3) continue;
+                onlyNotices &= row.GetChild(1).GetComponent<TMP_Text>().text == EventLogTab.KindName(LogKind.Notice);
+            }
+        }
+        d = $"rows={rows} onlyNotices={onlyNotices} tabFilter={EventLogTab.filter}";
+        if (rows > 0 && onlyNotices && EventLogTab.filter == -1) ctx.Pass("popout-filter", d);
+        else ctx.Fail("popout-filter", d);
+
+        Popouts.DockBack(id);
+        yield return null;
+        d = $"open={Popouts.IsOpen(id)} window={ModWindow.IsOpen} tab={ModWindow.CurrentTab}";
+        if (!Popouts.IsOpen(id) && ModWindow.IsOpen && ModWindow.CurrentTab == "log") ctx.Pass("popout-dock", d);
+        else ctx.Fail("popout-dock", d);
+        ModWindow.Close();
+    }
+
+    // The text of the first log line (not the loot summary) in a LogList; cell 2 is the line's text.
+    private static string FirstLine(EventLogTab.LogList list, int cell)
+    {
+        if (list == null) return null;
+        var column = list.transform;
+        for (int i = 0; i < column.childCount; i++)
+        {
+            var row = column.GetChild(i);
+            if (row.gameObject.activeSelf && row.childCount > cell) return row.GetChild(cell).GetComponent<TMP_Text>().text;
+        }
+        return null;
     }
 
     // Two stacks of the same ore pulled into the flagship's hold through the game's own pickup add up on one line.

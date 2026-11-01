@@ -48,7 +48,7 @@ internal static class CombatOverviewCheck
         }
         var rt = (RectTransform)p.transform;
         var canvas = ((RectTransform)rt.parent).rect.size;
-        var reloaded = PopoutState.Load(Popouts.Find(id));
+        var reloaded = PopoutState.Load(Popouts.Find(id), id);
         string layoutDetail = $"pos=({rt.anchoredPosition.x:0},{rt.anchoredPosition.y:0}) size=({rt.sizeDelta.x:0},{rt.sizeDelta.y:0}) canvas=({canvas.x:0},{canvas.y:0}) savedOpen={reloaded.open}";
         bool inside = rt.anchoredPosition.x >= -canvas.x / 2f - 0.5f && rt.anchoredPosition.x + rt.sizeDelta.x <= canvas.x / 2f + 0.5f
                       && rt.anchoredPosition.y <= canvas.y / 2f + 0.5f && rt.anchoredPosition.y - rt.sizeDelta.y >= -canvas.y / 2f - 0.5f;

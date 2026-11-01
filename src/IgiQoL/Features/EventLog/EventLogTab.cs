@@ -11,9 +11,14 @@ namespace IgiQoL.Features.EventLog;
 public static class EventLogTab
 {
     private static readonly string[] FilterNames = { "Everything", "Notifications", "Event lines", "ECHO", "Arrivals", "Loot", "Operations" };
+    private static readonly string[] LineNames = { "10", "25", "50", "100", "150" };
+    private static readonly int[] LineCounts = { 10, 25, 50, 100, 150 };
     // -1 = everything, else a LogKind.
     internal static int filter = -1;
     private const int MaxRows = 150;
+
+    public const string PopoutId = "event-log";
+    internal const string FilterOption = "filter", LinesOption = "lines";
 
     public static void Build(RectTransform content)
     {
@@ -21,7 +26,68 @@ public static class EventLogTab
         var row = Kit.Row(content);
         Kit.Dropdown(row, FilterNames, filter + 1, i => { filter = i - 1; ModWindow.Show("log"); }, 200f);
         Kit.TextButton(row, "Clear", () => { EventLog.Clear(); ModWindow.Show("log"); }, 70f);
-        Kit.Column(content, 2f).gameObject.AddComponent<LogList>();
+        PopoutTabButton.Add(row, "Pop out", "Dock back", () => Popouts.IsOpen(PopoutId), () => Popouts.Open(PopoutId), () => Popouts.Close(PopoutId), 90f,
+            "The newest lines in a window of their own, with their own filter. Clear stays here.");
+        Kit.Column(content, 2f).gameObject.AddComponent<LogList>().filterKind = filter;
+    }
+
+    internal static void RegisterPopout(EventLog owner)
+    {
+        Popouts.Register(new PopoutKind
+        {
+            Id = PopoutId,
+            Title = "Log",
+            Owner = owner,
+            DockTab = "log",
+            DefaultSize = new Vector2(460f, 300f),
+            MinSize = new Vector2(320f, 120f),
+            RelevantLabel = "ECHO is running",
+            Relevant = () => Source.Player.GamePlayer.current != null && Source.Player.GamePlayer.current.autoPlay,
+            Build = BuildPopout,
+            BuildOptions = BuildPopoutOptions,
+        });
+    }
+
+    internal static int PopoutFilter(PopoutState s)
+    {
+        var v = s.options[FilterOption];
+        return v.IsNumber ? Mathf.Clamp((int)v.AsNumber, -1, FilterNames.Length - 2) : -1;
+    }
+
+    internal static int PopoutLines(PopoutState s)
+    {
+        var v = s.options[LinesOption];
+        return v.IsNumber ? Mathf.Clamp((int)v.AsNumber, 1, MaxRows) : 25;
+    }
+
+    // The newest lines with a filter of their own; no help text, and Clear stays on the tab.
+    private static void BuildPopout(Popout p, RectTransform body)
+    {
+        var row = Kit.Row(body);
+        var content = Kit.Scroll(body);
+        var list = Kit.Column(content, 2f).gameObject.AddComponent<LogList>();
+        list.filterKind = PopoutFilter(p.State);
+        list.maxRows = PopoutLines(p.State);
+        Kit.Dropdown(row, FilterNames, list.filterKind + 1, i =>
+        {
+            p.State.options[FilterOption] = i - 1;
+            p.State.Save(p.Id);
+            list.filterKind = i - 1;
+            list.Invalidate();
+        }, 200f);
+    }
+
+    private static void BuildPopoutOptions(Popout p, RectTransform column)
+    {
+        var row = Kit.Row(column, 8f, 26f);
+        Kit.Label(row, "Lines shown");
+        int lines = PopoutLines(p.State), index = System.Array.IndexOf(LineCounts, lines);
+        Kit.Dropdown(row, LineNames, index < 0 ? 1 : index, i =>
+        {
+            p.State.options[LinesOption] = LineCounts[i];
+            p.State.Save(p.Id);
+            Popouts.Rebuild(p.Id);
+        }, 90f);
     }
 
     internal static string KindName(LogKind k) => k switch
@@ -54,6 +120,16 @@ public static class EventLogTab
         private readonly Dictionary<LogEntry, Line> lines = new();
         private readonly List<LogEntry> stale = new();
         internal int RowCount { get; private set; }
+        // -1 = everything, else a LogKind; and how many lines to show.
+        internal int filterKind = -1;
+        internal int maxRows = MaxRows;
+
+        // Redraws at the next frame (after the filter changed).
+        internal void Invalidate()
+        {
+            version = -1;
+            next = 0f;
+        }
 
         private void Update()
         {
@@ -68,7 +144,7 @@ public static class EventLogTab
             var column = (RectTransform)transform;
             pass++;
             int index = 0;
-            bool loot = (filter < 0 || filter == (int)LogKind.Loot) && EventLog.Loot.Count > 0;
+            bool loot = (filterKind < 0 || filterKind == (int)LogKind.Loot) && EventLog.Loot.Count > 0;
             if (loot)
             {
                 if (summary == null) summary = Kit.Label(column, "");
@@ -82,9 +158,9 @@ public static class EventLogTab
             for (int i = entries.Count - 1; i >= 0; i--)
             {
                 var e = entries[i];
-                if (filter >= 0 && (int)e.kind != filter) continue;
+                if (filterKind >= 0 && (int)e.kind != filterKind) continue;
                 matching++;
-                if (shown >= MaxRows) continue;
+                if (shown >= maxRows) continue;
                 if (!lines.TryGetValue(e, out var line))
                 {
                     line = NewLine(column, e);

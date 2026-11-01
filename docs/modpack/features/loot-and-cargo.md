@@ -84,8 +84,18 @@ The Scanner tab lists everything at your location you can board, salvage, tracto
 - Boardable ships, wrecks and loot, each with a Board, Salvage or Tractor button.
 - Where there are asteroids, "Asteroid ores": one row per ore and layer with the asteroid count and the nearest distance. Ores on your [Preferred ores](echo.md#preferred-ores) list are marked "preferred". The Mine button sends your mining ships to the nearest asteroid of that ore, as clicking it would. Core ores appear once you have the Basic Scanning mining skill and ore amounts with Advanced Scanning, the same as the game's asteroid tooltips.
 
-`HudCounter` puts a one-line count above the Dock button (above the QoL button when that sits there too). Click it to open the Scanner tab.
+`HudCounter` puts a one-line count above the Dock button (above the QoL button when that sits there too). Click it to open the Scanner tab, or, while the Scanner window below is open, to bring that window forward and flash it.
 
 ![The counter above the QoL and Dock buttons](../../images/scanner-counter.jpg)
 
 `MarkBoardable`, `MarkWrecks`, `MarkLoot` and `MarkOres` (all on, also switchable on the tab) put markers at the screen edge for the 8 nearest off-screen contacts of each kind, with the distance under the icon. Loot markers are tinted by rarity; empty wrecks and depleted ships are left out. Ore markers only point at asteroids with an ore from the Preferred ores list, tinted by that ore's rarity, so nothing shows while the list is empty. Clicking a marker boards, salvages, tractors or mines its target.
+
+### Scanner window
+
+The Pop out button at the top of the Scanner tab opens the Scanner as a [window of its own](interface.md#pop-out-windows) that stays on screen while you play. Dock back on the tab closes it; Dock on the window's header closes it and opens the tab. By default it is always shown; its Options button can limit it to when there is something here to board, salvage or pick up, the same count the HUD counter shows.
+
+- The map draws the location to scale, with your flagship as a white dot, your fleet in blue and enemies in red. Boardable ships, wrecks, loot and asteroids with ore use the same icons as the edge markers, and loot and ore are tinted by rarity. The thin rectangle is what the game camera shows now.
+- Dots follow their targets four times a second, and the set of ships and contacts is read once a second.
+- Under the map, the Contacts header's +/- button folds the list away so the map takes the whole window; that choice is remembered. The list is the tab's list without its settings and help text.
+- Click a dot to select its row, scrolled into view and highlighted, or click a row to ring its dot. One contact is selected at a time. A loot row rings every stack of that item, and an ore row rings every asteroid of that ore.
+- Board, Salvage, Tractor and Mine work as in the tab, but leave the window and the QoL window as they are.

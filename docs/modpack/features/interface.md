@@ -4,7 +4,7 @@ The mod window, the per-ship settings popup, and the small additions to the game
 
 ## Mod window
 
-Every tab of the modpack lives in one window. Open and close it with F6 (`Hotkey`), with the QoL button in space, or with the QoL tab above the station's Airlock tab while docked. The tabs are Scanner, DPS parser, Log, ECHO, Item rules, Operations, Stations, Loadouts, Notes, Stat reference, Mods and Settings. Drag the window by its header; it remembers where you left it and which tab was open.
+Every tab of the modpack lives in one window. Open and close it with F6 (`Hotkey`), with the QoL button in space, or with the QoL tab above the station's Airlock tab while docked. The tabs are Scanner, DPS parser, Log, ECHO, Item rules, Operations, Stations, Loadouts, Notes, Stat reference, Mods and Settings. Drag the window by its header and resize it from the corner at the bottom right; it remembers where you left it, its size and which tab was open. Tabs that don't fit the header go into the "More" dropdown at its right end, which names the open tab when it's one of them. The window is never narrower than the open tab's rows need, so a tab with wide rows widens it while it's open and the window goes back to your width on the next tab. A position or size saved at a larger resolution or text size comes back inside the screen.
 
 ![The Settings tab](../../images/tab-settings.jpg)
 
@@ -16,14 +16,15 @@ The QoL button in space sits on top of the side menu's button column at the righ
 
 ## Pop-out windows
 
-Some views float on their own, outside the mod window. So far that's the [combat overview](fleet-combat.md#combat-overview). Each one works like the game's fleet panel:
+Some views float on their own, outside the mod window: the [combat overview](fleet-combat.md#combat-overview), [DPS meters](logs-and-reference.md#dps-meters), the [Log](logs-and-reference.md#event-log), [notes](logs-and-reference.md#notes) and the [Scanner](loot-and-cargo.md#scanner-window). Each one works like the game's fleet panel:
 
 - Drag it by its header. It stays on screen, and a layout saved at a larger resolution or text size comes back inside the screen.
 - `-` collapses it to the header and `+` opens it again. The corner at the bottom right resizes it.
 - Its Options button sets when it shows (always, or only when it's relevant, for example in combat), its opacity (20-100%), click-through, and resets its position and size. A window hidden by its show condition keeps its place and comes back when the condition holds.
 - Click-through is on by default: clicks on the window's body reach the game under it, and the header keeps working. Hold `PopoutInteractKey` (Ctrl by default; either Ctrl key counts) to use the body, or switch click-through off in Options.
+- A view that comes from a tab (all but the combat overview) has a Pop out button on that tab, which reads "Dock back" while the view is out ("Dock back all" for the DPS meters), and a Dock button on its own header that closes it and opens the tab. The tab stays as it was. DPS meters and notes can have several windows at once, each with its own layout and settings.
 
-Each window keeps its position, size, collapsed state, opacity and options per machine, in Unity's PlayerPrefs next to the mod window's position, so they don't travel with a save. An open window comes back after loading a save and after a restart. While one is open, the mod window shows a strip along its bottom with a chip for it: click the chip to bring the window back on screen and flash its header, or `x` to close it. A chip is greyed while its window is hidden by its show condition.
+Each window keeps its position, size, collapsed state, opacity and options per machine, in Unity's PlayerPrefs next to the mod window's position, so they don't travel with a save. An open window comes back after loading a save and after a restart. While one is open, the mod window shows a strip along its bottom with a chip for it: click the chip to bring the window back on screen and flash its header, or `x` to close it (to dock it back, for a view that has a tab). A chip is greyed while its window is hidden by its show condition. A small window grows while its Options panel is open so the whole panel fits.
 
 ## Ship settings popup
 

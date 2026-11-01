@@ -85,7 +85,7 @@ public sealed class ContactMarkers : MonoBehaviour
             for (int i = 0; i < MaxPerKind; i++) Instance.markers.Add(Instance.NewMarker(root, kind));
     }
 
-    private static string IconKey(Kind kind) => kind switch
+    internal static string IconKey(Kind kind) => kind switch
     {
         Kind.Boardable => Kit.Icon("Info", "Fleet.Raid", "Crew"),
         Kind.Wreck => Kit.Icon("Info", "Salvage"),
@@ -93,7 +93,7 @@ public sealed class ContactMarkers : MonoBehaviour
         _ => Kit.Icon("Info", "Fleet.Tractor", "Cargo"),
     };
 
-    private static Color Tint(Kind kind) => kind switch
+    internal static Color Tint(Kind kind) => kind switch
     {
         Kind.Boardable => ColorHelper.orange75,
         Kind.Wreck => ColorHelper.lightCyan,

@@ -16,6 +16,7 @@ using Object = UnityEngine.Object;
 namespace IgiQoL.UI;
 
 // The mod's tabbed window. Tabs register from their feature's OnActivated; content is rebuilt on every tab switch.
+// You size it with the corner handle; tabs that don't fit the header go into a "More" dropdown at its end.
 public static class ModWindow
 {
     public sealed class Tab
@@ -23,10 +24,20 @@ public static class ModWindow
         public string Id, Title;
         public int Order;
         public Action<RectTransform> Build;
+        internal float width;
+        internal Button button;
     }
 
     private sealed class WindowRoot : MonoBehaviour
     {
+        // The frame after a tab is shown its rows built in their own Start or first Update exist, so it's measured then.
+        private void LateUpdate()
+        {
+            if (measureFrame < 0 || Time.frameCount < measureFrame || root != (RectTransform)transform) return;
+            measureFrame = -1;
+            FitTab();
+        }
+
         private void OnDestroy()
         {
             if (root == (RectTransform)transform)
@@ -34,16 +45,26 @@ public static class ModWindow
                 root = null;
                 body = null;
                 scroll = null;
-                tabButtons.Clear();
+                header = null;
+                more = null;
             }
         }
     }
 
     private const string PrefX = "IgiQoL.Window.X", PrefY = "IgiQoL.Window.Y", PrefTab = "IgiQoL.Window.Tab";
+    private const string PrefW = "IgiQoL.Window.W", PrefH = "IgiQoL.Window.H";
+    private const float DefaultWidth = 760f, DefaultHeight = 520f, FloorWidth = 480f, MinHeight = 300f;
+    // Window padding (6 + 6) around the header and body.
+    private const float Padding = 12f;
+    private const float MoreWidth = 120f;
 
     private static readonly List<Tab> tabs = new();
-    private static readonly Dictionary<string, Button> tabButtons = new();
-    private static RectTransform root, body, scroll;
+    private static RectTransform root, body, scroll, header;
+    private static Kit.Choice more;
+    // Tabs shown in the header; the rest are in the More dropdown.
+    private static int fitting = -1;
+    private static float grow, titleWidth, chosenWidth, chosenHeight, tabMinWidth;
+    private static int measureFrame = -1;
 
     public static bool IsOpen => root != null;
     public static string CurrentTab { get; private set; }
@@ -67,6 +88,13 @@ public static class ModWindow
     }
 
     public static bool HasTab(string title) => tabs.Exists(t => t.Title == title);
+
+    // For the self-check: the window, its tabs, how many fit the header (the rest are in More) and More's caption.
+    internal static RectTransform Root => root;
+    internal static IReadOnlyList<Tab> Tabs => tabs;
+    internal static int HeaderTabCount => fitting;
+    internal static string MoreCaption => more == null ? null : more.root.TryGetComponent<TMP_Dropdown>(out var dd) ? dd.captionText.text : more.root.GetComponentInChildren<TMP_Text>().text;
+    internal static float MinWidth => Mathf.Max(FloorWidth * grow, tabMinWidth);
 
     public static void Toggle()
     {
@@ -99,16 +127,19 @@ public static class ModWindow
         }
         Content = Kit.Scroll(body);
         scroll = (RectTransform)Content.GetComponentInParent<ScrollRect>().transform;
-        foreach (var kv in tabButtons)
-            ((Image)kv.Value.targetGraphic).color = kv.Key == tab.Id ? ColorHelper.mapDockButtonActive : ColorHelper.panelButton;
+        foreach (var t in tabs)
+            ((Image)t.button.targetGraphic).color = t == tab ? ColorHelper.mapDockButtonActive : ColorHelper.panelButton;
         CurrentTab = tab.Id;
         PlayerPrefs.SetString(PrefTab, tab.Id);
+        SyncMore();
         try { tab.Build(Content); }
         catch (Exception e)
         {
             Plugin.Log.LogError($"[Window] tab '{tab.Id}' failed to build: {e}");
             Kit.Muted(Content, "This tab failed to build; see BepInEx/LogOutput.log.");
         }
+        FitTab();
+        measureFrame = Time.frameCount + 1;
     }
 
     private static Tab Find(string id)
@@ -121,45 +152,186 @@ public static class ModWindow
     private static void Build()
     {
         var position = new Vector2(PlayerPrefs.GetFloat(PrefX, 0f), PlayerPrefs.GetFloat(PrefY, 0f));
-        // Tab captions grow with the Text size setting; each tab is at least 90 px and wide enough for its caption,
-        // and the window widens so they keep fitting.
-        float grow = Mathf.Max(1f, Features.TextScale.TextScale.Factor);
-        root = Kit.Window("IgiQoL_Window", 760f * grow, 520f, position);
+        // Tab captions grow with the Text size setting; each tab is at least 90 px and wide enough for its caption.
+        grow = Mathf.Max(1f, Features.TextScale.TextScale.Factor);
+        chosenWidth = PlayerPrefs.GetFloat(PrefW, DefaultWidth * grow);
+        chosenHeight = PlayerPrefs.GetFloat(PrefH, DefaultHeight);
+        tabMinWidth = 0f;
+        root = Kit.Window("IgiQoL_Window", chosenWidth, chosenHeight, position);
         root.gameObject.AddComponent<WindowRoot>();
 
-        var header = Kit.Row(root, 6f, 26f);
+        header = Kit.Row(root, 6f, 26f);
         header.name = "Header";
         header.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(6, 2, 0, 0);
         UiCards.AddBackground(header.gameObject, ColorHelper.panelHeaderBlue);
         FleetBarParts.AddIcon(header, Kit.Icon("Info", PoiIconKeys.Captain("Command")), ColorHelper.stationCardTitle, 16f);
-        FleetBarParts.AddLine(header, "Igi's QoL", 12f, ColorHelper.stationCardTitle, TextAlignmentOptions.MidlineLeft);
-        tabButtons.Clear();
-        float tabsWidth = 0f;
+        var title = FleetBarParts.AddLine(header, "Igi's QoL", 12f, ColorHelper.stationCardTitle, TextAlignmentOptions.MidlineLeft);
+        titleWidth = Mathf.Ceil(title.GetPreferredValues(title.text).x);
         foreach (var tab in tabs)
         {
             string id = tab.Id;
             var button = Kit.TextButton(header, tab.Title, () => Show(id), 90f * grow);
             var caption = button.GetComponentInChildren<TMP_Text>();
-            float width = Mathf.Max(90f * grow, caption != null ? Mathf.Ceil(caption.GetPreferredValues(tab.Title).x) + 12f : 0f);
-            CaptainCards.SetFixedSize((RectTransform)button.transform, width, 22f);
-            tabsWidth += width + 6f;
-            tabButtons[id] = button;
+            tab.width = Mathf.Max(90f * grow, caption != null ? Mathf.Ceil(caption.GetPreferredValues(tab.Title).x) + 12f : 0f);
+            CaptainCards.SetFixedSize((RectTransform)button.transform, tab.width, 22f);
+            tab.button = button;
         }
-        root.sizeDelta = new Vector2(Mathf.Max(760f * grow, 150f * grow + tabsWidth), root.sizeDelta.y);
+        more = null;
+        fitting = -1;
         CaptainCards.AddSpacer(header);
         Kit.Tile(header, PoiIconKeys.Fleet("Close"), ColorHelper.reddish, 22f, Close, "Close");
         var drag = header.gameObject.AddComponent<DragHandle>();
         drag.target = root;
-        drag.onEndDrag = p =>
+        drag.onEndDrag = _ =>
         {
-            PlayerPrefs.SetFloat(PrefX, p.x);
-            PlayerPrefs.SetFloat(PrefY, p.y);
+            ClampToScreen();
+            SaveLayout();
         };
 
         body = UiCards.NewChild("Body", root);
         body.gameObject.AddComponent<LayoutElement>().flexibleHeight = 1f;
         UiCards.SetColumn(body.gameObject.AddComponent<VerticalLayoutGroup>());
         PopoutStrip.Add(root);
+        var handle = ResizeHandle.Add(root);
+        handle.onResize = ResizeBy;
+        handle.onEnd = SaveLayout;
         scroll = null;
+        ApplySize(chosenWidth, chosenHeight);
+    }
+
+    // The window is as wide as you made it, or wider while the open tab needs more.
+    private static void FitTab()
+    {
+        if (root == null) return;
+        tabMinWidth = Mathf.Ceil(MinRowWidth(body)) + Padding;
+        ApplySize(chosenWidth, chosenHeight);
+    }
+
+    // Resizes keeping the top-left corner put (the window's pivot is its centre), inside the screen.
+    private static void ApplySize(float width, float height)
+    {
+        var canvas = CanvasSize();
+        var size = root.sizeDelta;
+        var pos = root.anchoredPosition;
+        float left = pos.x - size.x / 2f, top = pos.y + size.y / 2f;
+        float w = Mathf.Min(Mathf.Max(width, MinWidth), canvas.x);
+        float h = Mathf.Clamp(height, Mathf.Min(MinHeight, canvas.y), canvas.y);
+        root.sizeDelta = new Vector2(w, h);
+        root.anchoredPosition = new Vector2(left + w / 2f, top - h / 2f);
+        ClampToScreen();
+        LayoutHeader();
+    }
+
+    private static void ResizeBy(Vector2 delta)
+    {
+        var canvas = CanvasSize();
+        var size = root.sizeDelta;
+        var pos = root.anchoredPosition;
+        // The bottom-right corner follows the mouse up to the screen's edge.
+        float maxW = canvas.x / 2f - (pos.x - size.x / 2f), maxH = (pos.y + size.y / 2f) + canvas.y / 2f;
+        chosenWidth = Mathf.Clamp(size.x + delta.x, MinWidth, Mathf.Max(MinWidth, maxW));
+        chosenHeight = Mathf.Clamp(size.y - delta.y, MinHeight, Mathf.Max(MinHeight, maxH));
+        ApplySize(chosenWidth, chosenHeight);
+    }
+
+    private static void SaveLayout()
+    {
+        if (root == null) return;
+        PlayerPrefs.SetFloat(PrefX, root.anchoredPosition.x);
+        PlayerPrefs.SetFloat(PrefY, root.anchoredPosition.y);
+        PlayerPrefs.SetFloat(PrefW, chosenWidth);
+        PlayerPrefs.SetFloat(PrefH, chosenHeight);
+    }
+
+    private static Vector2 CanvasSize() => ((RectTransform)root.parent).rect.size;
+
+    // A position or size saved at a larger resolution or text size comes back inside the screen.
+    private static void ClampToScreen()
+    {
+        var canvas = CanvasSize();
+        var size = root.sizeDelta;
+        var pos = root.anchoredPosition;
+        float hx = Mathf.Max(0f, (canvas.x - size.x) / 2f), hy = Mathf.Max(0f, (canvas.y - size.y) / 2f);
+        root.anchoredPosition = new Vector2(Mathf.Clamp(pos.x, -hx, hx), Mathf.Clamp(pos.y, -hy, hy));
+    }
+
+    // Header: padding, icon, title, the tabs that fit, More, spacer, close; 6 px between neighbours.
+    private static void LayoutHeader()
+    {
+        float room = root.sizeDelta.x - Padding - (8f + 16f + titleWidth + 22f + 3 * 6f);
+        float all = 0f;
+        foreach (var t in tabs) all += t.width + 6f;
+        int fit = tabs.Count;
+        if (all > room)
+        {
+            float left = room - (MoreWidth * grow + 6f);
+            fit = 0;
+            while (fit < tabs.Count && tabs[fit].width + 6f <= left)
+            {
+                left -= tabs[fit].width + 6f;
+                fit++;
+            }
+        }
+        if (fit == fitting) return;
+        fitting = fit;
+        for (int i = 0; i < tabs.Count; i++) tabs[i].button.gameObject.SetActive(i < fit);
+        if (more != null)
+        {
+            more.root.SetActive(false);
+            Object.Destroy(more.root);
+            more = null;
+        }
+        if (fit == tabs.Count) return;
+        var names = new List<string> { "More" };
+        var ids = new List<string>();
+        for (int i = fit; i < tabs.Count; i++)
+        {
+            names.Add(tabs[i].Title);
+            ids.Add(tabs[i].Id);
+        }
+        more = Kit.Dropdown(header, names, 0, i =>
+        {
+            if (i > 0) Show(ids[i - 1]);
+        }, MoreWidth * grow);
+        more.root.transform.SetSiblingIndex(tabs[tabs.Count - 1].button.transform.GetSiblingIndex() + 1);
+        SyncMore();
+    }
+
+    // The dropdown names the open tab when it's one of its own, and reads "More" otherwise.
+    private static void SyncMore()
+    {
+        if (more == null) return;
+        int index = 0;
+        for (int i = fitting; i < tabs.Count; i++)
+            if (tabs[i].Id == CurrentTab) index = i - fitting + 1;
+        more.SetIndex(index);
+    }
+
+    // The narrowest width rows fit in: a row adds up its fixed-width parts (anything with a minimum width, or a preferred
+    // width and no flexible width, as the game's text buttons have), a column takes its widest row, a scroll view adds
+    // its scrollbar, and flexible labels count as nothing (they shrink and cut off with "...").
+    private static float MinRowWidth(RectTransform t)
+    {
+        var le = t.GetComponent<LayoutElement>();
+        if (le != null && (le.minWidth > 0f || le.flexibleWidth <= 0f && le.preferredWidth > 0f)) return Mathf.Max(le.minWidth, le.preferredWidth);
+        var scrollRect = t.GetComponent<ScrollRect>();
+        if (scrollRect != null) return scrollRect.content != null ? MinRowWidth(scrollRect.content) + UiScrollView.ScrollbarWidth : 0f;
+        var group = t.GetComponent<HorizontalOrVerticalLayoutGroup>();
+        if (group == null) return 0f;
+        bool row = group is HorizontalLayoutGroup;
+        float sum = 0f, widest = 0f;
+        int count = 0;
+        for (int i = 0; i < t.childCount; i++)
+        {
+            var child = t.GetChild(i) as RectTransform;
+            if (child == null || !child.gameObject.activeSelf) continue;
+            var childLe = child.GetComponent<LayoutElement>();
+            if (childLe != null && childLe.ignoreLayout) continue;
+            float w = MinRowWidth(child);
+            sum += w;
+            widest = Mathf.Max(widest, w);
+            count++;
+        }
+        return group.padding.horizontal + (row ? sum + group.spacing * Mathf.Max(0, count - 1) : widest);
     }
 }

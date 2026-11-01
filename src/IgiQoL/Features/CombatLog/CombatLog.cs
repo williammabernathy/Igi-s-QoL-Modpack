@@ -13,6 +13,8 @@ using IgiQoL.Game;
 using IgiQoL.UI;
 using Source.Combat;
 using Source.Galaxy;
+using Source.Personnel;
+using Source.Player;
 using Source.SpaceShip;
 using Source.Util;
 using UnityEngine;
@@ -21,22 +23,41 @@ namespace IgiQoL.Features.CombatLog;
 
 public enum View { DealtByWeapon, DealtByType, DealtByShip, DealtToTarget, TakenByWeapon, TakenByType, TakenFromShip, TakenByShip }
 
+// Who a row belongs to, captured when the row is created: the unit may be gone by the time a meter draws it.
+public enum UnitRole { Other, Flagship, Fleet, Drone, Mercenary }
+
 public sealed class Stat
 {
     public string label;
     public double total, shield, armor, hull, max;
     public int hits, crits, kills;
+    public UnitRole role;
+    // Hull size class (1 and up) of a ship row, 0 when the row isn't a ship.
+    public int size;
+    // The guid of your ship the row belongs to, null otherwise.
+    public string guid;
+    // Damage by DamageType, so a ship row can take the colour of its main type.
+    public readonly double[] byType = new double[CombatLog.TypeCount];
 
-    public void Add(float s, float a, float h, bool crit)
+    public void Add(float s, float a, float h, bool crit, DamageType type)
     {
         float sum = s + a + h;
         total += sum;
         shield += s;
         armor += a;
         hull += h;
+        byType[(int)type] += sum;
         if (sum > max) max = sum;
         hits++;
         if (crit) crits++;
+    }
+
+    public DamageType MainType()
+    {
+        int best = 0;
+        for (int i = 1; i < byType.Length; i++)
+            if (byType[i] > byType[best]) best = i;
+        return (DamageType)best;
     }
 }
 
@@ -81,6 +102,7 @@ public sealed class CombatLog : Feature
     public ConfigEntry<bool> WriteFile;
 
     public const int KeptFights = 10;
+    public static readonly int TypeCount = Enum.GetValues(typeof(DamageType)).Length;
 
     // Newest first; Fights[0] is the current (or last) fight.
     public static readonly List<Fight> Fights = new();
@@ -109,6 +131,7 @@ public sealed class CombatLog : Feature
     public override void OnActivated()
     {
         ModWindow.AddTab("combat", "DPS parser", 7, CombatLogTab.Build);
+        DpsMeter.Register(this);
         GameEvents.SaveLoaded += Reset;
         Plugin.Instance.StartCoroutine(WriteFinishedFights());
     }
@@ -128,6 +151,12 @@ public sealed class CombatLog : Feature
     }
 
     public override System.Collections.IEnumerator SelfCheck(SelfCheckContext ctx)
+    {
+        yield return DamageChecks(ctx);
+        yield return DpsMeterCheck.Run(ctx);
+    }
+
+    private System.Collections.IEnumerator DamageChecks(SelfCheckContext ctx)
     {
         // Earlier checks spawn enemies next to the fleet, so real hits may already be in.
         if (Session.dealt + Session.taken > 0)
@@ -248,30 +277,30 @@ public sealed class CombatLog : Feature
             object weapon = WeaponKey(source, turret);
             object ship = Owner(source);
             object foe = Definition(target);
-            Add(fight, Session, View.DealtByWeapon, weapon, source, turret, shield, armor, hull, crit, killed);
-            Add(fight, Session, View.DealtByType, typeKey, source, turret, shield, armor, hull, crit, killed);
-            Add(fight, Session, View.DealtByShip, ship, source, turret, shield, armor, hull, crit, killed);
-            Add(fight, Session, View.DealtToTarget, foe, target, null, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.DealtByWeapon, weapon, source, turret, type, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.DealtByType, typeKey, source, turret, type, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.DealtByShip, ship, source, turret, type, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.DealtToTarget, foe, target, null, type, shield, armor, hull, crit, killed);
         }
         else
         {
             fight.taken += sum;
             Session.taken += sum;
             object weapon = turret != null ? (object)turret.item?.equipmentBuilder ?? turret.GetType() : typeof(AbstractUnit);
-            Add(fight, Session, View.TakenByWeapon, weapon, source, turret, shield, armor, hull, crit, killed);
-            Add(fight, Session, View.TakenByType, typeKey, source, turret, shield, armor, hull, crit, killed);
-            Add(fight, Session, View.TakenFromShip, source != null ? Definition(source) : typeof(DamageData), source, turret, shield, armor, hull, crit, killed);
-            Add(fight, Session, View.TakenByShip, Owner(target), target, null, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.TakenByWeapon, weapon, source, turret, type, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.TakenByType, typeKey, source, turret, type, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.TakenFromShip, source != null ? Definition(source) : typeof(DamageData), source, turret, type, shield, armor, hull, crit, killed);
+            Add(fight, Session, View.TakenByShip, Owner(target), target, null, type, shield, armor, hull, crit, killed);
         }
         Version++;
     }
 
-    private static void Add(Fight fight, Fight session, View view, object key, AbstractUnit unit, AbstractTurret turret, float s, float a, float h, bool crit, bool killed)
+    private static void Add(Fight fight, Fight session, View view, object key, AbstractUnit unit, AbstractTurret turret, DamageType type, float s, float a, float h, bool crit, bool killed)
     {
         var stat = Row(fight, view, key, unit, turret);
-        stat.Add(s, a, h, crit);
+        stat.Add(s, a, h, crit, type);
         var total = Row(session, view, key, unit, turret);
-        total.Add(s, a, h, crit);
+        total.Add(s, a, h, crit, type);
         if (killed && (view == View.DealtToTarget || view == View.DealtByShip || view == View.DealtByWeapon))
         {
             stat.kills++;
@@ -284,8 +313,25 @@ public sealed class CombatLog : Feature
         var dict = fight.views[(int)view];
         if (dict.TryGetValue(key, out var stat)) return stat;
         stat = new Stat { label = Label(view, key, unit, turret) };
+        Capture(stat, view, unit);
         dict[key] = stat;
         return stat;
+    }
+
+    // The role, size class and guid of the unit a new row stands for. Rows by ship are credited to the ship that
+    // launched a drone, as their key is; every other row takes its first unit's own role.
+    private static void Capture(Stat stat, View view, AbstractUnit unit)
+    {
+        if (unit == null) return;
+        var who = view == View.DealtByShip || view == View.TakenByShip ? Commander(unit) : unit;
+        if (who.faction != Faction.player) return;
+        var data = who.unitData as SpaceShipData;
+        if (who is Drone || who.isCarrierFighter) stat.role = UnitRole.Drone;
+        else if (data != null && data == GamePlayer.current?.currentSpaceShip) stat.role = UnitRole.Flagship;
+        else if (data != null && data.commanderData is Mercenary) stat.role = UnitRole.Mercenary;
+        else stat.role = UnitRole.Fleet;
+        if (who is SpaceShip ship && ship.shipRoleType != null) stat.size = ship.shipRoleType.GetTypeSize();
+        stat.guid = data?.guid;
     }
 
     // Your fitted weapons are distinct pieces; a drone's weapon is rebuilt with each drone, so drones group by drone type.
@@ -299,9 +345,11 @@ public sealed class CombatLog : Feature
     private static object Definition(AbstractUnit unit) => (object)unit.unitData?.unitDefinition ?? unit;
 
     // Damage by a drone counts for the ship that launched it.
+    private static AbstractUnit Commander(AbstractUnit unit) => unit is Drone d && d.droneCommander != null ? d.droneCommander : unit;
+
     private static object Owner(AbstractUnit unit)
     {
-        if (unit is Drone d && d.droneCommander != null) unit = d.droneCommander;
+        unit = Commander(unit);
         return (object)unit.unitData ?? unit;
     }
 

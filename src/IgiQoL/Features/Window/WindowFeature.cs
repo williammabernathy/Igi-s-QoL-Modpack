@@ -117,6 +117,7 @@ public sealed class WindowFeature : Feature
         if (ModWindow.IsOpen && rows == entries) ctx.Pass("window-open", detail);
         else ctx.Fail("window-open", detail + $" open={ModWindow.IsOpen}");
         yield return ctx.Screenshot("window-settings");
+        yield return WindowResizeCheck.Run(ctx);
 
         if (HudButton.Instance == null) ctx.Skip("hud-button", "no dock button in this scene");
         else
