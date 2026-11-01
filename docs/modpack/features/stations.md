@@ -58,6 +58,12 @@ Starting a roll-up starts each refinery job and queues each part job as soon as 
 
 Click a material in the refinery's left column to show only the ore that refines into it, sorted by how much of that material one unit yields. The other materials dim while the filter is on. Click the material again to show all ore, or click another one to switch. When no ore at the station yields the material, the ore row says so. If the selected ore gets hidden, the first ore left is selected. Leaving the refinery clears the filter. It changes only what the screen shows.
 
+## "Used in" tooltips
+
+![The Titanium Plate tooltip listing the recipes that use it](../../images/used-in.jpg)
+
+Hover a forge ingredient (a refined product, a canister, a signal fragment) and its tooltip lists the forge recipes that use it, with how many one craft takes, the same number the forge's ingredient list shows. Only recipes you can craft are listed, the ones the forge offers you, so a blueprint shows up as soon as you learn it. When you have a recipe in more than one rarity, its line has one count per rarity, in that rarity's colour. The list stops at 8 recipes and says how many more there are. The comparison tooltip for your fitted item doesn't get the list.
+
 ## Operations tab
 
 ![The Operations tab](../../images/tab-operations.jpg)

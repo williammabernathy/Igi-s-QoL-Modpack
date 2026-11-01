@@ -234,6 +234,10 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 [Refinery filter](features/stations.md#refinery-filter): only `Enabled`.
 
+### `[UsedIn]`
+
+["Used in" tooltips](features/stations.md#used-in-tooltips): only `Enabled`.
+
 ### `[Operations]`
 
 [Operations tab](features/stations.md#operations-tab)
