@@ -9,6 +9,7 @@ using IgiQoL.Features.DronesOnArrival;
 using IgiQoL.Features.DroneModes;
 using IgiQoL.Features.EngagementDistance;
 using IgiQoL.Features.MissileRetarget;
+using IgiQoL.Features.FleetRetreat;
 using IgiQoL.Features.Separation;
 using IgiQoL.Features.TargetPriority;
 using Source.SpaceShip;
@@ -160,6 +161,18 @@ public static class ShipPopup
                     ShipSettings.Edit(guid).separation = i == 0 ? null : i == 1;
                     ShipSettings.Save(guid);
                 });
+        }
+
+        var retreat = FleetRetreat.Instance;
+        if (retreat != null && retreat.Active)
+        {
+            var row = Kit.Row(Body, 8f, 26f);
+            Kit.Tooltip(Kit.Label(row, "Retreat for repairs"), null, "Fleet ships only, not the ship you fly. When a hit leaves the ship below this hull %, it leaves the fight and repairs for 120 s, then comes back, as the game does below 10%. A hired extra mercenary leaves for good, as in the game.");
+            Kit.Dropdown(row, FleetRetreat.Names, Mathf.Max(0, System.Array.IndexOf(FleetRetreat.Values, s.retreatBelow)), i =>
+            {
+                ShipSettings.Edit(guid).retreatBelow = FleetRetreat.Values[i];
+                ShipSettings.Save(guid);
+            }, 200f);
         }
 
         var targeting = TargetPriority.Instance;

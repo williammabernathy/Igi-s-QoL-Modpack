@@ -33,6 +33,8 @@ public sealed class ShipSettings
     // Guid of another of your ships the drones stay with (follow, guard, its target); null = their own ship.
     public string droneAnchor;
     public bool? separation;
+    // Hull % below which a fleet ship leaves for repairs; null = the game's 10%.
+    public int? retreatBelow;
 
     public static readonly ShipSettings Default = new();
 
@@ -115,6 +117,8 @@ public sealed class ShipSettings
         else record.Remove("droneAnchor");
         if (s.separation.HasValue) record["separation"] = s.separation.Value;
         else record.Remove("separation");
+        if (s.retreatBelow.HasValue) record["retreatBelow"] = s.retreatBelow.Value;
+        else record.Remove("retreatBelow");
     }
 
     public static void Invalidate() => cache.Clear();
@@ -157,6 +161,8 @@ public sealed class ShipSettings
         if (v.IsString) s.droneAnchor = v.AsString;
         v = record["separation"];
         if (v.IsBoolean) s.separation = v.AsBoolean;
+        v = record["retreatBelow"];
+        if (v.IsNumber) s.retreatBelow = (int)v.AsNumber;
         return s;
     }
 }

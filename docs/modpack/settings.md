@@ -155,6 +155,10 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | `Gap` | Gap between hulls (units) | `2` | 0.5 to 10 |
 | `OtherShips` | Other ships keep distance too | `false` | `true`, `false` |
 
+### `[FleetRetreat]`
+
+[Retreat for repairs](features/fleet-combat.md#retreat-for-repairs): only `Enabled`. The threshold is set per ship in the popup.
+
 ### `[MissileRetarget]`
 
 [Missile retargeting](features/fleet-combat.md#missile-retargeting)

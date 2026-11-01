@@ -46,6 +46,12 @@ In a fight the game flies every ship straight at a ring around its target and sw
 
 Measured in spawned 12-enemy, 4-ally brawls (4 rounds of 33 s each way): with both on, overlapping ship pairs dropped by 42%, and the share of turrets with their target in range dropped from 78% to 71%, because ships that slide apart sometimes slide out of reach.
 
+## Retreat for repairs
+
+In the game a fleet ship leaves a fight for repairs once a hit drops it below 10% hull: it flies out, repairs for 120 s and rejoins. Your fleet ships can't be destroyed, but every hull hit of 2% or more can kill crew aboard. The popup's "Retreat for repairs" makes a ship leave sooner: below 20%, 30%, 50% or 75% hull. "Game default" keeps the 10%.
+
+The check runs when the ship takes a hit, as the game's does. It has no effect on the ship you fly, and a hired extra mercenary ship leaves for good, as it does at 10% in the game.
+
 ## Missile retargeting
 
 What your missiles do when their target is destroyed before they hit. `Mode`:
