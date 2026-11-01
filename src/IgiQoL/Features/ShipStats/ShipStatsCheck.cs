@@ -13,6 +13,7 @@ using IgiQoL.Game;
 using Source.Combat;
 using Source.Galaxy;
 using Source.Item;
+using Source.SpaceShip.Auto;
 using Source.UI.Tooltip;
 using Source.Util;
 using TMPro;
@@ -28,6 +29,8 @@ internal static class ShipStatsCheck
     private static readonly MethodInfo ArmorStep = AccessTools.Method(typeof(ArmorModule), "ApplyArmorResistance");
     private static readonly MethodInfo BuildCard = AccessTools.Method(typeof(SpaceShip), "BuildTooltipCard");
     private const string BoostId = "IgiQoL_ShipStatsCheck";
+    private static readonly AccessTools.FieldRef<ThreatTable, Dictionary<AbstractUnit, float>> ThreatOf =
+        AccessTools.FieldRefAccess<ThreatTable, Dictionary<AbstractUnit, float>>("threat");
 
     public static IEnumerator Run(SelfCheckContext ctx)
     {
@@ -152,6 +155,7 @@ internal static class ShipStatsCheck
             if (source == null || !UITooltip.TooltipEnabled)
             {
                 ctx.Skip("tooltip", source == null ? "the ship has no tooltip source" : "tooltips are off");
+                yield return CheckAggro(ctx, enemy, flagship, ships);
                 yield break;
             }
             try
@@ -182,6 +186,122 @@ internal static class ShipStatsCheck
             foreach (var e in added)
                 if (e != null) Object.Destroy(e.gameObject);
         }
+
+        // Last, because its screenshot waits 2 s while the enemy fights.
+        yield return CheckAggro(ctx, enemy, flagship, ships);
+    }
+
+    // The enemy's threat list follows the game's own table and marks the unit it's attacking, and "Attacked by" lists
+    // the units aiming at a ship but not the ones that only hit a nearby ally. All in one frame, so the enemy's own
+    // once-a-second target choice (CombatActions.Update) can't interfere. Ships at a station location run
+    // SpaceStationActions and keep no table, so such an enemy gets the game's CombatActions for the check, the way
+    // ECHO's idle combat hands one to a ship (IdleManager.SetIdleCombatMode).
+    private static IEnumerator CheckAggro(SelfCheckContext ctx, SpaceShip enemy, SpaceShip flagship, List<SpaceShip> ships)
+    {
+        if (enemy == null || enemy.isDestroyed) enemy = Enemy();
+        if (enemy == null)
+        {
+            ctx.Skip("threat", "no enemy ship");
+            ctx.Skip("attackers", "no enemy ship");
+            yield break;
+        }
+        var original = enemy.autoActions;
+        var combat = original as CombatActions;
+        if (combat == null)
+        {
+            combat = new CombatActions(enemy);
+            enemy.SetTemporaryActions(combat);
+        }
+        SpaceShip wing = null;
+        foreach (var s in ships)
+            if (wing == null && s != flagship && s != enemy) wing = s;
+        var table = ThreatOf(combat.threat);
+        var saved = new Dictionary<AbstractUnit, float>(table);
+        try
+        {
+            float top = 1f;
+            foreach (var v in table.Values) top = Mathf.Max(top, v);
+            top *= 10f;
+            combat.threat.Set(flagship, top);
+            if (wing != null) combat.threat.Set(wing, top / 2f);
+            enemy.SetManualTarget(flagship);
+
+            var game = combat.threat.GetPriorityTargetThreat(useIgnore: false);
+            var threat = Find(enemy, ShipStats.ThreatTitle);
+            var rows = threat != null ? threat.rows : new List<TooltipRow>();
+            bool first = rows.Count > 0 && rows[0].label == Aggro.Name(flagship) && rows[0].value == "100%" && rows[0].badge == "target";
+            bool second = wing == null || (rows.Count > 1 && rows[1].label == Aggro.Name(wing) && rows[1].value == "50%" && rows[1].badge == null);
+            string threatDetail = $"{enemy.displayName} ({(original == combat ? saved.Count + " entries before" : "lent a table; it runs " + (original != null ? original.GetType().Name : "none"))}): {Describe(threat)}; game's top {Aggro.Name(game.unit)}";
+            if (game.unit == flagship && first && second && rows.Count <= ShipStats.AggroRows + 1) ctx.Pass("threat", threatDetail);
+            else ctx.Fail("threat", threatDetail);
+
+            string targeting = null;
+            foreach (var r in Card(enemy).rows)
+                if (r.label == ShipStats.TargetingLabel) targeting = r.value;
+            var attackers = Find(flagship, ShipStats.AttackersTitle);
+            string enemyName = Aggro.Name(enemy);
+            bool listed = false;
+            if (attackers != null)
+                foreach (var r in attackers.rows) listed |= r.label == enemyName || r.label.StartsWith(enemyName + " x");
+            bool wingClear = true;
+            if (wing != null)
+            {
+                wing.AddTargetedBy(enemy, 10f); // what the game's BroadcastThreatToAllies does when an ally is hit
+                var onWing = new List<AbstractUnit>();
+                Aggro.Attackers(wing, onWing);
+                wingClear = !onWing.Contains(enemy);
+            }
+            // Same-named attackers share a row: no label twice, and the rows' counts add up to the header's.
+            var onEnemy = Find(enemy, ShipStats.AttackersTitle);
+            string grouping = GroupingProblem(attackers) ?? GroupingProblem(onEnemy);
+            string attackDetail = $"{enemy.displayName} card: Targeting '{targeting}', {Describe(onEnemy)}; {flagship.displayName}: {Describe(attackers)}; "
+                + (wing != null ? $"{wing.displayName} left out: {wingClear}" : "no fleet ship to test an ally's list");
+            if (targeting == Aggro.Name(flagship) && listed && wingClear && grouping == null) ctx.Pass("attackers", attackDetail);
+            else ctx.Fail("attackers", attackDetail + (grouping != null ? "; " + grouping : ""));
+
+            // For the eye: the enemy's card as the game shows it, threat list included.
+            var source = enemy.GetComponent<TooltipSource>();
+            if (source != null && UITooltip.TooltipEnabled)
+            {
+                try
+                {
+                    UITooltip.Show(source, source.Prefab);
+                    yield return ctx.Screenshot("ship-stats-aggro");
+                }
+                finally { UITooltip.Hide(source); }
+            }
+        }
+        finally
+        {
+            table.Clear();
+            foreach (var kv in saved) table[kv.Key] = kv.Value;
+            if (enemy.autoActions != original) enemy.SetTemporaryActions(original);
+        }
+    }
+
+    // Null when every label is unique and the rows' counts ("x6", "+2 more") add up to the header's.
+    private static string GroupingProblem(TooltipSection section)
+    {
+        if (section == null) return null;
+        var seen = new HashSet<string>();
+        int sum = 0;
+        foreach (var r in section.rows)
+        {
+            if (!seen.Add(r.label)) return "'" + r.label + "' twice";
+            if (r.label.StartsWith("+")) { sum += int.Parse(r.label.Substring(1, r.label.IndexOf(' ') - 1)); continue; }
+            int x = r.label.LastIndexOf(" x");
+            sum += x > 0 && int.TryParse(r.label.Substring(x + 2), out int n) ? n : 1;
+        }
+        return sum.ToString() == section.count ? null : $"rows add up to {sum}, header says {section.count}";
+    }
+
+    private static TooltipCard Card(SpaceShip ship) => (TooltipCard)BuildCard.Invoke(ship, null);
+
+    private static TooltipSection Find(SpaceShip ship, string title)
+    {
+        foreach (var s in Card(ship).sections)
+            if (s.title == title) return s;
+        return null;
     }
 
     private static TemporaryEffect AddEffect(SpaceShip ship, string name, bool debuff, bool shown, float seconds)

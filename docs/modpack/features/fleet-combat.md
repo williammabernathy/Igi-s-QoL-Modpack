@@ -60,7 +60,14 @@ Ships with armour get a second figure per row, after the `|`: what a hit on the 
 
 Below that, a Buffs and debuffs block lists what the game's buff bar would show if that ship were yours: one row per effect, with its stacks (`x3`), the time left and a bar that empties as it runs out. Buffs are blue and debuffs red, as in the game's buff bar, and the block's header counts both. An ability that's running without a timer of its own reads "active" (or "on" for a toggle). The block is left out when the ship has no effects.
 
-The card rebuilds twice a second while you hover it, so timers count down and the resistance figures follow debuffs as they land and expire.
+The card also says what the ship is targeting right now ("Targeting", next to the Captain row) and adds two blocks when they have something to show:
+
+- Threat: the ship's threat list, highest first, each as a share of the top entry, so you can see how close another ship is to pulling it away. The unit it's attacking has a red "target" badge. That isn't always the top entry, because the game skips units out of its weapon or chase range first. Only combat ships that aren't yours keep a threat list, and at a station location most ships follow the station's behaviour instead and have none.
+- Attacked by: the units whose current target is this ship, on any ship, yours included. Units with the same name share a row ("Defense Platform x6"), and the header gives the total.
+
+Each block shows 5 rows, then "+N more".
+
+The card rebuilds twice a second while you hover it, so timers count down, the resistance figures follow debuffs as they land and expire, and the threat shares and attackers stay current.
 
 ## Missile retargeting
 
