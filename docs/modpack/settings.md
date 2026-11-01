@@ -159,6 +159,10 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 [Retreat for repairs](features/fleet-combat.md#retreat-for-repairs): only `Enabled`. The threshold is set per ship in the popup.
 
+### `[ShipStats]`
+
+[Ship stats on hover](features/fleet-combat.md#ship-stats-on-hover): only `Enabled`.
+
 ### `[MissileRetarget]`
 
 [Missile retargeting](features/fleet-combat.md#missile-retargeting)

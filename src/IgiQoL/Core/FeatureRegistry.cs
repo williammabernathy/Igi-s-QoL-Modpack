@@ -34,6 +34,7 @@ public static class FeatureRegistry
         new Features.Separation.Separation(),
         new Features.CraftRollup.CraftRollup(),
         new Features.CombatLog.CombatLog(),
+        new Features.ShipStats.ShipStats(),
         new Features.EventLog.EventLog(),
         new Features.Guide.Guide(),
         new Features.EchoKit.EchoKit(),

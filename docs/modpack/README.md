@@ -10,7 +10,7 @@ The modpack was developed and tested on Linux only, with the game running under 
 
 1. Install BepInEx 5 (`win_x64`, version 5.4.23 or later) into the game folder and start the game once. On Linux under Proton, BepInEx also needs a DLL override; [setup.md](../setup.md#installing-bepinex) explains it.
 2. Download `IgiQoL-<version>.zip` from the [releases page](https://github.com/williammabernathy/Igi-s-QoL-Modpack/releases) and extract it into the game folder. It adds `BepInEx/plugins/IgiQoL/`.
-3. Start the game. `BepInEx/LogOutput.log` should have a line like `IgiQoL startup: 37 active, 1 disabled, 0 failed` (the disabled one is the developer harness).
+3. Start the game. `BepInEx/LogOutput.log` should have a line like `IgiQoL startup: 38 active, 1 disabled, 0 failed` (the disabled one is the developer harness).
 
 To update, extract the new zip over the old one. To remove the mod, delete `BepInEx/plugins/IgiQoL/` (and `BepInEx/config/igi.qol.cfg` and `BepInEx/config/IgiQoL/` if you want its settings and files gone too).
 
@@ -24,7 +24,7 @@ The features, by area:
 |---|---|
 | [Window and HUD](features/interface.md) | Mod window, ship settings popup, fleet command strip, fleet shield and armor bars, text size, jumps remaining, mission distance |
 | [ECHO, the autopilot](features/echo.md) | Activity priority, ECHO decisions, missions, retreat, abilities and deployables, preferred ores, ECHO's operations, cargo rules |
-| [Fleet and combat](features/fleet-combat.md) | Target priority, engagement distance, keep distance in combat, retreat for repairs, missile retargeting, drone modes, drones on arrival |
+| [Fleet and combat](features/fleet-combat.md) | Target priority, engagement distance, keep distance in combat, retreat for repairs, ship stats on hover, missile retargeting, drone modes, drones on arrival |
 | [Loot and cargo](features/loot-and-cargo.md) | Item rules, loot pickup limits, shared fleet holds, Scanner |
 | [Stations, loadouts and crafting](features/stations.md) | Station services, ship loadouts, crafting roll-up, refinery filter, "Used in" tooltips, Operations tab |
 | [Logs, reference and other mods](features/logs-and-reference.md) | Event log, DPS parser, stat reference, notes, other mods |

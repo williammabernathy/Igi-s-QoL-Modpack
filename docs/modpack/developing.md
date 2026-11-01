@@ -9,7 +9,7 @@ How `src/IgiQoL` is put together and the rules every feature follows. Building a
 | `Plugin.cs` | The BepInEx plugin (`igi.qol`). Logs the game version against `TestedGameVersion`, then starts the registry |
 | `Core/` | The feature registry, the `Feature` base class, game events, save data, per-ship settings, the startup report, the `[Dev]` harness and its dumps and profiler |
 | `Features/<Name>/` | One folder per feature: the `Feature` subclass, its Harmony patch classes, its tab, its self-check |
-| `Game/` | Small helpers over game objects shared by several features: `Fleet` (flagship, fleet ship list, data-to-unit), `Cargo` (count, move, deposit target), `Items` (rule keys) |
+| `Game/` | Small helpers over game objects shared by several features: `Fleet` (flagship, fleet ship list, data-to-unit), `Cargo` (count, move, deposit target), `Items` (rule keys), `Resists` (the share of a hit a unit takes by damage type, shields and hull, then armour) |
 | `Rules/` | `ItemRules`, the per-save item rule table that loot pickup limits, ECHO cargo rules and station services read |
 | `UI/` | The mod window and its widgets (`Kit`), settings rows, the ship settings popup, drag handles, fleet row layout |
 
