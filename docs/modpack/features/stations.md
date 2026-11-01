@@ -70,8 +70,23 @@ For the full list, type part of the item's name into the search at the top of th
 
 ![The Operations tab](../../images/tab-operations.jpg)
 
-Operations are the game's boarding and installation raids. The tab has three sections:
+Operations are the game's boarding and installation raids. The tab has four sections:
 
 - Operations you start: the stealth, ammo and automatic-movement choices the operation panel starts with. The game remembers these between operations; changing them here is the same as changing them on the panel. `PlayerAutoBuyOut` (off) also ticks "Auto Accept Buyouts" on every new operation, which the game doesn't remember.
 - Operations ECHO starts: see [ECHO's operations](echo.md#echos-operations).
+- Priority compartment: the room your crew go for first, one choice for boardings of ships (`BoardingCompartment`) and one for installations, where the crew go in on foot (`InstallationCompartment`). When an operation starts, yours or ECHO's, the first compartment of that type in the layout becomes its priority, as if you had clicked it on the operation screen, and you can still click another one. A layout without that room gets no priority. The game keeps no priority between operations, and the rooms differ from ship to ship and site to site, so the choice is a kind of room, not a room number. Each list offers only the rooms that kind of operation can have, without the airlock and corridors. Both default to None, the game's behaviour.
 - Running operations: yours and ECHO's, with their live options. Changes apply to the running operation at once. Each operation has the same exit button as the game's operation panel. After a victory it reads Extract, and your crew heads back to your ship with what it collected. Before that it reads Abandon: it asks first, then your crew retreats (or the approach is called off) and the operation ends. The button goes away once the crew is already leaving.
+
+## Favourite stations
+
+The Stations tab keeps a list of stations you pick, nearest first. Each one shows its system and the jumps to it from where you are, the game's facility icons (hover one for its name), and your material storage there: space used out of the capacity, and the three biggest stacks (hover the line for all of them). Travel to plots the course the way a click on the galaxy map does, and asks first when you're docked and the game has something to warn about. The x takes the station off the list.
+
+There are three ways to add a station or take it off again:
+
+- Shift-click its marker on the galaxy map. The marker's tooltip says which of the two a Shift-click does.
+- The Favourite button at the start of the airlock's button row while you're docked there. It reads Unfavourite on a favourite.
+- "Add a station" at the bottom of the tab: type part of a station or system name. It searches the stations the galaxy map shows, in systems you can reach.
+
+The search box above the list looks through the favourites' material storage: type part of an item name ("tungsten") and every favourite holding a matching item gets a row with the count and Travel to. The armory and the data inventory are the same at every station, so they aren't listed. Shop stock and mission boards only fill in while you're at a station, so the list doesn't show them.
+
+The list is kept in the save. A favourite whose station no longer exists is left out of the list.

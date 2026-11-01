@@ -4,7 +4,7 @@ The mod window, the per-ship settings popup, and the small additions to the game
 
 ## Mod window
 
-Every tab of the modpack lives in one window. Open and close it with F6 (`Hotkey`), with the QoL button in space, or with the QoL tab above the station's Airlock tab while docked. The tabs are Scanner, DPS parser, Log, ECHO, Item rules, Operations, Loadouts, Notes, Stat reference, Mods and Settings. Drag the window by its header; it remembers where you left it and which tab was open.
+Every tab of the modpack lives in one window. Open and close it with F6 (`Hotkey`), with the QoL button in space, or with the QoL tab above the station's Airlock tab while docked. The tabs are Scanner, DPS parser, Log, ECHO, Item rules, Operations, Stations, Loadouts, Notes, Stat reference, Mods and Settings. Drag the window by its header; it remembers where you left it and which tab was open.
 
 ![The Settings tab](../../images/tab-settings.jpg)
 

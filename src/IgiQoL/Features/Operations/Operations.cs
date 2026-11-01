@@ -32,15 +32,26 @@ public sealed class Operations : Feature
     public override string Title => "Operations tab";
     public override string Description => "The Operations tab: your starting choices for operations, ECHO's choices, and the operations running now.";
     public override string SettingsTab => "Operations";
-    public override Type[] PatchClasses => new[] { typeof(DungeonPanelPatch) };
+    public override Type[] PatchClasses => new[] { typeof(DungeonPanelPatch), typeof(PriorityCompartmentPatch) };
 
     public ConfigEntry<bool> PlayerAutoBuyOut;
+    public ConfigEntry<string> BoardingCompartment, InstallationCompartment;
+
+    public const string NoCompartment = "None";
 
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
         PlayerAutoBuyOut = cfg.Bind(Id, "PlayerAutoBuyOut", false, SettingInfo.Describe("Accept buyouts automatically",
             "Ticks 'Auto Accept Buyouts' on the operation panel whenever you start a new operation. The game remembers your stealth, ammo and movement choices between operations, but not this one. Buyouts are offers from defenders to switch to your side for credits."));
+        var names = new List<string> { NoCompartment };
+        names.AddRange(Enum.GetNames(typeof(CompartmentType)));
+        BoardingCompartment = cfg.Bind(Id, "BoardingCompartment", NoCompartment, SettingInfo.Describe("Boardings",
+            "The compartment your crew make for first when a boarding of a ship starts, yours and ECHO's: the first compartment of that type in the ship, as if you had clicked it on the operation screen. You can still click another one. A ship without that compartment gets no priority. None: the game default, no priority.",
+            new AcceptableValueList<string>(names.ToArray())));
+        InstallationCompartment = cfg.Bind(Id, "InstallationCompartment", NoCompartment, SettingInfo.Describe("Installations",
+            "The same for operations at installations, where your crew go in on foot instead of by boarding pod: outposts, research stations, derelicts, ruins and the like. None: the game default, no priority.",
+            new AcceptableValueList<string>(names.ToArray())));
     }
 
     public override void OnActivated()
@@ -88,6 +99,11 @@ public sealed class Operations : Feature
         }
         else Kit.Muted(content, "ECHO's operations are turned off on the Settings tab, so ECHO uses the game's normal choices: your stealth and ammo from above, and it never accepts buyouts.");
 
+        Kit.Heading(content, "Priority compartment");
+        Kit.Muted(content, "The compartment your crew go for first when an operation starts, yours and ECHO's, as if you had clicked it on the operation screen. You can still click another one. The game doesn't remember a priority between operations, and the rooms differ from site to site, so this picks by kind of room.");
+        AddCompartmentRow(content, BoardingCompartment, BoardingTypes());
+        AddCompartmentRow(content, InstallationCompartment, InstallationTypes());
+
         Kit.Heading(content, "Running operations");
         Kit.Muted(content, "Operations in progress, yours and ECHO's. Changes here apply to the running operation at once.");
         var column = Kit.Column(content);
@@ -97,10 +113,77 @@ public sealed class Operations : Feature
     public static List<DungeonOperation> CurrentOperations() =>
         Singleton<DungeonManager>.HasInstance ? Singleton<DungeonManager>.Instance._operations : null;
 
+    private static void AddCompartmentRow(RectTransform content, ConfigEntry<string> entry, List<CompartmentType> types)
+    {
+        // A type set in the cfg that no layout uses still shows, so the dropdown never misreports the setting.
+        if (Enum.TryParse<CompartmentType>(entry.Value, out var current) && !types.Contains(current)) types.Add(current);
+        var names = new List<string> { "None (game default)" };
+        int index = 0;
+        foreach (var t in types)
+        {
+            if (t.ToString() == entry.Value) index = names.Count;
+            names.Add(CompartmentName(t));
+        }
+        var row = Kit.Row(content);
+        string label = SettingInfo.Of(entry).Label;
+        Kit.Tooltip(Kit.Label(row, label), label, entry.Description.Description);
+        Kit.Dropdown(row, names, index, i => entry.Value = i == 0 ? NoCompartment : types[i - 1].ToString(), 200f);
+    }
+
+    public static string CompartmentName(CompartmentType type)
+    {
+        string name = Translation.Translate("@Compartment" + type);
+        return string.IsNullOrEmpty(name) || name.StartsWith("@") ? SettingRows.Pretty(type.ToString()) : name;
+    }
+
+    // Every room type a boarded ship can have: ship layouts depend only on the hull size.
+    public static List<CompartmentType> BoardingTypes()
+    {
+        var set = new HashSet<CompartmentType>();
+        foreach (Source.SpaceShip.SpaceShipType size in Enum.GetValues(typeof(Source.SpaceShip.SpaceShipType)))
+            foreach (var c in ShipCompartmentLayout.Build(size, 0)) set.Add(c.type);
+        return Rooms(set);
+    }
+
+    // Every room type the walk-in operations draw their layouts from.
+    public static List<CompartmentType> InstallationTypes()
+    {
+        var set = new HashSet<CompartmentType>();
+        foreach (DungeonType t in Enum.GetValues(typeof(DungeonType)))
+        {
+            var def = DungeonDefinition.Get(t);
+            if (def == null || def.approachStyle == ApproachStyle.Pods) continue;
+            foreach (var entry in def.GetCompartmentPool()) set.Add(entry.type);
+        }
+        return Rooms(set);
+    }
+
+    // The crew start in the airlock, and corridors repeat with nothing to find, so neither is offered.
+    private static List<CompartmentType> Rooms(HashSet<CompartmentType> set)
+    {
+        set.Remove(CompartmentType.Airlock);
+        set.Remove(CompartmentType.Corridor);
+        var list = new List<CompartmentType>(set);
+        list.Sort();
+        return list;
+    }
+
+    // Sets the starting priority of a new simulation to the first compartment of the chosen type, unless it already has
+    // one. Returns the index set, or -1.
+    public static int ApplyPriority(DungeonSimulation sim, string typeName)
+    {
+        if (sim?.options == null || sim.options.priorityCompartmentIndex.HasValue) return -1;
+        if (typeName == NoCompartment || !Enum.TryParse<CompartmentType>(typeName, out var type)) return -1;
+        int index = ShipCompartmentLayout.FindFirst(sim.compartments, type);
+        if (index >= 0) sim.options.priorityCompartmentIndex = index;
+        return index;
+    }
+
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
         CheckPlayerBuyOut(ctx);
         CheckExitStates(ctx);
+        CheckPriority(ctx);
 
         ModWindow.Open("operations");
         ctx.Cleanup(ModWindow.Close);
@@ -112,6 +195,64 @@ public sealed class Operations : Feature
         yield return ctx.Screenshot("window-operations");
 
         yield return CheckExitButton(ctx);
+    }
+
+    // The boarding postfix on the game's own boarding setup: None leaves no priority, Bridge picks the first bridge, and
+    // a priority already set stays. Installations use the same helper on a walk-in layout from a real definition.
+    private void CheckPriority(SelfCheckContext ctx)
+    {
+        string savedBoarding = BoardingCompartment.Value, savedInstallation = InstallationCompartment.Value;
+        try
+        {
+            var def = DungeonDefinition.Get(DungeonType.HostileShip);
+            if (def == null) ctx.Skip("priority-boarding", "no boarding definition");
+            else
+            {
+                DungeonSimulation Board(DungeonOptions o) => DungeonSimulation.CreateForShipBoarding(
+                    new DungeonLocationData { dungeonType = DungeonType.HostileShip, shipSizeTier = Source.SpaceShip.SpaceShipType.Size4, level = 10 }, o, def);
+                string Shown(DungeonSimulation s) => s.options.priorityCompartmentIndex?.ToString() ?? "unset";
+                BoardingCompartment.Value = NoCompartment;
+                var none = Board(new DungeonOptions());
+                BoardingCompartment.Value = nameof(CompartmentType.Bridge);
+                var bridge = Board(new DungeonOptions());
+                var preset = Board(new DungeonOptions { priorityCompartmentIndex = 0 });
+                int want = ShipCompartmentLayout.FindFirst(bridge.compartments, CompartmentType.Bridge);
+                string detail = $"none={Shown(none)} bridge={Shown(bridge)} (first bridge {want} of {bridge.compartments.Count}) preset={Shown(preset)}";
+                if (!none.options.priorityCompartmentIndex.HasValue && want >= 0 && bridge.options.priorityCompartmentIndex == want && preset.options.priorityCompartmentIndex == 0)
+                    ctx.Pass("priority-boarding", detail);
+                else ctx.Fail("priority-boarding", detail);
+            }
+
+            DungeonDefinition walk = null;
+            foreach (DungeonType t in Enum.GetValues(typeof(DungeonType)))
+            {
+                var d = DungeonDefinition.Get(t);
+                if (d != null && d.approachStyle != ApproachStyle.Pods) { walk = d; break; }
+            }
+            if (walk == null) ctx.Skip("priority-installation", "no walk-in dungeon definition");
+            else
+            {
+                var sim = new DungeonSimulation();
+                sim.compartments = DungeonCompartmentLayout.Build(walk.layoutStyle, walk.GetCompartmentPool(), 12, new SeededRandom(7UL));
+                var types = InstallationTypes();
+                // The last offered room of the layout, so the pick has to skip past the airlock and other rooms.
+                var room = CompartmentType.Airlock;
+                foreach (var c in sim.compartments)
+                    if (types.Contains(c.type)) room = c.type;
+                InstallationCompartment.Value = room.ToString();
+                int got = ApplyPriority(sim, InstallationCompartment.Value);
+                int want = ShipCompartmentLayout.FindFirst(sim.compartments, room);
+                string detail = $"{walk.dungeonType}: {room} at {got}, first {want} of {sim.compartments.Count}; offered {string.Join(", ", types.ConvertAll(CompartmentName))}";
+                if (room != CompartmentType.Airlock && got > 0 && got == want && sim.options.priorityCompartmentIndex == want)
+                    ctx.Pass("priority-installation", detail);
+                else ctx.Fail("priority-installation", detail);
+            }
+        }
+        finally
+        {
+            BoardingCompartment.Value = savedBoarding;
+            InstallationCompartment.Value = savedInstallation;
+        }
     }
 
     // ExitFor on bare operations in each state the button distinguishes.
@@ -266,6 +407,31 @@ internal static class DungeonPanelPatch
                 __instance.autoAcceptBuyOutToggle.SetIsOnWithoutNotify(true);
         }
         catch (Exception e) { F.Fail(e, nameof(DungeonPanelPatch)); }
+    }
+}
+
+// Sets the starting priority compartment from the Boardings / Installations settings once the layout exists.
+[HarmonyPatch]
+internal static class PriorityCompartmentPatch
+{
+    private static Operations F => Operations.Instance;
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(DungeonSimulation), nameof(DungeonSimulation.CreateForShipBoarding))]
+    private static void CreateForShipBoardingPostfix(DungeonSimulation __result)
+    {
+        if (!F.Active) return;
+        try { Operations.ApplyPriority(__result, F.BoardingCompartment.Value); }
+        catch (Exception e) { F.Fail(e, nameof(CreateForShipBoardingPostfix)); }
+    }
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(DungeonOperation), nameof(DungeonOperation.BeginWalkSimulation))]
+    private static void BeginWalkSimulationPostfix(DungeonOperation __instance)
+    {
+        if (!F.Active) return;
+        try { Operations.ApplyPriority(__instance.simulation, F.InstallationCompartment.Value); }
+        catch (Exception e) { F.Fail(e, nameof(BeginWalkSimulationPostfix)); }
     }
 }
 
