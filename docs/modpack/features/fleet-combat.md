@@ -58,7 +58,9 @@ Hovering any ship, enemy, neutral or your own, adds a Resistances block to the g
 
 Ships with armour get a second figure per row, after the `|`: what a hit on the armour loses in total, the ship's resistance plus the armour's own resistance or weakness to that type (paint strip included). That figure applies only while the armour has HP left. A row turns red when either figure is below 0%, meaning that type hits harder than normal.
 
-The card is built when you start hovering. An enemy's figures don't change under the pointer; hover it again to see a debuff that landed meanwhile.
+Below that, a Buffs and debuffs block lists what the game's buff bar would show if that ship were yours: one row per effect, with its stacks (`x3`), the time left and a bar that empties as it runs out. Buffs are blue and debuffs red, as in the game's buff bar, and the block's header counts both. An ability that's running without a timer of its own reads "active" (or "on" for a toggle). The block is left out when the ship has no effects.
+
+The card rebuilds twice a second while you hover it, so timers count down and the resistance figures follow debuffs as they land and expire.
 
 ## Missile retargeting
 

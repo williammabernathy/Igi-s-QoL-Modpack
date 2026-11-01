@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using Behaviour.Ability;
 using Behaviour.Equipment.Module;
 using Behaviour.UI;
 using Behaviour.UI.Tooltip;
@@ -13,6 +14,7 @@ using Source.Combat;
 using Source.Galaxy;
 using Source.Item;
 using Source.UI.Tooltip;
+using Source.Util;
 using TMPro;
 using UnityEngine;
 
@@ -95,26 +97,128 @@ internal static class ShipStatsCheck
         if (after != before && afterMismatch == null && Value(target, DamageType.Kinetic) == before) ctx.Pass("debuff", debuffDetail);
         else ctx.Fail("debuff", debuffDetail + (afterMismatch != null ? "; " + afterMismatch : ""));
 
-        // The tooltip the game shows on hover carries the section.
-        var source = target.GetComponent<TooltipSource>();
-        if (source == null || !UITooltip.TooltipEnabled)
+        // Buffs and debuffs: a buff, a debuff and an effect the game keeps out of its buff HUD, as child effects the
+        // way projectiles and abilities attach them. Only the first two get rows; the debuff counts in the header.
+        var rowsBefore = Rows(EffectsSection(target));
+        int debuffsBefore = Effects.DebuffCount(target);
+        var added = new List<TemporaryEffect>
         {
-            ctx.Skip("tooltip", source == null ? "the ship has no tooltip source" : "tooltips are off");
-            yield break;
-        }
-        bool shown = false;
+            AddEffect(target, "IgiQoL check buff", debuff: false, shown: true, 30f),
+            AddEffect(target, "IgiQoL check debuff", debuff: true, shown: true, 20f),
+            AddEffect(target, "IgiQoL check hidden", debuff: true, shown: false, 20f),
+        };
         try
         {
-            UITooltip.Show(source, source.Prefab);
-            var tip = UITooltip._current;
-            if (tip != null)
-                foreach (var t in tip.Content.GetComponentsInChildren<TMP_Text>(true))
-                    if (t.text == ShipStats.SectionTitle.ToUpperInvariant()) shown = true;
-            if (shown) ctx.Pass("tooltip", target.displayName + ": section shown");
-            else ctx.Fail("tooltip", target.displayName + ": no section title in the shown tooltip");
-            yield return ctx.Screenshot("ship-stats");
+            yield return null; // TemporaryEffect.Start sets the time left
+            var section = EffectsSection(target);
+            var rows = Rows(section);
+            int debuffs = Effects.DebuffCount(target);
+            string effectsDetail = $"{target.displayName}: {Describe(section)}; {rowsBefore.Count} rows before";
+            TooltipRow debuffRow = null;
+            if (section != null)
+                foreach (var r in section.rows)
+                    if (r.label == "IgiQoL check debuff") debuffRow = r;
+            if (rows.Count == rowsBefore.Count + 2 && rows.Contains("IgiQoL check buff") && debuffRow != null
+                && !rows.Contains("IgiQoL check hidden") && debuffs == debuffsBefore + 1
+                && debuffRow.dotColor == ColorHelper.debuffBorder && debuffRow.fill > 0.9f
+                && section.count.EndsWith(debuffs + (debuffs == 1 ? " debuff" : " debuffs")))
+                ctx.Pass("effects", effectsDetail);
+            else ctx.Fail("effects", effectsDetail + $"; debuffs {debuffsBefore} -> {debuffs}");
+
+            // A real ability fired from the flagship: its effects show, translated, each once.
+            ActivatedAbility ability = null;
+            foreach (var a in flagship.GetComponentsInChildren<ActivatedAbility>())
+                if (ability == null && !a.toggledAbility && a.isReady && !a.IsPayloadActive()) ability = a;
+            var abilityBefore = Rows(EffectsSection(flagship));
+            if (ability == null) ctx.Skip("ability", "no ready, untoggled ability on the flagship");
+            else if (ability.TriggerPayload() == null) ctx.Fail("ability", ability.displayName + ": the game didn't trigger it");
+            else
+            {
+                yield return null;
+                var abilityRows = Rows(EffectsSection(flagship));
+                var fresh = new List<string>();
+                foreach (var r in abilityRows)
+                    if (!abilityBefore.Contains(r)) fresh.Add(r);
+                bool clean = fresh.Count > 0;
+                foreach (var r in fresh)
+                    if (r.StartsWith("@") || abilityRows.IndexOf(r) != abilityRows.LastIndexOf(r)) clean = false;
+                string abilityDetail = $"{flagship.displayName} fired {Translation.Translate(ability.displayName)}: {Describe(EffectsSection(flagship))}";
+                if (clean) ctx.Pass("ability", abilityDetail);
+                else ctx.Fail("ability", abilityDetail + $"; {fresh.Count} new rows");
+            }
+
+            // The tooltip the game shows on hover carries both sections and rebuilds itself while it shows.
+            var source = target.GetComponent<TooltipSource>();
+            if (source == null || !UITooltip.TooltipEnabled)
+            {
+                ctx.Skip("tooltip", source == null ? "the ship has no tooltip source" : "tooltips are off");
+                yield break;
+            }
+            try
+            {
+                UITooltip.Show(source, source.Prefab);
+                string shownText = TooltipText();
+                bool resists = shownText.Contains("\n" + ShipStats.SectionTitle.ToUpperInvariant() + "\n");
+                bool effects = shownText.Contains("\n" + ShipStats.EffectsTitle.ToUpperInvariant() + "\n");
+                if (resists && effects) ctx.Pass("tooltip", target.displayName + ": both sections shown");
+                else ctx.Fail("tooltip", $"{target.displayName}: resistances {resists}, buffs and debuffs {effects}");
+
+                // Effect timers run on the shown card: the text changes as time passes. Runs before the screenshot,
+                // which waits 2 s, because the fleet may be fighting this enemy.
+                float until = Time.realtimeSinceStartup + 1.5f;
+                while (Time.realtimeSinceStartup < until && UITooltip.IsShowing(source)) yield return null;
+                string laterText = UITooltip.IsShowing(source) ? TooltipText() : null;
+                if (laterText == null && (target == null || target.isDestroyed)) ctx.Skip("refresh", "the enemy was destroyed while waiting");
+                else if (laterText == null)
+                    ctx.Fail("refresh", "the tooltip closed while waiting; now showing " + (UITooltip._current != null && UITooltip._current.Source != null ? UITooltip._current.Source.name : "nothing"));
+                else if (laterText != shownText) ctx.Pass("refresh", target.displayName + ": card rebuilt with new timers");
+                else ctx.Fail("refresh", target.displayName + ": card text unchanged after 1.5 s");
+                if (UITooltip.IsShowing(source)) yield return ctx.Screenshot("ship-stats");
+            }
+            finally { UITooltip.Hide(source); }
         }
-        finally { UITooltip.Hide(source); }
+        finally
+        {
+            foreach (var e in added)
+                if (e != null) Object.Destroy(e.gameObject);
+        }
+    }
+
+    private static TemporaryEffect AddEffect(SpaceShip ship, string name, bool debuff, bool shown, float seconds)
+    {
+        var go = new GameObject("IgiQoL_ShipStatsCheck " + name);
+        go.transform.SetParent(ship.transform, false);
+        var effect = go.AddComponent<TemporaryEffect>();
+        var t = Traverse.Create(effect);
+        t.Property("displayName").SetValue(name);
+        t.Property("isDebuff").SetValue(debuff);
+        t.Property("showInBuffHud").SetValue(shown);
+        effect.SetDuration(seconds);
+        return effect;
+    }
+
+    private static TooltipSection EffectsSection(SpaceShip ship)
+    {
+        var card = (TooltipCard)BuildCard.Invoke(ship, null);
+        foreach (var s in card.sections)
+            if (s.title == ShipStats.EffectsTitle) return s;
+        return null;
+    }
+
+    private static List<string> Rows(TooltipSection section)
+    {
+        var labels = new List<string>();
+        if (section != null)
+            foreach (var r in section.rows) labels.Add(r.label);
+        return labels;
+    }
+
+    private static string TooltipText()
+    {
+        var parts = new List<string> { "" };
+        foreach (var t in UITooltip._current.Content.GetComponentsInChildren<TMP_Text>(true)) parts.Add(t.text);
+        parts.Add("");
+        return string.Join("\n", parts);
     }
 
     private static SpaceShip Enemy()
