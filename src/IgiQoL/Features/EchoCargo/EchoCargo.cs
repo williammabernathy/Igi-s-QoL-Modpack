@@ -3,15 +3,19 @@ using System.Collections;
 using System.Collections.Generic;
 using Behaviour.Gameplay;
 using Behaviour.Item;
+using Behaviour.Item.Usable;
 using Behaviour.UI;
 using Behaviour.UI.NotificationAlert;
 using Behaviour.UI.Spacestation;
+using Behaviour.Unit;
 using Behaviour.Util;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
+using IgiQoL.Features.Loadouts;
 using IgiQoL.Game;
 using IgiQoL.Rules;
+using LightJson;
 using Source.Galaxy.POI;
 using Source.Item;
 using Source.Player;
@@ -33,7 +37,7 @@ public sealed class EchoCargo : Feature
     public override string SettingsTab => "Item rules";
     public override Type[] PatchClasses => new[] { typeof(EchoCargoPatches) };
 
-    public ConfigEntry<bool> ApplyToAutoDeposit, SellFromData, SellFromStorage;
+    public ConfigEntry<bool> ApplyToAutoDeposit, SellFromData, SellFromStorage, SellFromArmory;
 
     public override void BindConfig(ConfigFile cfg)
     {
@@ -44,6 +48,8 @@ public sealed class EchoCargo : Feature
             "Data items (intel and records, blueprint pieces, jumpgate passes, claims) never sit in cargo: the game puts them straight into your data inventory. On: a Sell or Sell above N rule that names the item or its category sells them from there when ECHO unloads, when you dock with Station services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. Sell above N keeps N there. The default rule and the any-category \"rarity and below\" rules never sell from the data inventory. Favourites and items your missions need stay. Off: data items are never sold."));
         SellFromStorage = cfg.Bind(Id, "SellFromStorage", false, SettingInfo.Describe("Sell from station storage",
             "Material storage is kept per station. On: a Sell or Sell above N rule that names the item or its category also sells what is already stored at the station you're docked at: when ECHO unloads (after the cargo and data inventory sales, before any deposit), when you dock with Station services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. Sell above N keeps N in that station's storage. The default rule and the any-category \"rarity and below\" rules never sell from storage. Favourites and items your missions need stay. Off: stored materials are never sold by rules."));
+        SellFromArmory = cfg.Bind(Id, "SellFromArmory", false, SettingInfo.Describe("Sell from the armory",
+            "The armory holds the weapons, modules, boosters, ammo and usables you or ECHO stored. On: a Sell or Sell above N rule that names the item or its category also sells from the armory: when ECHO unloads (last, after cargo, the data inventory and station storage), when you dock with Station services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. Sell above N keeps N in the armory. The default rule and the any-category \"rarity and below\" rules never sell from the armory. Kept: favourites, items your missions need, the usables the game keeps aboard, warp fuel, every ammo type a ship of your fleet fires, and the exact pieces any saved loadout uses. Off: nothing is sold from the armory."));
     }
 
     private static InventoryItemType FirstOre()
@@ -62,6 +68,8 @@ public sealed class EchoCargo : Feature
         CheckDataPlan(ctx);
         CheckDataEcho(ctx);
         CheckStorageEcho(ctx);
+        CheckArmoryKeeps(ctx);
+        CheckArmoryEcho(ctx);
         yield break;
     }
 
@@ -361,6 +369,168 @@ public sealed class EchoCargo : Feature
             player.credits = credits0;
         }
     }
+
+    internal const string TestLoadout = "igiqol-selfcheck";
+
+    private static bool Carried(InventoryItemType t)
+    {
+        foreach (var s in Fleet.Ships(withMercenaries: true))
+            if (s.cargo.GetCount(t) > 0) return true;
+        return false;
+    }
+
+    internal static void RestoreCount(Inventory inv, InventoryItemType t, int count0)
+    {
+        int d = inv.GetCount(t) - count0;
+        if (d > 0) inv.Remove(t, d);
+        else if (d < 0) inv.Add(t, -d);
+    }
+
+    // Sellable ammo no ship of the fleet fires or carries, preferring a type the armory doesn't hold. Null while a fleet
+    // ship isn't spawned, because ArmoryKeeps then keeps every ammo type.
+    internal static InventoryItemType UnfiredAmmo()
+    {
+        var player = GamePlayer.current;
+        var units = new List<SpaceShip>();
+        foreach (var s in Fleet.Ships(withMercenaries: false))
+        {
+            var u = Fleet.Unit(s);
+            if (u == null) return null;
+            units.Add(u);
+        }
+        InventoryItemType any = null;
+        foreach (var t in InventoryItemType.all)
+        {
+            if (t.itemCategory != ItemCategory.Ammo || t.identifier == null || !t.canSell || t.sellValue <= 0 || player.RequiredItemCountForMissions(t) > 0 || Carried(t)) continue;
+            bool fired = false;
+            foreach (var u in units) fired |= u.DoWeUseAmmo(t);
+            if (fired) continue;
+            if (player.globalInventory.GetCount(t) == 0) return t;
+            any ??= t;
+        }
+        return any;
+    }
+
+    // Sellable ammo the flagship fires that no other ship carries, so a Sell rule on it can only reach the armory.
+    internal static InventoryItemType FiredAmmo()
+    {
+        var player = GamePlayer.current;
+        var unit = Fleet.Flagship;
+        if (unit == null) return null;
+        foreach (var t in InventoryItemType.all)
+        {
+            if (t.itemCategory != ItemCategory.Ammo || t.identifier == null || !t.canSell || t.sellValue <= 0 || !unit.DoWeUseAmmo(t)) continue;
+            bool elsewhere = false;
+            foreach (var s in Fleet.Ships(withMercenaries: true))
+                elsewhere |= s != player.currentSpaceShip && s.cargo.GetCount(t) > 0;
+            if (!elsewhere) return t;
+        }
+        return null;
+    }
+
+    // A sellable equipment type (sellable at ss when given) that no saved loadout names, the armory doesn't hold and no ship carries.
+    internal static InventoryItemType TestPiece(SpaceStation ss, InventoryItemType besides)
+    {
+        var player = GamePlayer.current;
+        HashSet<string> pieces = null;
+        foreach (var t in InventoryItemType.all)
+        {
+            if (t == besides || t.equipmentDefinition == null || t.identifier == null || !t.canSell || t.sellValue <= 0 || !t.CanGoInArmory()
+                || ss != null && !CargoRules.CanSellHere(ss, t) || player.RequiredItemCountForMissions(t) > 0 || player.globalInventory.GetCount(t) > 0
+                || Carried(t) || CargoRules.ArmoryKeeps(t, ref pieces)) continue;
+            return t;
+        }
+        return null;
+    }
+
+    internal static void PutTestLoadout(InventoryItemType piece)
+    {
+        var ship = GamePlayer.current.currentSpaceShip;
+        LoadoutStore.Put(ship.guid, new Loadout { name = TestLoadout, hull = ship.shipClass.identifier, hardpoints = new JsonValue[] { piece.ToJson() } });
+    }
+
+    internal static void DeleteTestLoadout() => LoadoutStore.Delete(GamePlayer.current.currentSpaceShip.guid, TestLoadout);
+
+    // The armory guard on its own: a usable the game keeps aboard, ammo the flagship fires and a piece a saved loadout
+    // names stay; ammo the fleet doesn't fire and gear no loadout names don't.
+    private static void CheckArmoryKeeps(SelfCheckContext ctx)
+    {
+        InventoryItemType usable = null;
+        foreach (var t in InventoryItemType.all)
+            if (t.itemCategory == ItemCategory.Usable && t.storageOverride == StorageOverride.None) { usable = t; break; }
+        var fired = FiredAmmo();
+        var unfired = UnfiredAmmo();
+        var piece = TestPiece(null, null);
+        var other = piece != null ? TestPiece(null, piece) : null;
+        if (usable == null || fired == null || unfired == null || other == null)
+        {
+            ctx.Skip("armory-keeps", $"test items missing: usable={usable != null} fired={fired != null} unfired={unfired != null} pieces={(piece != null ? 1 : 0) + (other != null ? 1 : 0)}");
+            return;
+        }
+        try
+        {
+            PutTestLoadout(piece);
+            HashSet<string> pieces = null;
+            bool u = CargoRules.ArmoryKeeps(usable, ref pieces), f = CargoRules.ArmoryKeeps(fired, ref pieces), n = CargoRules.ArmoryKeeps(unfired, ref pieces),
+                p = CargoRules.ArmoryKeeps(piece, ref pieces), o = CargoRules.ArmoryKeeps(other, ref pieces);
+            string detail = $"usable {Items.RuleKey(usable)}={u} fired {Items.RuleKey(fired)}={f} unfired {Items.RuleKey(unfired)}={n} loadout piece {Items.RuleKey(piece)}={p} other {Items.RuleKey(other)}={o}";
+            if (u && f && !n && p && !o) ctx.Pass("armory-keeps", detail);
+            else ctx.Fail("armory-keeps", detail);
+        }
+        finally { DeleteTestLoadout(); }
+    }
+
+    // ECHO's unload sells from the armory with SellFromArmory on: Sell above N keeps N there, and a Sell rule on ammo the
+    // flagship fires sells none of it, though that stack sits ahead in the armory.
+    private static void CheckArmoryEcho(SelfCheckContext ctx)
+    {
+        var ss = SpaceStation.current;
+        if (ss == null || SpaceStationInterior.instance == null || !Singleton<IdleManager>.HasInstance)
+        {
+            ctx.Skip("armory-echo", "not docked");
+            return;
+        }
+        var ammo = UnfiredAmmo();
+        if (ammo == null || !CargoRules.CanSellHere(ss, ammo))
+        {
+            ctx.Skip("armory-echo", ammo == null ? "no sellable ammo the fleet doesn't fire or carry (or a fleet ship isn't spawned)" : "station has no shop");
+            return;
+        }
+        var fired = FiredAmmo();
+        var player = GamePlayer.current;
+        var armory = player.globalInventory;
+        var setting = Instance.SellFromArmory;
+        bool setting0 = setting.Value;
+        int ammo0 = armory.GetCount(ammo), fired0 = fired != null ? armory.GetCount(fired) : 0;
+        long credits0 = player.credits;
+        try
+        {
+            setting.Value = true;
+            if (fired != null) armory.Add(fired, 5);
+            armory.Add(ammo, 5);
+            int held = armory.GetCount(ammo), keep = held - 3, firedHeld = fired != null ? armory.GetCount(fired) : 0;
+            string key = Items.RuleKey(ammo);
+            string rules = "\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}";
+            if (fired != null) rules += ",\"" + Items.RuleKey(fired) + "\":{\"dockAction\":\"Sell\"}";
+            ItemRules.UseForTest("{\"items\":{" + rules + "}}");
+            long before = player.credits;
+            bool result = Singleton<IdleManager>.Instance.TryDropCargo(ss);
+            int after = armory.GetCount(ammo), firedAfter = fired != null ? armory.GetCount(fired) : 0;
+            long earned = player.credits - before;
+            string detail = $"{key} keep={keep} result={result} held {held}->{after} credits +{earned} (expected {ammo.sellValue * 3}) "
+                + (fired != null ? $"fired {Items.RuleKey(fired)} {firedHeld}->{firedAfter}" : "no fired ammo to test");
+            if (result && after == keep && earned == ammo.sellValue * 3 && firedAfter == firedHeld) ctx.Pass("armory-echo", detail);
+            else ctx.Fail("armory-echo", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            RestoreCount(armory, ammo, ammo0);
+            if (fired != null) RestoreCount(armory, fired, fired0);
+            player.credits = credits0;
+        }
+    }
 }
 
 public static class CargoRules
@@ -401,7 +571,7 @@ public static class CargoRules
         }
     }
 
-    // Pure. Stored items (data inventory, station storage) are already in their storage, so Sell above N keeps N there.
+    // Pure. Stored items (data inventory, station storage, armory) are already in their storage, so Sell above N keeps N there.
     // held: everything of the type in that storage, favourites included; reserved: GamePlayer.RequiredItemCountForMissions.
     public static int StoredSellCount(ItemRule rule, int held, int reserved)
     {
@@ -411,9 +581,9 @@ public static class CargoRules
         return Math.Max(0, held - keep);
     }
 
-    // How many of this stored stack (data inventory or station storage) the rules sell here. Only a rule that names the
-    // item or its category counts. Favourite stacks are never sold but count toward N. quoted: amount of the type earlier
-    // stacks of the same storage were already quoted for.
+    // How many of this stored stack (data inventory, station storage or armory) the rules sell here. Only a rule that names
+    // the item or its category counts. Favourite stacks are never sold but count toward N. quoted: amount of the type
+    // earlier stacks of the same storage were already quoted for. The armory adds ArmoryKeeps.
     public static int StoredSell(SpaceStation ss, Inventory.InventoryItem stack, int quoted)
     {
         if (stack.favourite) return 0;
@@ -426,6 +596,39 @@ public static class CargoRules
     public static bool CanSellHere(SpaceStation ss, InventoryItemType item) =>
         ss.shopInventory != null && SpaceStationInterior.instance != null
         && item.canSell && item.sellValue > 0 && !RefinedMaterialExtensions.IsCanister(item);
+
+    // Armory items the rules never sell, on top of StoredSell's guards: the usables the game keeps aboard, warp fuel, ammo a
+    // ship of your fleet fires (every ammo type while one of them isn't spawned) and the exact pieces a saved loadout names
+    // (LoadoutApply.Identity). pieces: those identities, built on first need and reused for the rest of one pass.
+    public static bool ArmoryKeeps(InventoryItemType item, ref HashSet<string> pieces)
+    {
+        if (item.itemCategory == ItemCategory.Usable && item.storageOverride == StorageOverride.None || item.TryGetState<WarpFuelState>(out _)) return true;
+        if (item.itemCategory == ItemCategory.Ammo)
+        {
+            foreach (var s in Fleet.Ships(withMercenaries: false))
+            {
+                var unit = Fleet.Unit(s);
+                if (unit == null || unit.DoWeUseAmmo(item)) return true;
+            }
+            return false;
+        }
+        if (item.equipmentDefinition == null) return false;
+        pieces ??= LoadoutPieces();
+        return pieces.Contains(LoadoutApply.Identity(item.ToJson()));
+    }
+
+    private static HashSet<string> LoadoutPieces()
+    {
+        var set = new HashSet<string>();
+        foreach (var ship in GamePlayer.current.spaceShips)
+            foreach (var l in LoadoutStore.For(ship.guid))
+            {
+                foreach (var v in l.hardpoints) if (!v.IsNull) set.Add(LoadoutApply.Identity(v));
+                foreach (var v in l.modules.Values) if (!v.IsNull) set.Add(LoadoutApply.Identity(v));
+                foreach (var v in l.boosters) if (!v.IsNull) set.Add(LoadoutApply.Identity(v));
+            }
+        return set;
+    }
 
     // DropFoundItem's chunk, or the whole stack with EchoGates' fast unloading.
     public static int ChunkSize(SpaceShipData ship, InventoryItemType item)
@@ -537,8 +740,8 @@ internal static class EchoCargoPatches
     }
 
     // Sell before deposit: one sale per tick, from every cargo ship's hold, then the data inventory, then this station's
-    // storage, ahead of the vanilla unload walk. That walk stops at the first stack a full storage can't take, so a full
-    // storage only ever holds up deposits.
+    // storage, then the armory, ahead of the vanilla unload walk. That walk stops at the first stack a full storage can't
+    // take, so a full storage only ever holds up deposits.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryDropCargo))]
     private static bool TryDropCargoPrefix(IdleManager __instance, SpaceStation ss, ref bool __result)
@@ -553,9 +756,10 @@ internal static class EchoCargoPatches
                     int n = StepFor(__instance, ss, ship, stack).sell;
                     if (n > 0 && CargoRules.Sell(__instance, ss, stack, n)) { __result = true; return false; }
                 }
-            // Data items never reach cargo, and stored materials are already off the ships, so they get their own walks.
+            // Data items never reach cargo, and stored materials and gear are already off the ships, so they get their own walks.
             if (F.SellFromData.Value && SellOneStored(__instance, ss, GamePlayer.current.dataInventory)
-                || F.SellFromStorage.Value && SellOneStored(__instance, ss, ss.materialStorage))
+                || F.SellFromStorage.Value && SellOneStored(__instance, ss, ss.materialStorage)
+                || F.SellFromArmory.Value && SellOneStored(__instance, ss, GamePlayer.current.globalInventory))
             {
                 __result = true;
                 return false;
@@ -567,10 +771,12 @@ internal static class EchoCargoPatches
 
     private static bool SellOneStored(IdleManager im, SpaceStation ss, Inventory storage)
     {
+        bool armory = storage == GamePlayer.current.globalInventory;
+        HashSet<string> pieces = null;
         foreach (var stack in storage.items)
         {
             int n = CargoRules.StoredSell(ss, stack, 0);
-            if (n > 0 && CargoRules.Sell(im, ss, stack, n)) return true;
+            if (n > 0 && !(armory && CargoRules.ArmoryKeeps(stack.item, ref pieces)) && CargoRules.Sell(im, ss, stack, n)) return true;
         }
         return false;
     }

@@ -12,7 +12,7 @@ Five buttons in the airlock's button row, after the game's own. Each shows up on
 |---|---|
 | Repair fleet N cr | Starts the hangar's paid repair (about 20 s, at the hangar's own price and reputation discount) on every damaged ship in your fleet. The free repair the station does by itself takes minutes |
 | Restock ammo | Tops up every fleet ship's ammo to the "ammo minutes" target of ECHO's Autopilot tab: from the armory first, then bought from the station's credit shops. The game's ECHO only restocks the ship you fly |
-| Sell by rules +N cr | Applies the [Item rules](loot-and-cargo.md#item-rules) Sell and Sell above N dock actions to your fleet's cargo, to your data inventory with [`SellFromData`](echo.md#echo-cargo-rules) on, and to this station's material storage with [`SellFromStorage`](echo.md#echo-cargo-rules) on |
+| Sell by rules +N cr | Applies the [Item rules](loot-and-cargo.md#item-rules) Sell and Sell above N dock actions to your fleet's cargo, to your data inventory with [`SellFromData`](echo.md#echo-cargo-rules) on, to this station's material storage with [`SellFromStorage`](echo.md#echo-cargo-rules) on, and to the armory with [`SellFromArmory`](echo.md#echo-cargo-rules) on |
 | Replace crew | Puts back the crew each ship lost to hull hits (see below) |
 | Unload brigs | Moves the prisoners in your ships' brigs to the station brig, so the next boarding's captives fit aboard instead of floating off with "Brig full". Willing prisoners stay willing. The station brig's size grows with your level |
 
@@ -24,7 +24,7 @@ Crew losses: every hull hit of 2% or more can kill one crew member, on every shi
 
 The same services can run every time you dock, ECHO included: `RepairOnDock`, `RestockOnDock`, `SellOnDock`, `CrewOnDock` and `BrigOnDock` (all off). With ECHO on, selling is left to [ECHO cargo rules](echo.md#echo-cargo-rules). `AirlockButtons` (on) shows the buttons.
 
-Hired mercenaries are left out of every service. Repair skips ships that are away for repairs, since the game brings those back repaired for free. Favourites, mission items, usables the game keeps aboard and the ammo a ship uses are never sold.
+Hired mercenaries are left out of every service. Repair skips ships that are away for repairs, since the game brings those back repaired for free. Favourites, mission items, usables the game keeps aboard and the ammo a ship uses are never sold. Selling from the armory also keeps warp fuel, every ammo type your fleet fires and the pieces your saved loadouts use.
 
 ## Ship loadouts
 

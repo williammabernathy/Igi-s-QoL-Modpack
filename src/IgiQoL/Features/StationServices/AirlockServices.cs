@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Behaviour.UI;
 using Behaviour.UI.Spacestation;
@@ -104,11 +105,16 @@ internal sealed class AirlockServices : MonoBehaviour
             + (cells > 0 ? $" The ship you fly also gets up to {cells} warp fuel cell{(cells == 1 ? "" : "s")}." : ""));
         r = Services.Sell(false);
         var echo = EchoCargo.EchoCargo.Instance;
-        string stored = echo.SellFromData.Value && echo.SellFromStorage.Value ? " It also sells from your data inventory and this station's storage, keeping N there for Sell above N."
-            : echo.SellFromData.Value ? " It also sells from your data inventory, keeping N there for Sell above N."
-            : echo.SellFromStorage.Value ? " It also sells from this station's storage, keeping N there for Sell above N." : "";
+        var from = new List<string>(3);
+        if (echo.SellFromData.Value) from.Add("your data inventory");
+        if (echo.SellFromStorage.Value) from.Add("this station's storage");
+        if (echo.SellFromArmory.Value) from.Add("your armory");
+        string stored = from.Count == 0 ? ""
+            : " It also sells from " + (from.Count == 1 ? from[0] : string.Join(", ", from.GetRange(0, from.Count - 1)) + " and " + from[from.Count - 1])
+              + ", keeping N there for Sell above N.";
+        string armoryKept = echo.SellFromArmory.Value ? " The armory also keeps warp fuel, every ammo type your fleet fires and the pieces your saved loadouts use." : "";
         Show(sell, r, (c ? "Sell +" : "Sell by rules +") + Services.Money(r.credits), c ? "Sell" : "Sell by rules", "Sell by rules",
-            "Sells your fleet's cargo whose Item rules dock action is Sell; for Sell above N it stores up to N first." + stored + " Favourites, mission items and the ammo a ship uses stay aboard.");
+            "Sells your fleet's cargo whose Item rules dock action is Sell; for Sell above N it stores up to N first." + stored + " Favourites, mission items and the ammo a ship uses stay aboard." + armoryKept);
         r = Services.Crew(false);
         string crewLabel = c ? "Crew" : "Replace crew";
         Show(crew, r, r.credits > 0 ? crewLabel + " " + Services.Money(r.credits) : crewLabel, crewLabel, "Replace crew",

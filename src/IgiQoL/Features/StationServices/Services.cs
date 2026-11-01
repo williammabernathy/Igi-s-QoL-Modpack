@@ -377,23 +377,26 @@ public static class Services
             }
         }
         // Data items never sit in cargo: the game keeps them in the player-wide data inventory. Station storage holds what
-        // earlier visits deposited here.
+        // earlier visits deposited here, and the armory the gear stored anywhere. Riskiest last.
         var echo = EchoCargo.EchoCargo.Instance;
         if (echo.SellFromData.Value) SellStored(r, run, ss, player.dataInventory, "Data inventory");
         if (echo.SellFromStorage.Value) SellStored(r, run, ss, ss.materialStorage, "Station storage");
+        if (echo.SellFromArmory.Value) SellStored(r, run, ss, player.globalInventory, "Armory");
         return r;
     }
 
     private static void SellStored(ServiceReport r, bool run, SpaceStation ss, Inventory storage, string label)
     {
         var player = GamePlayer.current;
+        bool armory = storage == player.globalInventory;
+        HashSet<string> pieces = null;
         var quoted = new Dictionary<InventoryItemType, int>();   // quotes only: what earlier stacks of the type would sell
         foreach (var stack in new List<Inventory.InventoryItem>(storage.items))
         {
             var item = stack.item;
             quoted.TryGetValue(item, out int q);
             int n = CargoRules.StoredSell(ss, stack, q);
-            if (n <= 0) continue;
+            if (n <= 0 || armory && CargoRules.ArmoryKeeps(item, ref pieces)) continue;
             long value = item.sellValue * n;
             if (run)
             {

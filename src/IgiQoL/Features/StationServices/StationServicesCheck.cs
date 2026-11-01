@@ -52,6 +52,7 @@ internal static class StationServicesCheck
         CheckSell(ctx);
         CheckSellData(ctx);
         CheckSellStorage(ctx);
+        CheckSellArmory(ctx);
         CheckCrewTrack(ctx);
         CheckCrew(ctx);
         CheckBrig(ctx);
@@ -428,6 +429,67 @@ internal static class StationServicesCheck
             if (cargo0 > 0) ship.cargo.Add(ore, cargo0);
             storage.Remove(ore, storage.GetCount(ore));
             if (stored0 > 0) storage.Add(ore, stored0);
+        }
+    }
+
+    // The armory with SellFromArmory on: Sell above N keeps N there and the quote matches the run, while Sell rules on ammo
+    // the flagship fires and on a piece a saved loadout names sell none of them; the setting turns it off.
+    private static void CheckSellArmory(SelfCheckContext ctx)
+    {
+        var ss = Services.Docked();
+        var ammo = EchoCargo.EchoCargo.UnfiredAmmo();
+        var piece = EchoCargo.EchoCargo.TestPiece(ss, null);
+        if (ammo == null || piece == null || !EchoCargo.CargoRules.CanSellHere(ss, ammo))
+        {
+            ctx.Skip("sell-armory", ammo == null ? "no sellable ammo the fleet doesn't fire or carry (or a fleet ship isn't spawned)"
+                : piece == null ? "no sellable equipment type to name in a test loadout" : "station has no shop");
+            return;
+        }
+        var fired = EchoCargo.EchoCargo.FiredAmmo();
+        var player = GamePlayer.current;
+        var armory = player.globalInventory;
+        var setting = EchoCargo.EchoCargo.Instance.SellFromArmory;
+        bool setting0 = setting.Value;
+        int ammo0 = armory.GetCount(ammo), fired0 = fired != null ? armory.GetCount(fired) : 0;
+        string key = Items.RuleKey(ammo);
+        try
+        {
+            setting.Value = true;
+            EchoCargo.EchoCargo.PutTestLoadout(piece);
+            armory.Add(piece, 1);
+            if (fired != null) armory.Add(fired, 5);
+            armory.Add(ammo, 6);
+            int held = armory.GetCount(ammo), keep = held - 4, firedHeld = fired != null ? armory.GetCount(fired) : 0;
+            long expected = ammo.sellValue * 4;
+            string rules = "\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "},\"" + Items.RuleKey(piece) + "\":{\"dockAction\":\"Sell\"}";
+            if (fired != null) rules += ",\"" + Items.RuleKey(fired) + "\":{\"dockAction\":\"Sell\"}";
+            ItemRules.UseForTest("{\"items\":{" + rules + "}}");
+            long before = player.credits;
+            var quote = Services.Sell(false);
+            var run = Services.Sell(true);
+            int firedAfter = fired != null ? armory.GetCount(fired) : 0;
+            string detail = $"{key}: keep={keep} held {held}->{armory.GetCount(ammo)} credits +{player.credits - before} (expected {expected}) quote={quote.credits} run={run.credits} "
+                + $"loadout piece {Items.RuleKey(piece)} 1->{armory.GetCount(piece)} " + (fired != null ? $"fired {Items.RuleKey(fired)} {firedHeld}->{firedAfter}" : "no fired ammo to test")
+                + $" lines=[{string.Join("; ", run.lines)}]";
+            if (quote.credits == expected && run.credits == expected && player.credits - before == expected && armory.GetCount(ammo) == keep
+                && armory.GetCount(piece) == 1 && firedAfter == firedHeld && run.lines.Exists(l => l.StartsWith("Armory: "))) ctx.Pass("sell-armory", detail);
+            else ctx.Fail("sell-armory", detail);
+
+            setting.Value = false;
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"Sell\"}}}");
+            var off = Services.Sell(true);
+            detail = $"setting off: sold {off.credits} cr, held {keep}->{armory.GetCount(ammo)}";
+            if (off.credits == 0 && armory.GetCount(ammo) == keep) ctx.Pass("sell-armory-off", detail);
+            else ctx.Fail("sell-armory-off", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            EchoCargo.EchoCargo.DeleteTestLoadout();
+            EchoCargo.EchoCargo.RestoreCount(armory, ammo, ammo0);
+            EchoCargo.EchoCargo.RestoreCount(armory, piece, 0);
+            if (fired != null) EchoCargo.EchoCargo.RestoreCount(armory, fired, fired0);
         }
     }
 
