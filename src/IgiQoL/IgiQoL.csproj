@@ -2,7 +2,7 @@
   <PropertyGroup>
     <AssemblyName>IgiQoL</AssemblyName>
     <RootNamespace>IgiQoL</RootNamespace>
-    <!-- Major and minor of the next release. CI sets the patch from the newest release tag (.gitlab-ci.yml). -->
+    <!-- Major and minor of the next release. CI sets the patch from the newest release tag (.github/workflows/ci.yml). -->
     <Version>0.2.0</Version>
   </PropertyGroup>
 
