@@ -7,6 +7,5 @@ decompiled/
 decompiled-*/
 # Copies of the game's assemblies per version (Directory.Build.props, SnapshotGameAssemblies): copyrighted, never commit.
 game-versions/
-# Local task tracking: feature list and bug log.
+# Local task tracking: open features and bugs.
 FEATURELIST.md
-BUGS.md

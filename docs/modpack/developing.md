@@ -117,4 +117,4 @@ private static void SomeMethodPostfix(SomeGameType __instance)
 5. Build, run the harness with `OnlyChecks = <Id>`, then the full harness.
 6. Document it in the matching page under `docs/modpack/features/`, add its settings to [settings.md](settings.md), and bump the feature and startup counts in [README.md](README.md).
 
-Task tracking lives in two local files at the repo root: `FEATURELIST.md` (open features, checks still owed in play, dropped ideas, standing decisions, harness notes) and `BUGS.md` (bugs found in play). Both are gitignored and stay on the machine they were written on.
+Task tracking lives in one local file at the repo root: `FEATURELIST.md` (open features, bugs found in play, checks still owed in play, dropped ideas, standing decisions, harness notes). It's gitignored and stays on the machine it was written on.
