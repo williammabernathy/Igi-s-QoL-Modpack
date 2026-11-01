@@ -7,10 +7,6 @@ decompiled/
 decompiled-*/
 # Copies of the game's assemblies per version (Directory.Build.props, SnapshotGameAssemblies): copyrighted, never commit.
 game-versions/
-# Local working notes: session log, phase plans, wishlist and planning docs.
-SESSION_LOG.md
-PHASE_*.md
-WISHLIST.txt
-docs/mod-plans.md
-docs/planning-brief.md
-docs/qol-modpack-plan.md
+# Local task tracking: feature list and bug log.
+FEATURELIST.md
+BUGS.md
