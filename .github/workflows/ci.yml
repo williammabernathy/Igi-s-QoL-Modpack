@@ -1,0 +1,105 @@
+# Runs on pushes to main and development. Every job runs on the self-hosted runner labeled vanguard-galaxy
+# (docs/ci.md), which has the .NET 8 SDK and GAME_DIR pointing at the installed game.
+# A passing main push that changed the mod's sources publishes a release.
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  build:
+    runs-on: [self-hosted, vanguard-galaxy]
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sources-changed: ${{ steps.changes.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # Major.minor come from <Version> in IgiQoL.csproj. The patch is one above the newest vMAJOR.MINOR.* tag,
+      # or <Version>'s own patch when that line has no release yet.
+      - id: version
+        run: |
+          base=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/IgiQoL/IgiQoL.csproj)
+          last=$(git tag -l "v${base%.*}.*" --sort=-v:refname | head -n 1)
+          if [ -n "$last" ]; then VERSION="${base%.*}.$(( ${last##*.} + 1 ))"; else VERSION="$base"; fi
+          echo "version=$VERSION" | tee -a "$GITHUB_OUTPUT"
+      # A new branch or an unknown previous commit counts as changed.
+      - id: changes
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null && git diff --quiet "$BEFORE" HEAD -- src/IgiQoL Directory.Build.props; then
+            echo "changed=false" | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" | tee -a "$GITHUB_OUTPUT"
+          fi
+      - run: dotnet build VanguardGalaxyMods.sln -c Release -p:GameDir="$GAME_DIR" -p:DeployToGame=false -p:Version="${{ steps.version.outputs.version }}" -p:ReleaseZip=true
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build
+          path: |
+            src/IgiQoL/bin/Release/IgiQoL.dll
+            artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Every Harmony target, game member and AccessTools/Traverse lookup the built DLL uses must resolve in the installed game.
+  patch-check:
+    needs: build
+    runs-on: [self-hosted, vanguard-galaxy]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: build
+      - run: dotnet run --project tools/VersionDiff -c Release -- patches --new "$GAME_DIR/VanguardGalaxy_Data/Managed" --mod src/IgiQoL/bin/Release/IgiQoL.dll --out patch-report.md || { cat patch-report.md; exit 1; }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: patch-report
+          path: patch-report.md
+          retention-days: 7
+
+  release:
+    needs: [build, patch-check]
+    if: github.ref == 'refs/heads/main' && needs.build.outputs.sources-changed == 'true'
+    runs-on: [self-hosted, vanguard-galaxy]
+    concurrency: release
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: build
+      - run: |
+          last=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+          {
+            echo "Extract the zip into the Vanguard Galaxy game folder; it adds BepInEx/plugins/IgiQoL/. Needs BepInEx 5 (win_x64) installed."
+            echo
+            echo "## Changes"
+            echo
+            git log --no-merges --format='- %s' ${last:+$last..}HEAD
+          } > release-notes.md
+          cat release-notes.md
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Igi's QoL Modpack ${{ env.VERSION }}
+          body_path: release-notes.md
+          files: artifacts/IgiQoL-${{ env.VERSION }}.zip
+          fail_on_unmatched_files: true

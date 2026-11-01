@@ -31,7 +31,7 @@ The modpack, the tools and the template were developed and tested on Linux only,
 | `tools/VersionDiff/` | Compares game versions: which patched methods changed, which game members a mod DLL uses that are gone, and what changed in the game's data |
 | `templates/VgMod/` | `dotnet new` template for a mod in its own repo |
 | `Directory.Build.props` | Shared build setup: game references, publicizer, deploy to the game, game-version snapshots |
-| `.gitlab-ci.yml` | Build, patch check and releases, on a runner on this PC |
+| `.github/workflows/ci.yml` | Build, patch check and releases, on a runner on this PC |
 | `docs/` | The documentation above; `docs/images/` holds the screenshots |
 | `decompiled/`, `game-versions/` | The decompiled game and copies of its DLLs per version. Gitignored: they're the game's copyrighted code |
 
@@ -43,4 +43,4 @@ dotnet build -c Release
 
 builds everything against the installed game and copies the plugins into `BepInEx/plugins/`. You need the .NET 8 SDK and BepInEx 5 in the game folder; [docs/setup.md](docs/setup.md) and [docs/building.md](docs/building.md) have the details.
 
-Releases of the modpack are on the [GitLab releases page](https://gitlab.com/Igifoshifonator/igis-qol-modpack/-/releases).
+Releases of the modpack are on the [GitHub releases page](https://github.com/williammabernathy/Igi-s-QoL-Modpack/releases).

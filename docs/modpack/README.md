@@ -9,7 +9,7 @@ The modpack was developed and tested on Linux only, with the game running under 
 ## Install
 
 1. Install BepInEx 5 (`win_x64`, version 5.4.23 or later) into the game folder and start the game once. On Linux under Proton, BepInEx also needs a DLL override; [setup.md](../setup.md#installing-bepinex) explains it.
-2. Download `IgiQoL-<version>.zip` from the [releases page](https://gitlab.com/Igifoshifonator/igis-qol-modpack/-/releases) and extract it into the game folder. It adds `BepInEx/plugins/IgiQoL/`.
+2. Download `IgiQoL-<version>.zip` from the [releases page](https://github.com/williammabernathy/Igi-s-QoL-Modpack/releases) and extract it into the game folder. It adds `BepInEx/plugins/IgiQoL/`.
 3. Start the game. `BepInEx/LogOutput.log` should have a line like `IgiQoL startup: 34 active, 1 disabled, 0 failed` (the disabled one is the developer harness).
 
 To update, extract the new zip over the old one. To remove the mod, delete `BepInEx/plugins/IgiQoL/` (and `BepInEx/config/igi.qol.cfg` and `BepInEx/config/IgiQoL/` if you want its settings and files gone too).

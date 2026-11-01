@@ -1,17 +1,16 @@
 # CI and releases
 
-`.gitlab-ci.yml` runs on every push to `main` and `development`. Day-to-day work goes to `development`; a merge to `main` that touches the mod's sources publishes a release.
+`.github/workflows/ci.yml` runs on every push to `main` and `development`. Day-to-day work goes to `development`; a merge to `main` that touches the mod's sources publishes a release.
 
 ```mermaid
 flowchart LR
     build --> patch-check
-    patch-check -->|main only, src/IgiQoL or<br/>Directory.Build.props changed| publish
-    publish --> release
+    patch-check -->|main only, src/IgiQoL or<br/>Directory.Build.props changed| release
 ```
 
-1. `build` compiles the solution against the installed game and packs `artifacts/IgiQoL-<version>.zip`, laid out as `BepInEx/plugins/IgiQoL/IgiQoL.dll` (+ `.pdb`) so it extracts straight into the game folder.
-2. `patch-check` runs `VersionDiff patches` in manifest mode on the built DLL. It fails if a Harmony target, a game member the DLL uses, or an `AccessTools`/`Traverse` string lookup doesn't resolve in the installed game. The report is a job artifact ("Patch report").
-3. On `main` only, and only when `src/IgiQoL/` or `Directory.Build.props` changed in the push, `publish` uploads the zip to the project's generic package registry, and `release` creates the tag `v<version>` and a GitLab release linking the zip. The release notes list the commit subjects since the previous tag, without merge commits.
+1. `build` compiles the solution against the installed game and packs `artifacts/IgiQoL-<version>.zip`, laid out as `BepInEx/plugins/IgiQoL/IgiQoL.dll` (+ `.pdb`) so it extracts straight into the game folder. The DLL and zip are the run's `build` artifact.
+2. `patch-check` runs `VersionDiff patches` in manifest mode on the built DLL. It fails if a Harmony target, a game member the DLL uses, or an `AccessTools`/`Traverse` string lookup doesn't resolve in the installed game. The report is the run's `patch-report` artifact.
+3. On `main` only, and only when `src/IgiQoL/` or `Directory.Build.props` changed in the push, `release` creates the tag `v<version>` and a GitHub release with the zip attached. The release notes list the commit subjects since the previous tag, without merge commits.
 
 The in-game self-checks ([dev-harness.md](modpack/dev-harness.md)) need the game running, so CI doesn't run them. Run them yourself before merging to `main`.
 
@@ -39,13 +38,14 @@ dotnet run --project tools/VersionDiff -c Release -- patches --new "$G/VanguardG
   --mod src/IgiQoL/bin/Release/IgiQoL.dll --out patch-report.md
 ```
 
-`build` passes when the output ends in `Build succeeded` with no `warning CS` lines; `patch-check` passes when VersionDiff exits 0. The zip lands in `artifacts/` (gitignored). The `publish` and `release` jobs need GitLab's job token and only make sense in CI.
+`build` passes when the output ends in `Build succeeded` with no `warning CS` lines; `patch-check` passes when VersionDiff exits 0. The zip lands in `artifacts/` (gitignored). The `release` job needs the workflow's GitHub token and only makes sense in CI.
 
 ## The runner
 
-The game's DLLs are copyrighted and can't go to GitLab, so jobs run only on a project runner on this PC, tagged `vanguard-galaxy`. Pipelines wait as pending while it is off.
+The game's DLLs are copyrighted and can't go to GitHub, so jobs run only on a self-hosted runner on this PC, labeled `vanguard-galaxy`. Runs wait as queued while it is off.
 
-- Binary: `~/.local/bin/gitlab-runner`, config `~/.gitlab-runner/config.toml` (holds the runner token, keep it private).
-- Service: `systemctl --user {status,restart} gitlab-runner`, a user unit in `~/.config/systemd/user/`. It starts at login, not at boot.
-- Executor: docker, through rootless podman's socket (`podman.socket` user unit, `/run/user/1000/podman/podman.sock`). Job containers get the game folder read-only at `/game` (`volumes` in the config).
-- After moving the game, update the `volumes` path in the config. After losing the config, create a new runner under Settings > CI/CD > Runners with the tag `vanguard-galaxy` and "Run untagged jobs" off, then `gitlab-runner register` with the same executor, host and volume options.
+- Install: `~/.local/share/actions-runner` (the `actions/runner` release for linux-x64). `.runner` and `.credentials*` there hold its registration, keep them private.
+- Service: `systemctl --user {status,restart} github-runner`, a user unit in `~/.config/systemd/user/`. It starts at login, not at boot.
+- Jobs run directly on the host, in `_work/` under the install, not in a container. `.env` in the install sets `GAME_DIR` (the game folder) and `DOTNET_ROOT`; `.path` is the `PATH` jobs get and includes `~/.dotnet`. Restart the service after editing either.
+- The workflow only triggers on pushes, so pull requests from forks never run code on this PC. Keep it that way: don't add `pull_request` triggers while the repo is public.
+- After moving the game, update `GAME_DIR` in `.env`. After losing the install, add a new runner under Settings > Actions > Runners > New self-hosted runner, then run its `config.sh` with `--labels vanguard-galaxy` and recreate `.env`, `.path` and the user unit.

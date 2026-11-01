@@ -47,7 +47,7 @@ Search the log for `CHECK` and `Self-check complete`.
 
 Every build copies the game DLLs it compiled against into `game-versions/<game version>-<hash>/`. When Steam updates the game, the old copy stays there. Those folders are in `.gitignore`. Do not commit them.
 
-To see what changed between two versions, use the VersionDiff tool from https://gitlab.com/Igifoshifonator/igis-qol-modpack (`tools/VersionDiff`, documented in its README). Its `patches` command shows which methods your patches target have changed or disappeared, and which game members your DLL uses that are gone.
+To see what changed between two versions, use the VersionDiff tool from https://github.com/williammabernathy/Igi-s-QoL-Modpack (`tools/VersionDiff`, documented in its README). Its `patches` command shows which methods your patches target have changed or disappeared, and which game members your DLL uses that are gone.
 
 After an update:
 
