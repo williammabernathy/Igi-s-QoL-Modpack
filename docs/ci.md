@@ -46,6 +46,6 @@ The game's DLLs are copyrighted and can't go to GitHub, so jobs run only on a se
 
 - Install: `~/.local/share/actions-runner` (the `actions/runner` release for linux-x64). `.runner` and `.credentials*` there hold its registration, keep them private.
 - Service: `systemctl --user {status,restart} github-runner`, a user unit in `~/.config/systemd/user/`. It starts at login, not at boot.
-- Jobs run directly on the host, in `_work/` under the install, not in a container. `.env` in the install sets `GAME_DIR` (the game folder) and `DOTNET_ROOT`; `.path` is the `PATH` jobs get and includes `~/.dotnet`. Restart the service after editing either.
+- Jobs run directly on the host, in `_work/` under the install, not in a container. `.env` in the install sets `GAME_DIR` (the game folder), `DOTNET_ROOT` and a `PATH` that starts with `~/.dotnet`; the user unit loads it with `EnvironmentFile=`, so restart the service after editing it.
 - The workflow only triggers on pushes, so pull requests from forks never run code on this PC. Keep it that way: don't add `pull_request` triggers while the repo is public.
-- After moving the game, update `GAME_DIR` in `.env`. After losing the install, add a new runner under Settings > Actions > Runners > New self-hosted runner, then run its `config.sh` with `--labels vanguard-galaxy` and recreate `.env`, `.path` and the user unit.
+- After moving the game, update `GAME_DIR` in `.env`. After losing the install, add a new runner under Settings > Actions > Runners > New self-hosted runner, then run its `config.sh` with `--labels vanguard-galaxy` and recreate `.env` and the user unit.
