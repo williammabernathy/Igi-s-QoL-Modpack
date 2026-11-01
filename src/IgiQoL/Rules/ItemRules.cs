@@ -43,6 +43,17 @@ public static class ItemRules
 
     public static ItemRule Resolve(InventoryItemType item)
     {
+        var rule = Explicit(item);
+        if (rule != null) return rule;
+        if (ByRarityUpTo.Count > 0)
+            for (var r = item.rarity; r <= Rarity.Legendary; r++)
+                if (ByRarityUpTo.TryGetValue(r, out var anyRule)) return anyRule;
+        return Default;
+    }
+
+    // The rule that names the item or its category; null when only an any-category rule or the default covers it.
+    public static ItemRule Explicit(InventoryItemType item)
+    {
         if (ByItem.Count > 0 && item.identifier != null)
         {
             if (item.itemLevel > 0 && ByItemLevel.Count > 0 && ByItemLevel.TryGetValue((item.identifier, item.itemLevel), out var levelRule)) return levelRule;
@@ -53,10 +64,7 @@ public static class ItemRules
             for (var r = item.rarity; r <= Rarity.Legendary; r++)
                 if (ByCategoryUpTo.TryGetValue((item.itemCategory, r), out var upRule)) return upRule;
         if (ByCategory.Count > 0 && ByCategory.TryGetValue(item.itemCategory, out var catRule)) return catRule;
-        if (ByRarityUpTo.Count > 0)
-            for (var r = item.rarity; r <= Rarity.Legendary; r++)
-                if (ByRarityUpTo.TryGetValue(r, out var anyRule)) return anyRule;
-        return Default;
+        return null;
     }
 
     public static void Load()

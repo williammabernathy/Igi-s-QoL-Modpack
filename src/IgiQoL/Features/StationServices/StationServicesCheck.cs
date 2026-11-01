@@ -50,6 +50,7 @@ internal static class StationServicesCheck
         CheckRestock(ctx);
         CheckFuel(ctx);
         CheckSell(ctx);
+        CheckSellData(ctx);
         CheckCrewTrack(ctx);
         CheckCrew(ctx);
         CheckBrig(ctx);
@@ -318,6 +319,61 @@ internal static class StationServicesCheck
             else ctx.Fail("sell-favourite", detail);
         }
         finally { ItemRules.Load(); }
+    }
+
+    // Data items live in the data inventory, never in cargo: Sell above N keeps N there and the quote matches the run;
+    // favourite stacks stay, and the setting turns it off.
+    private static void CheckSellData(SelfCheckContext ctx)
+    {
+        var ss = Services.Docked();
+        var item = EchoCargo.EchoCargo.TestDataItem();
+        if (item == null || !EchoCargo.CargoRules.CanSellHere(ss, item))
+        {
+            ctx.Skip("sell-data", item == null ? "no sellable Data item type" : "station has no shop");
+            return;
+        }
+        var player = GamePlayer.current;
+        var data = player.dataInventory;
+        var setting = EchoCargo.EchoCargo.Instance.SellFromData;
+        bool setting0 = setting.Value;
+        int count0 = data.GetCount(item);
+        string key = Items.RuleKey(item);
+        try
+        {
+            setting.Value = true;
+            data.Add(item, 6);
+            int held = data.GetCount(item);
+            int keep = Mathf.Max(held - 4, player.RequiredItemCountForMissions(item));
+            long expected = item.sellValue * (held - keep);
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}}}");
+            long before = player.credits;
+            var quote = Services.Sell(false);
+            var run = Services.Sell(true);
+            string detail = $"{key}: keep={keep} held {held}->{data.GetCount(item)} credits +{player.credits - before} (expected {expected}) quote={quote.credits} run={run.credits} lines=[{string.Join("; ", run.lines)}]";
+            if (expected > 0 && quote.credits == expected && run.credits == expected && player.credits - before == expected && data.GetCount(item) == keep
+                && run.lines.Exists(l => l.StartsWith("Data inventory: "))) ctx.Pass("sell-data", detail);
+            else ctx.Fail("sell-data", detail);
+
+            foreach (var s in data.items)
+                if (s.item == item) s.favourite = true;
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"Sell\"}}}");
+            var fav = Services.Sell(true);
+            int afterFav = data.GetCount(item);
+            foreach (var s in data.items)
+                if (s.item == item) s.favourite = false;
+            setting.Value = false;
+            var off = Services.Sell(true);
+            detail = $"favourite: sold {fav.credits} cr, held {keep}->{afterFav}; setting off: sold {off.credits} cr, held {data.GetCount(item)}";
+            if (fav.credits == 0 && afterFav == keep && off.credits == 0 && data.GetCount(item) == keep) ctx.Pass("sell-data-kept", detail);
+            else ctx.Fail("sell-data-kept", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            data.Remove(item, data.GetCount(item));
+            if (count0 > 0) data.Add(item, count0);
+        }
     }
 
     // A fleet ship (the flagship if there is none) and a crew type it has at least `min` of.

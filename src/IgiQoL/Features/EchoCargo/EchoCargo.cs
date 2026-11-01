@@ -33,13 +33,15 @@ public sealed class EchoCargo : Feature
     public override string SettingsTab => "Item rules";
     public override Type[] PatchClasses => new[] { typeof(EchoCargoPatches) };
 
-    public ConfigEntry<bool> ApplyToAutoDeposit;
+    public ConfigEntry<bool> ApplyToAutoDeposit, SellFromData;
 
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
         ApplyToAutoDeposit = cfg.Bind(Id, "ApplyToAutoDeposit", true, SettingInfo.Describe("Apply when fleet cargo auto-deposits on dock",
             "With the game's fleet auto-deposit on, fleet holds are emptied the moment you dock. On: your rules apply there too: Keep aboard stays aboard, Sell stays aboard until ECHO unloads it, Sell above N deposits up to N. When you dock yourself nothing is sold, unless Station services' \"Sell by item rules when you dock\" is on or you press the airlock's Sell by rules button. Off: the game deposits everything as usual, so fleet-ship rules only matter with auto-deposit off."));
+        SellFromData = cfg.Bind(Id, "SellFromData", true, SettingInfo.Describe("Sell from the data inventory",
+            "Data items (intel and records, blueprint pieces, jumpgate passes, claims) never sit in cargo: the game puts them straight into your data inventory. On: a Sell or Sell above N rule that names the item or its category sells them from there when ECHO unloads, when you dock with Station services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. Sell above N keeps N there. The default rule and the any-category \"rarity and below\" rules never sell from the data inventory. Favourites and items your missions need stay. Off: data items are never sold."));
     }
 
     private static InventoryItemType FirstOre()
@@ -54,6 +56,8 @@ public sealed class EchoCargo : Feature
         CheckPlan(ctx);
         CheckMoveCap(ctx);
         CheckLiveKeep(ctx);
+        CheckDataPlan(ctx);
+        CheckDataEcho(ctx);
         yield break;
     }
 
@@ -134,6 +138,82 @@ public sealed class EchoCargo : Feature
         if (!result && after == before) ctx.Pass("live-keep", detail);
         else ctx.Fail("live-keep", detail);
     }
+
+    // A sellable Data-category type, preferring one the player holds none of so the check leaves real stacks alone.
+    internal static InventoryItemType TestDataItem()
+    {
+        InventoryItemType any = null;
+        foreach (var t in InventoryItemType.all)
+        {
+            if (t.itemCategory != ItemCategory.Data || t.identifier == null || !t.canSell || t.sellValue <= 0) continue;
+            if (GamePlayer.current.dataInventory.GetCount(t) == 0) return t;
+            any ??= t;
+        }
+        return any;
+    }
+
+    private static void CheckDataPlan(SelfCheckContext ctx)
+    {
+        var sell = new ItemRule { dockAction = DockAction.Sell };
+        var above = new ItemRule { dockAction = DockAction.SellAbove, keepAmount = 3 };
+        int a = CargoRules.DataSellCount(sell, 5, 2), b = CargoRules.DataSellCount(sell, 2, 2), c = CargoRules.DataSellCount(above, 5, 0),
+            d = CargoRules.DataSellCount(above, 5, 4), e = CargoRules.DataSellCount(above, 2, 0),
+            f = CargoRules.DataSellCount(new ItemRule { dockAction = DockAction.Keep }, 5, 0), g = CargoRules.DataSellCount(new ItemRule(), 5, 0);
+        string detail = $"sell(5,res2)={a} sell(2,res2)={b} above3(5)={c} above3(5,res4)={d} above3(2)={e} keep={f} default={g}";
+        if (a == 3 && b == 0 && c == 2 && d == 1 && e == 0 && f == 0 && g == 0) ctx.Pass("data-plan", detail);
+        else ctx.Fail("data-plan", detail);
+    }
+
+    // ECHO's unload sells from the data inventory: one stack per tick, Sell above N keeps N, an any-category rule sells nothing.
+    private static void CheckDataEcho(SelfCheckContext ctx)
+    {
+        var ss = SpaceStation.current;
+        if (ss == null || SpaceStationInterior.instance == null || !Singleton<IdleManager>.HasInstance)
+        {
+            ctx.Skip("data-echo", "not docked");
+            return;
+        }
+        var item = TestDataItem();
+        if (item == null || !CargoRules.CanSellHere(ss, item))
+        {
+            ctx.Skip("data-echo", item == null ? "no sellable Data item type" : "station has no shop");
+            return;
+        }
+        var player = GamePlayer.current;
+        var data = player.dataInventory;
+        int count0 = data.GetCount(item);
+        long credits0 = player.credits;
+        try
+        {
+            data.Add(item, 5);
+            int held = data.GetCount(item);
+            int keep = Math.Max(held - 3, player.RequiredItemCountForMissions(item));
+            int expect = held - keep;
+            ItemRules.UseForTest("{\"items\":{\"" + Items.RuleKey(item) + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}}}");
+            long before = player.credits;
+            bool result = Singleton<IdleManager>.Instance.TryDropCargo(ss);
+            int after = data.GetCount(item);
+            int left = 0;
+            foreach (var s in data.items)
+                if (s.item == item) left += CargoRules.DataSell(ss, s, 0);
+            // An any-category rule resolves to Sell for the item but never reaches the data inventory.
+            ItemRules.UseForTest("{\"rarityUpTo\":{\"Legendary\":{\"dockAction\":\"Sell\"}}}");
+            int catchAll = 0;
+            foreach (var s in data.items)
+                if (s.item == item) catchAll += CargoRules.DataSell(ss, s, 0);
+            bool resolves = ItemRules.Resolve(item).dockAction == DockAction.Sell;
+            string detail = $"{Items.RuleKey(item)} keep={keep} result={result} held {held}->{after} credits +{player.credits - before} (expected {item.sellValue * expect}) left={left} catchAll={catchAll} resolvesSell={resolves}";
+            if (result && expect > 0 && after == keep && player.credits - before == item.sellValue * expect && left == 0 && catchAll == 0 && resolves) ctx.Pass("data-echo", detail);
+            else ctx.Fail("data-echo", detail);
+        }
+        finally
+        {
+            ItemRules.Load();
+            data.Remove(item, data.GetCount(item));
+            if (count0 > 0) data.Add(item, count0);
+            player.credits = credits0;
+        }
+    }
 }
 
 public static class CargoRules
@@ -170,6 +250,28 @@ public static class CargoRules
             default:
                 return default;
         }
+    }
+
+    // Pure. Data-inventory items are already in their storage, so Sell above N keeps N there. held: everything of the type
+    // in the data inventory, favourites included; reserved: GamePlayer.RequiredItemCountForMissions.
+    public static int DataSellCount(ItemRule rule, int held, int reserved)
+    {
+        int keep = rule.dockAction == DockAction.Sell ? reserved
+            : rule.dockAction == DockAction.SellAbove ? Math.Max(rule.keepAmount, reserved)
+            : held;
+        return Math.Max(0, held - keep);
+    }
+
+    // How many of this data-inventory stack the rules sell here. Only a rule that names the item or its category counts.
+    // Favourite stacks are never sold but count toward N. quoted: amount of the type earlier stacks were already quoted for.
+    public static int DataSell(SpaceStation ss, Inventory.InventoryItem stack, int quoted)
+    {
+        if (stack.favourite) return 0;
+        var item = stack.item;
+        var rule = ItemRules.Explicit(item);
+        if (rule == null || !CanSellHere(ss, item)) return 0;
+        var player = GamePlayer.current;
+        return Math.Min(stack.count, DataSellCount(rule, player.dataInventory.GetCount(item) - quoted, player.RequiredItemCountForMissions(item)));
     }
 
     public static bool CanSellHere(SpaceStation ss, InventoryItemType item) =>
@@ -272,6 +374,26 @@ public static class CargoRules
 internal static class EchoCargoPatches
 {
     private static EchoCargo F => EchoCargo.Instance;
+
+    // Data items never reach cargo, so the cargo walk below never sees them. Sell one data-inventory stack per tick before
+    // any cargo is unloaded, so a full storage can't hold up a sale.
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryDropCargo))]
+    private static bool TryDropCargoPrefix(IdleManager __instance, SpaceStation ss, ref bool __result)
+    {
+        if (!F.Active) return true;
+        try
+        {
+            if (!F.SellFromData.Value || !ItemRules.HasDockRules) return true;
+            foreach (var stack in GamePlayer.current.dataInventory.items)
+            {
+                int n = CargoRules.DataSell(ss, stack, 0);
+                if (n > 0 && CargoRules.Sell(__instance, ss, stack, n)) { __result = true; return false; }
+            }
+            return true;
+        }
+        catch (Exception e) { F.Fail(e, nameof(EchoCargoPatches)); return true; }
+    }
 
     // Vanilla body (IdleManager.TryDropCargoOf) with the dock action of each stack's rule applied before the deposit branch.
     [HarmonyPrefix]

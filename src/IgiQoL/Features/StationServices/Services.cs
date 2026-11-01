@@ -381,6 +381,30 @@ public static class Services
                 r.lines.Add($"{s.GetShipName()}: {n} {Name(item)}, {Money(value)}");
             }
         }
+        // Data items never sit in cargo: the game keeps them in the player-wide data inventory.
+        if (EchoCargo.EchoCargo.Instance.SellFromData.Value)
+        {
+            var data = player.dataInventory;
+            var quoted = new Dictionary<InventoryItemType, int>();   // quotes only: what earlier stacks of the type would sell
+            foreach (var stack in new List<Inventory.InventoryItem>(data.items))
+            {
+                var item = stack.item;
+                quoted.TryGetValue(item, out int q);
+                int n = CargoRules.DataSell(ss, stack, q);
+                if (n <= 0) continue;
+                long value = item.sellValue * n;
+                if (run)
+                {
+                    player.credits += value;
+                    if (item.itemCategory != ItemCategory.Data) ss.shopInventory.Add(item, n, item.buyBack);
+                    data.Remove(stack, n);
+                }
+                else quoted[item] = q + n;
+                r.credits += value;
+                r.count++;
+                r.lines.Add($"Data inventory: {n} {Name(item)}, {Money(value)}");
+            }
+        }
         return r;
     }
 

@@ -70,7 +70,7 @@ public sealed class ItemRulesTab : Feature
         Kit.Tooltip(Kit.Fixed(header, "Pickup limit", 96f, TextAlignmentOptions.Center, muted), "Pickup limit",
             "Stop auto-tractoring once a ship carries this many. 0 = no limit. -1 = never auto-tractor it (items your missions need and ammo the ship fires are still picked up; clicking an item yourself always works). Needs 'Loot pickup limits' on.");
         Kit.Tooltip(Kit.Fixed(header, "At dock", 130f, TextAlignmentOptions.Center, muted), "At dock",
-            "Game default: deposited in the station's storage as usual. Keep aboard: never unloaded. Sell: sold at the station shop when ECHO unloads. Sell above N: deposited until the storage holds N, the rest is sold. Favourite stacks, ammo the flagship uses and the usable items the game keeps aboard are never touched. Needs 'ECHO cargo rules' on.");
+            "Game default: deposited in the station's storage as usual. Keep aboard: never unloaded. Sell: sold at the station shop when ECHO unloads. Sell above N: deposited until the storage holds N, the rest is sold. Data items sit in your data inventory, not cargo: Sell and Sell above N sell them from there when the rule names the item or its category ('Sell from the data inventory'). Favourite stacks, ammo the flagship uses and the usable items the game keeps aboard are never touched. Needs 'ECHO cargo rules' on.");
         Kit.Tooltip(Kit.Fixed(header, "N", 60f, TextAlignmentOptions.Center, muted), "N", "For Sell above N: the amount to keep in storage.");
         Kit.Fixed(header, "", 22f, TextAlignmentOptions.Center, muted);
 
