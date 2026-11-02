@@ -282,6 +282,19 @@ internal static class LoadoutsCheck
         else if (button != null && button.gameObject.activeInHierarchy) ctx.Pass("hangar-button", $"at {((RectTransform)button).anchoredPosition}");
         else ctx.Fail("hangar-button", button == null ? "no button" : "button hidden");
         yield return ctx.Screenshot("hangar-loadouts");
+
+        // Hired mercenaries aren't offered, and applying to one is refused.
+        bool listed = LoadoutsTab.Ships().Exists(s => s.commanderData is Source.Personnel.Mercenary);
+        if (!listed) ctx.Pass("no-mercenary", "no hired ship in the Loadouts list");
+        else ctx.Fail("no-mercenary", "a hired ship is in the Loadouts list");
+        var merc = player.activeFleet.Find(s => s != null && s.commanderData is Source.Personnel.Mercenary);
+        if (merc == null) ctx.Skip("no-mercenary-reason", "no mercenary hired");
+        else
+        {
+            string why = LoadoutApply.CannotApplyReason(merc);
+            if (why != null && why.Contains("hired ship")) ctx.Pass("no-mercenary-reason", why);
+            else ctx.Fail("no-mercenary-reason", why ?? "no reason given");
+        }
     }
 
     private static JsonValue Json(string text) => LightJson.Serialization.JsonReader.Parse(text);

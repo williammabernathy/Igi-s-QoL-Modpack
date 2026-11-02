@@ -30,7 +30,7 @@ public static class LoadoutsTab
     internal static List<SpaceShipData> Ships()
     {
         var player = GamePlayer.current;
-        var list = Fleet.Ships(withMercenaries: true);
+        var list = Fleet.Ships(withMercenaries: false);
         foreach (var s in player.spaceShips)
             if (s != null && !list.Contains(s) && !s.IsWorkBayAssigned && !s.IsEmpireFleetAssigned) list.Add(s);
         return list;

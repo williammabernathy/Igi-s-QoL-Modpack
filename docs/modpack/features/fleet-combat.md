@@ -34,7 +34,7 @@ The ship settings popup adds, per ship:
 - "Only attack within (units of the flagship)": fleet ships don't pick enemies further than this from the ship you fly, and drop a target that moves past it (0 = off);
 - one rule per combat weapon (hardpoint). A weapon with a rule shoots the best enemy by that rule among those it can hit and has in range, and follows the ship's target otherwise. For example, one turret on drones while the rest follow the ship.
 
-The Escort and Defensive stances pick the ship's target themselves; weapon rules still apply under them.
+The Escort and Defensive stances pick the ship's target themselves (Defensive: whoever is hitting it, else your target; Escort: your target), so under them the chain, "Attacking my flagship" included, only decides when there is nothing to copy. New fleet ships start in the Defensive stance; set Aggressive for the chain to decide every pick. Weapon rules still apply under every stance.
 
 ## Engagement distance
 

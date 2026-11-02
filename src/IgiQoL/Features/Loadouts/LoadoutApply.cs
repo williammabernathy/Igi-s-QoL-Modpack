@@ -37,6 +37,9 @@ public static class LoadoutApply
         // The hangar's own refit rule (PersonalHangar.SelectShip); IsLentOut would also count your personal fleet.
         if (ship.IsCarrierAssigned || ship.IsWorkBayAssigned || ship.IsPatrolAssigned || ship.IsEmpireFleetAssigned)
             return ship.GetShipName() + " is assigned elsewhere; the hangar can't refit it either.";
+        // A hired mercenary leaves with everything fitted (GamePlayer.DismissFleetShip).
+        if (!GamePlayer.current.spaceShips.Contains(ship))
+            return ship.GetShipName() + " is a hired ship; loadouts apply to your own ships only.";
         return null;
     }
 

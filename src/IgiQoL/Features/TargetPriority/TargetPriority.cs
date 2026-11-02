@@ -428,8 +428,8 @@ public sealed class TargetPriority : Feature
             var assist = AccessTools.Method(typeof(AbstractUnit), "AssistPlayerAgainstAttacker");
             wingModule.ResetCurrentTargets();
             wingModule.SetAutoTarget(startOn);
-            // The flagship's TakeDamage records the hit before it broadcasts.
-            ship.AddTargetedBy(attacker, 0f);
+            // A hit on the flagship, as the TakeDamage prefix records it.
+            TargetRanking.RecordHit(attacker, ship, 0f);
             assist.Invoke(wingData.unit, new object[] { wingData.unit, attacker });
             var afterOther = wingModule.autoTarget;
             assist.Invoke(ship, new object[] { wingData.unit, attacker });
@@ -455,6 +455,22 @@ public sealed class TargetPriority : Feature
         else ctx.Fail("flagship-assist", assistDetail);
         if (lowerHeld) ctx.Pass("flagship-assist-lower", lowerDetail);
         else ctx.Fail("flagship-assist-lower", lowerDetail);
+
+        // A hit on another of your ships doesn't make its attacker an attacker of the flagship (the game's own
+        // trackers did: BroadcastThreatToAllies copies every hit to allies within 80 u).
+        AbstractUnit ally = null;
+        foreach (var c in candidates)
+            if (c is AbstractUnit cu && cu != startOn && cu != attacker && !cu.isDestroyed && wingModule.IsValidTarget(cu)
+                && !TargetRanking.AttacksFlagship(cu, ship)) { ally = cu; break; }
+        if (ally == null) ctx.Skip("flagship-assist-ally", "needs a third live enemy not attacking the flagship");
+        else
+        {
+            TargetRanking.RecordHit(ally, wingData.unit, 10f);
+            bool attacks = TargetRanking.AttacksFlagship(ally, ship);
+            string allyDetail = $"hit on {Name(wingData.unit)} by {Name(ally)}: attacksFlagship={attacks}";
+            if (!attacks) ctx.Pass("flagship-assist-ally", allyDetail);
+            else ctx.Fail("flagship-assist-ally", allyDetail);
+        }
     }
 
     private static string Name(TargetableUnit t) => t == null ? "none" : t.targetName + "#" + t.GetHashCode();
@@ -602,7 +618,13 @@ public sealed class TargetPriority : Feature
 
 internal static class TargetRanking
 {
-    private static readonly List<AbstractUnit> fleetUnits = new();
+    // Hits on your ships, kept by the mod: the game's targetedBy trackers also hold whoever hit any ally within 80 u
+    // (AbstractUnit.BroadcastThreatToAllies), which made every enemy in a fleet fight an "attacker" of the flagship.
+    private struct Hit { public float flagshipUntil, until, damage; }
+    private static readonly Dictionary<AbstractUnit, Hit> hits = new();
+    private static readonly List<AbstractUnit> deadHits = new();
+    // The game's own tracker window per hit (TargetableUnit.AddTargetedBy adds 3 s).
+    private const float HitSeconds = 3f;
     // The guns' expected DPS by damage type (indexed by DamageType), for "Weakest to my weapons".
     private static readonly float[] dpsByType = new float[Resists.Types.Length];
     private static readonly float[] candidateKeys = new float[ShipSettings.MaxChain];
@@ -616,11 +638,10 @@ internal static class TargetRanking
         return single;
     }
 
-    // Gathers what the chain's rules read once per pick: the fleet's hit trackers for "Most damage to my fleet",
-    // the guns' DPS for "Weakest to my weapons" (the turret's alone with a weapon rule, else the ship's).
+    // Gathers what the chain's rules read once per pick: the guns' DPS for "Weakest to my weapons" (the turret's
+    // alone with a weapon rule, else the ship's).
     public static void Prepare(List<TargetRule> chain, AbstractTargetingModule module, AbstractTurret turret)
     {
-        if (Has(chain, TargetRule.MostDamage)) CollectFleet();
         if (!Has(chain, TargetRule.WeakestToMyWeapons)) return;
         Array.Clear(dpsByType, 0, dpsByType.Length);
         if (turret != null) AddDps(turret);
@@ -765,12 +786,12 @@ internal static class TargetRanking
         return false;
     }
 
-    // Hit the flagship in the last few seconds, or has it as its target. Enemy combat ships aim from their threat
-    // table (CombatActions.ChooseCombatTarget), so this also catches attackers that haven't landed a hit yet.
+    // Hit the flagship in the last 3 s (the mod's own record), or has it as its target. Enemy combat ships aim from
+    // their threat table (CombatActions.ChooseCombatTarget), so this also catches attackers that haven't landed a hit yet.
     internal static bool AttacksFlagship(AbstractUnit u, AbstractUnit flagship)
     {
         if (flagship == null || u == null) return false;
-        if (flagship.IsTargetedBy(u)) return true;
+        if (hits.TryGetValue(u, out var h) && h.flagshipUntil > Time.time) return true;
         var provider = u.targetProvider;
         return provider != null && provider.priorityTarget == flagship;
     }
@@ -794,31 +815,32 @@ internal static class TargetRanking
         return 9f;
     }
 
-    // Damage this enemy dealt to your flagship and fleet ships in the game's last-few-seconds tracker.
-    private static float DamageToFleet(AbstractUnit enemy)
+    // Damage this enemy dealt to your flagship and fleet ships in the last 3 s, from the mod's own hit record.
+    private static float DamageToFleet(AbstractUnit enemy) =>
+        hits.TryGetValue(enemy, out var h) && h.until > Time.time ? h.damage : 0f;
+
+    internal static void RecordHit(AbstractUnit attacker, AbstractUnit target, float damage)
     {
-        float total = 0f;
-        for (int i = 0; i < fleetUnits.Count; i++)
-        {
-            var ship = fleetUnits[i];
-            if (ship != null && ship.targetedBy.TryGetValue(enemy, out var tracker)) total += tracker.damage;
-        }
-        return total;
+        if (attacker == null || target == null) return;
+        float now = Time.time;
+        hits.TryGetValue(attacker, out var h);
+        if (h.until < now) h.damage = 0f;
+        h.damage += damage;
+        h.until = now + HitSeconds;
+        if (target == Fleet.Flagship) h.flagshipUntil = now + HitSeconds;
+        hits[attacker] = h;
+        if (hits.Count > 64) PruneHits(now);
     }
 
-    internal static void CollectFleet()
+    private static void PruneHits(float now)
     {
-        fleetUnits.Clear();
-        var flagship = Fleet.Flagship;
-        if (flagship != null) fleetUnits.Add(flagship);
-        var player = GamePlayer.current;
-        if (player == null) return;
-        foreach (var data in player.activeFleet)
-        {
-            var unit = data != null ? data.unit : null;
-            if (unit != null && unit != flagship) fleetUnits.Add(unit);
-        }
+        deadHits.Clear();
+        foreach (var kv in hits)
+            if (kv.Key == null || kv.Value.until < now) deadHits.Add(kv.Key);
+        foreach (var k in deadHits) hits.Remove(k);
     }
+
+    internal static void ResetHits() => hits.Clear();
 }
 
 // A weapon's own target, refreshed on the ship's scan and read back by the AbstractTurret.currentTarget postfix.
@@ -846,6 +868,7 @@ internal static class TargetPriorityPatches
     {
         nextRepick.Clear();
         WeaponPicks.Clear();
+        TargetRanking.ResetHits();
     }
 
     private static bool Resolve(AbstractTargetingModule module, out TargetPriority.Resolved r)
@@ -888,6 +911,23 @@ internal static class TargetPriorityPatches
             feature.Fail(e, nameof(TargetPriorityPatches));
             return true;
         }
+    }
+
+    // Who hit your ships, for "Attacking my flagship" and "Most damage to my fleet". A prefix: TakeDamage ends by
+    // broadcasting the hit to allies (AssistPlayerAgainstAttacker), and the assist must already see it.
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(AbstractUnit), nameof(AbstractUnit.TakeDamage))]
+    private static void TakeDamagePrefix(AbstractUnit __instance, DamageData damageData)
+    {
+        var feature = TargetPriority.Instance;
+        if (!feature.Active) return;
+        try
+        {
+            var source = damageData != null ? damageData.sourceUnit : null;
+            if (source == null || __instance.isDestroyed || !Fleet.IsPlayerShip(__instance)) return;
+            TargetRanking.RecordHit(source, __instance, damageData.damageAmount);
+        }
+        catch (Exception e) { feature.Fail(e, nameof(TargetPriorityPatches)); }
     }
 
     // Each scan: the ship's own re-pick and leash, then each weapon's pick.

@@ -13,6 +13,7 @@ using IgiQoL.Features.FleetRetreat;
 using IgiQoL.Features.Separation;
 using IgiQoL.Features.TargetPriority;
 using IgiQoL.Features.CargoPins;
+using Source.Player;
 using Source.SpaceShip;
 using Source.Util;
 using TMPro;
@@ -201,7 +202,7 @@ public static class ShipPopup
     private static void AddTargeting(SpaceShipData ship, string guid, ShipSettings s, TargetPriority targeting)
     {
         var row = Kit.Row(Body, 8f, 26f);
-        Kit.Tooltip(Kit.Label(row, "Target choice"), null, targeting.Rule.Description.Description);
+        Kit.Tooltip(Kit.Label(row, "Target choice"), null, targeting.Rule.Description.Description + StanceNote(ship));
         var rules = new string[TargetPriority.RuleNames.Length + 1];
         rules[0] = "Default (" + TargetPriority.RuleNames[(int)targeting.Rule.Value].Replace(" (game default)", "") + ")";
         TargetPriority.RuleNames.CopyTo(rules, 1);
@@ -309,6 +310,23 @@ public static class ShipPopup
                 ShipSettings.Save(guid);
             }, 200f);
         }
+    }
+
+    // The fleet stance decides when the chain gets a say: Defensive and Escort set a manual target the chain never
+    // overrides. A tooltip line, not a row: the popup has no scroll.
+    private static string StanceNote(SpaceShipData ship)
+    {
+        if (ship == GamePlayer.current.currentSpaceShip) return "";
+        string name, help;
+        switch (ship.fleetStance)
+        {
+            case FleetStance.Aggressive: name = "Aggressive"; help = "The chain decides every pick."; break;
+            case FleetStance.Defensive: name = "Defensive"; help = "The game sets its target itself while it's being hit (whoever hits it most) or while your flagship has a target; the chain decides only when there is nothing to copy."; break;
+            case FleetStance.Escort: name = "Escort"; help = "The game copies your flagship's target; the chain decides only when the flagship has none."; break;
+            case FleetStance.HoldFire: name = "Hold fire"; help = "It doesn't pick targets at all."; break;
+            default: return "";
+        }
+        return "\n\nThis ship's stance is " + name + ". " + help;
     }
 
     // Two controls and a line: the ammo switch, then one pick-and-toggle row so the popup's height doesn't grow with the pins.
