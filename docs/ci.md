@@ -10,7 +10,9 @@ flowchart LR
 
 1. `build` compiles the solution against the installed game and packs `artifacts/IgiQoL-<version>.zip`, laid out as `BepInEx/plugins/IgiQoL/IgiQoL.dll` (+ `.pdb`) so it extracts straight into the game folder. The DLL and zip are the run's `build` artifact.
 2. `patch-check` runs `VersionDiff patches` in manifest mode on the built DLL. It fails if a Harmony target, a game member the DLL uses, or an `AccessTools`/`Traverse` string lookup doesn't resolve in the installed game. The report is the run's `patch-report` artifact.
-3. On `main` only, and only when `src/IgiQoL/` or `Directory.Build.props` changed in the push, `release` creates the tag `v<version>` and a GitHub release with the zip attached. The release notes list the commit subjects since the previous tag, without merge commits.
+3. On `main` only, and only when `src/IgiQoL/` or `Directory.Build.props` differs from the newest `v*` tag, `release` creates the tag `v<version>` and a GitHub release with the zip attached. Comparing with the last release, not the previous push, means a release that failed is tried again by the next push, and re-running a finished release finds nothing new. The release notes list the commit subjects since the previous tag, without merge commits. `release` fails instead of writing onto a tag that already exists.
+
+Runs of one branch go one at a time (a workflow-level `concurrency` group per ref that never cancels a running run), so two close pushes can't both pick the same version.
 
 The in-game self-checks ([dev-harness.md](modpack/dev-harness.md)) need the game running, so CI doesn't run them. Run them yourself before merging to `main`.
 

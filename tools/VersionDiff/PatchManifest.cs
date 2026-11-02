@@ -32,8 +32,12 @@ internal sealed class GameVersion
         if (fallback != null) resolver.AddSearchDirectory(fallback);
         // Cecil resolves the HarmonyLib enums in the mod's attribute arguments, so 0Harmony.dll must be findable.
         var harmonyDir = fallback == null ? null : Path.GetFullPath(Path.Combine(fallback, "..", "..", "BepInEx", "core"));
-        if (harmonyDir != null && Directory.Exists(harmonyDir)) resolver.AddSearchDirectory(harmonyDir);
+        HarmonyFound = harmonyDir != null && File.Exists(Path.Combine(harmonyDir, "0Harmony.dll"));
+        if (HarmonyFound) resolver.AddSearchDirectory(harmonyDir);
     }
+
+    // False when 0Harmony.dll wasn't found: attribute arguments naming HarmonyLib enums then decode as nothing, and every target looks unsupported.
+    public bool HarmonyFound { get; }
 
     public bool InDir(string assemblyName) => File.Exists(Path.Combine(Dir, assemblyName + ".dll"));
 

@@ -71,6 +71,7 @@ public static class PatchDiff
 
         var vNew = new GameVersion(newDir, fallback ?? newDir, Label(newDir, snapshots));
         var vOld = oldDir == null ? null : new GameVersion(oldDir, fallback ?? newDir, Label(oldDir, snapshots));
+        if (!vNew.HarmonyFound) return Program.Fail("0Harmony.dll not found in BepInEx/core two folders above the game's Managed dir; the mod's Harmony attributes can't be decoded without it");
 
         var targets = new Dictionary<string, Target>();
         var lookups = new List<Lookup>();
@@ -100,7 +101,7 @@ public static class PatchDiff
         if (outFile != null) File.WriteAllText(outFile, report);
         else Console.Out.Write(report);
 
-        var broken = rows.Any(r => r.Status is "missing" or "ambiguous" || r.ParamProblems.Count > 0)
+        var broken = rows.Any(r => r.Status is "missing" or "ambiguous" or "unsupported" || r.ParamProblems.Count > 0)
             || unresolved.Count > 0 || lookupRows.Any(l => l.NewStatus is "missing" or "type changed");
         return broken ? 1 : 0;
     }
