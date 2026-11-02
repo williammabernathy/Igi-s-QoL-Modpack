@@ -169,7 +169,7 @@ internal static class FavouriteStationsCheck
         int before = FavouriteStations.Guids.Count;
         // The click rebuilds the tab, which destroys the button, so note it was there first.
         bool clicked = remove != null;
-        remove?.onClick.Invoke();
+        if (remove != null) remove.onClick.Invoke();
         yield return null;
         bool removedOne = clicked && FavouriteStations.Guids.Count == before - 1;
         FavouriteStationsTab.RunItems("");

@@ -64,7 +64,7 @@ internal static class UsedInCheck
             // The most-used ingredient: one line per recipe, capped, first entry with the forge's per-craft count.
             var recipes = UsedIn.Index()[most.identifier];
             var parents = new List<CraftingRecipe>();
-            foreach (var r in recipes) if (!parents.Contains(r.parentRecipe ?? r)) parents.Add(r.parentRecipe ?? r);
+            foreach (var r in recipes) if (!parents.Contains(UsedIn.ParentOf(r))) parents.Add(UsedIn.ParentOf(r));
             source.SetItem(most, 1, false, ItemTooltipContext.InInventory, interactive: false);
             string text = Show(source);
             int expectedLines = 1 + Mathf.Min(parents.Count, UsedIn.MaxLines) + (parents.Count > UsedIn.MaxLines ? 1 : 0);
@@ -80,7 +80,7 @@ internal static class UsedInCheck
             for (int p = 0; p < shown && variantLine < 0; p++)
             {
                 int n = 0;
-                foreach (var r in recipes) if ((r.parentRecipe ?? r) == parents[p]) n++;
+                foreach (var r in recipes) if (UsedIn.ParentOf(r) == parents[p]) n++;
                 if (n > 1) { variantLine = p; variants = n; }
             }
             if (variantLine < 0) ctx.Skip("rarities", "no shown recipe is craftable in more than one rarity");
@@ -139,7 +139,7 @@ internal static class UsedInCheck
             UsedInSearch.Run(name);
             // Several items can match the name (the one item opens by itself); open it with its own Show button.
             Button toggle = Toggle(name);
-            if (UsedInSearch.ListText == null) toggle?.onClick.Invoke();
+            if (UsedInSearch.ListText == null && toggle != null) toggle.onClick.Invoke();
 
             var recipes = UsedIn.Index()[item.identifier];
             int expected = UsedIn.LineCount(recipes);
@@ -153,7 +153,8 @@ internal static class UsedInCheck
             else ctx.Fail("search", detail);
             yield return ctx.Screenshot("used-in-search");
 
-            Toggle(name)?.onClick.Invoke();
+            var hide = Toggle(name);
+            if (hide != null) hide.onClick.Invoke();
             if (UsedInSearch.ListText == null) ctx.Pass("hide", "Hide closed the list");
             else ctx.Fail("hide", "the list is still open after Hide");
         }

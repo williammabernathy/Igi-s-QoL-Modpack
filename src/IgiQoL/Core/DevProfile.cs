@@ -108,24 +108,32 @@ internal static class DevProfile
         bool skip = true;
         int allFrames = 0;
         long frameStart = Stopwatch.GetTimestamp();
-        while (Time.realtimeSinceStartup < end)
+        double wallMs;
+        // Always unpatch and clear the flags, even if the profile is abandoned part way through.
+        try
         {
-            yield return null;
-            allFrames++;
-            if (!skip) frames.Add(Time.unscaledDeltaTime * 1000f);
-            skip = false;
-            if (Time.realtimeSinceStartup >= nextCensus)
+            while (Time.realtimeSinceStartup < end)
             {
-                hostiles.Add(Hostiles());
-                units.Add(UnityEngine.Object.FindObjectsByType<AbstractUnit>(FindObjectsInactive.Exclude).Length);
-                nextCensus = Time.realtimeSinceStartup + 1f;
-                skip = true;
+                yield return null;
+                allFrames++;
+                if (!skip) frames.Add(Time.unscaledDeltaTime * 1000f);
+                skip = false;
+                if (Time.realtimeSinceStartup >= nextCensus)
+                {
+                    hostiles.Add(Hostiles());
+                    units.Add(UnityEngine.Object.FindObjectsByType<AbstractUnit>(FindObjectsInactive.Exclude).Length);
+                    nextCensus = Time.realtimeSinceStartup + 1f;
+                    skip = true;
+                }
             }
+            wallMs = (Stopwatch.GetTimestamp() - frameStart) * 1000.0 / Stopwatch.Frequency;
         }
-        double wallMs = (Stopwatch.GetTimestamp() - frameStart) * 1000.0 / Stopwatch.Frequency;
-        collecting = false;
-        SimMarker.collecting = false;
-        harmony.UnpatchSelf();
+        finally
+        {
+            collecting = false;
+            SimMarker.collecting = false;
+            harmony.UnpatchSelf();
+        }
         Report(frames, allFrames, hostiles, units, wallMs);
     }
 

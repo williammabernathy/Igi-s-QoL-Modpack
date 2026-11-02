@@ -201,7 +201,7 @@ public sealed class Guide : Feature
             string key = "@EquipStat" + s + "Description";
             if (!Translation.Exists(key)) continue;
             string name = Translation.Exists("@EquipStat" + s) ? Translation.Translate("@EquipStat" + s) : s.ToString();
-            descriptions ??= Section(content, "The game's own stat descriptions");
+            if (descriptions == null) descriptions = Section(content, "The game's own stat descriptions");
             Kit.Text(descriptions, "<b>" + name + "</b>: " + Translation.Translate(key));
         }
     }

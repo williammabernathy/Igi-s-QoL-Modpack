@@ -183,7 +183,8 @@ internal static class MissionDistanceCheck
     {
         var chip = row.GetComponentsInChildren<RectTransform>().FirstOrDefault(t => t.name == "IgiQoL_Distance");
         if (chip == null) return null;
-        return chip.GetComponentInChildren<TMP_Text>().text + " | " + chip.GetComponent<Behaviour.UI.Tooltip.TooltipSource>()?.BodyText;
+        var tooltip = chip.GetComponent<Behaviour.UI.Tooltip.TooltipSource>();
+        return chip.GetComponentInChildren<TMP_Text>().text + " | " + (tooltip != null ? tooltip.BodyText : null);
     }
 
     private static string Want(Source.MissionSystem.Mission mission)

@@ -139,7 +139,11 @@ public sealed class EchoPriority : Feature
         }
         int index = List.Count == 0 ? 0 : (int)List[0] + 1;
         foreach (var a in Resources.FindObjectsOfTypeAll<Autopilot>())
-            if (a.gameObject.scene.IsValid() && a.loadoutDropdown != null) a.loadoutDropdown.SetValueWithoutNotify(index);
+        {
+            if (!a.gameObject.scene.IsValid()) continue;
+            if (a.loadoutDropdown != null) a.loadoutDropdown.SetValueWithoutNotify(index);
+            if (a.runMissionsToggle != null) a.runMissionsToggle.SetIsOnWithoutNotify(ap.runMissions);
+        }
         if (Singleton<IdleManager>.HasInstance) IdleManager.ForceImmediateActivityCheck();
     }
 
@@ -328,7 +332,7 @@ internal static class EchoPriorityPatches
     }
 
     [HarmonyPrefix]
-    [HarmonyPatch(typeof(IdleManager), "TryPreferredActivity")]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryPreferredActivity))]
     private static bool TryPreferredActivityPrefix(IdleManager __instance, ref bool __result)
     {
         if (!F.Active) return true;

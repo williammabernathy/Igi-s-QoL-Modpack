@@ -101,14 +101,14 @@ public sealed class Notes : Feature
         string title = null;
         foreach (var t in p.transform.Find("Frame/Header").GetComponentsInChildren<TMP_Text>())
             if (t.text == note.name) title = t.text;
-        string d = $"id={first} title={title} text='{view?.label.text}' out={NotesPopout.IsOut(note)}";
+        string d = $"id={first} title={title} text='{(view != null ? view.label.text : null)}' out={NotesPopout.IsOut(note)}";
         if (view != null && title != null && view.label.text == NotesMarkdown.Render(note.text) && NotesPopout.IsOut(note)) ctx.Pass("popout", d);
         else ctx.Fail("popout", d);
 
         note.text = "# Checklist\n- one\n- two";
         NotesStore.Save();
         yield return null;
-        d = $"text='{view?.label.text}'";
+        d = $"text='{(view != null ? view.label.text : null)}'";
         if (view != null && view.label.text == NotesMarkdown.Render(note.text)) ctx.Pass("popout-follows", d);
         else ctx.Fail("popout-follows", d);
         yield return ctx.Screenshot("note-popout");

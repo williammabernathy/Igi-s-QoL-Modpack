@@ -188,13 +188,13 @@ internal static class CargoPinsCheck
             ((RectTransform)slot.transform).sizeDelta = new Vector2(76f, 76f);
             slot.SetEntry(stack);
             string unpinnedHint = CargoPins.Hint(slot);
-            CargoPins.Toggle(ship, ore);
+            CargoPins.Toggle(ship, ore.identifier);
             CargoPins.RefreshMarks(ship);
             var mark = slot.transform.Find(CargoPins.MarkName);
             bool shown = mark != null && mark.gameObject.activeSelf;
             string pinnedHint = CargoPins.Hint(slot);
             yield return ctx.Screenshot("cargo-pin-mark");
-            CargoPins.Toggle(ship, ore);
+            CargoPins.Toggle(ship, ore.identifier);
             CargoPins.RefreshMarks(ship);
             bool hidden = mark != null && !mark.gameObject.activeSelf;
             string key = CargoPins.Instance.PinKey.Value.ToString();

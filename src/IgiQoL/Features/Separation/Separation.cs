@@ -154,8 +154,8 @@ public sealed class Separation : Feature
         // Other ships: an enemy dropped onto the flagship gets a push of its own only with OtherShips on.
         var other = enemy as SpaceShip;
         float wait = Time.realtimeSinceStartup + 20f;
-        while (other != null && other.targetProvider?.priorityTarget == null && Time.realtimeSinceStartup < wait) yield return new WaitForSeconds(0.5f);
-        if (other == null || other.rigidbody == null || other.targetProvider?.priorityTarget == null || other.overrideTarget.HasValue || other.holdPosition)
+        while (other != null && (other.targetProvider == null || other.targetProvider.priorityTarget == null) && Time.realtimeSinceStartup < wait) yield return new WaitForSeconds(0.5f);
+        if (other == null || other.rigidbody == null || other.targetProvider == null || other.targetProvider.priorityTarget == null || other.overrideTarget.HasValue || other.holdPosition)
         {
             ctx.Skip("other-ships", "no enemy ship with a target of its own");
             yield break;
@@ -270,10 +270,10 @@ internal static class SeparationPatches
         {
             if (!(__instance is SpaceShip ship) || ship.isCarrierFighter) return;
             var module = ship.targetProvider;
-            if (ship.travelling || ship.holdPosition || ship.overrideTarget.HasValue || module == null || module.priorityTarget == null
-                || !feature.IsOn(ship))
+            if (!feature.IsOn(ship) || ship.travelling || ship.holdPosition || ship.overrideTarget.HasValue || module == null
+                || module.priorityTarget == null)
             {
-                states.Remove(ship);
+                if (states.Count > 0) states.Remove(ship);
                 return;
             }
             if (!states.TryGetValue(ship, out var s))

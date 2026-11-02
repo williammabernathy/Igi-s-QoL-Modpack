@@ -30,7 +30,7 @@ public static class CombatLogTab
         var views = new List<string>();
         foreach (View v in System.Enum.GetValues(typeof(View))) views.Add(CombatLog.ViewName(v));
         Kit.Dropdown(row, views, (int)view, i => { view = (View)i; ModWindow.Show("combat"); }, 220f);
-        Kit.TextButton(row, "Clear", () => { CombatLog.Reset(); scope = 0; ModWindow.Show("combat"); }, 70f);
+        Kit.TextButton(row, "Clear", () => { CombatLog.Reset(); scope = -1; ModWindow.Show("combat"); }, 70f);
         var overview = CombatOverview.CombatOverview.Instance;
         if (overview != null && overview.Active)
             Kit.TextButton(row, Popouts.IsOpen(CombatOverview.CombatOverview.PopoutId) ? "Close combat overview" : "Combat overview", () =>

@@ -80,7 +80,7 @@ public sealed class EchoGates : Feature
         QuickStationSteps = cfg.Bind(Id, "QuickStationSteps", false, SettingInfo.Describe("Quick station steps",
             "At a friendly station, ECHO takes its next step 2 seconds after it docks, turns in a mission, hires crew, restocks or takes a mission, instead of waiting out its whole decision time (12 s, less with the Prompt Engineering skills). A visit that turns in a mission and takes the next one is about half a minute shorter. While it waits for repairs, its next step comes 2 seconds after the flagship's hull and armour are full instead of at its next regular check. Waiting for a mission to come up keeps the normal time, so ECHO doesn't make more decisions than it would anyway. Game default: off."));
         RecruitPrisoners = cfg.Bind(Id, "RecruitPrisoners", false, SettingInfo.Describe("Recruit willing prisoners before hiring",
-            "When ECHO tops up your flagship's crew at a station, it first recruits prisoners who are willing to join: from the flagship's brig, your fleet ships' brigs, then the station brig. A recruit costs 40% of the crew type's price, the same as on the brig screens, and frees a brig place for the next boarding's captives. ECHO only hires at the personnel center for what's still missing. Only when ECHO is allowed to buy crew (Autopilot tab, crew settings). Game default: off (crew reserve, then hiring)."));
+            "When ECHO tops up your flagship's crew at a station, after the crew reserve it recruits prisoners who are willing to join (the flagship's brig, your fleet ships' brigs, then the station brig) before hiring. A recruit costs 40% of the crew type's price, the same as on the brig screens, and frees a brig place for the next boarding's captives. ECHO only hires at the personnel center for what's still missing. Only when ECHO is allowed to buy crew (Autopilot tab, crew settings). Game default: off (crew reserve, then hiring)."));
         HireOnlyWhatFits = cfg.Bind(Id, "HireOnlyWhatFits", true, SettingInfo.Describe("Hire only crew that fits aboard",
             "ECHO tops up each crew type to its share in the Autopilot tab's crew settings. When other types already fill the ship, the game still takes that type's whole shortfall from the crew reserve and pays the personnel center for all of it, but only the crew that fit come aboard: the other reserve crew are lost and the credits are spent for nothing. With this on, ECHO takes and pays for only as many as fit. The unmodded game behaves as if this were off."));
         RebalanceCrew = cfg.Bind(Id, "RebalanceCrew", false, SettingInfo.Describe("Make room for short crew types",
@@ -783,12 +783,8 @@ internal static class EchoGatePatches
         try
         {
             if (!F.FastUnloading.Value) return true;
-            Inventory dest = Cargo.DepositTarget(ss, dropItem);
-            if (dest == null) return true;
-            Cargo.Move(cargoShip.cargo, dest, dropItem, int.MaxValue);
-            __instance.inventoryFull = false;
-            __instance.SetQuickerUpdateTimer();
-            IdleManager.ReportDeposit(cargoShip, dropItem);
+            if (Cargo.DepositTarget(ss, dropItem) == null) return true;
+            EchoCargo.CargoRules.DepositUpTo(__instance, ss, cargoShip, dropItem, int.MaxValue);
             return false;
         }
         catch (Exception e) { F.Fail(e, nameof(EchoGatePatches)); return true; }
@@ -841,7 +837,10 @@ internal static class EchoGatePatches
                 && ship.cargoUsed == cargoBefore && player.credits == creditsBefore) return;
             __instance.updateTimer = EchoGates.QuickStepSeconds;
             if (GamePlayer.current.autoPlay)
-                Plugin.Log.LogInfo($"[EchoGates] quick station step after '{SidePanel.instance?.idleStatusMessage.text}'");
+            {
+                var panel = SidePanel.instance;
+                Plugin.Log.LogInfo($"[EchoGates] quick station step after '{(panel != null ? panel.idleStatusMessage.text : "")}'");
+            }
         }
         catch (Exception e) { F.Fail(e, nameof(EchoGatePatches)); }
     }
@@ -854,7 +853,7 @@ internal static class EchoGatePatches
     internal static void ResetQuickSteps() => repairPending = decidingDocked = false;
 
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(IdleManager), "Update")]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.Update))]
     internal static void IdleUpdatePostfix(IdleManager __instance)
     {
         if (!repairPending || !F.Active) return;

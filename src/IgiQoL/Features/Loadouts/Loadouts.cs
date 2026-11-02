@@ -42,6 +42,7 @@ public sealed class Loadouts : Feature
         ModWindow.AddTab(this, "loadouts", "Loadouts", 25, LoadoutsTab.Build);
         GameEvents.SaveLoaded += () =>
         {
+            LoadoutsTab.Reset();
             ready = true;
             var flown = GamePlayer.current != null ? GamePlayer.current.currentSpaceShip : null;
             flownGuid = flown != null ? flown.guid : null;

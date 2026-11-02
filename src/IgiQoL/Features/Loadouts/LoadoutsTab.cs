@@ -18,6 +18,15 @@ public static class LoadoutsTab
     private static ApplyReport lastReport;
     private static string lastReportFor;
 
+    // Per-save state: another save has other ships and its own last report.
+    internal static void Reset()
+    {
+        selectedGuid = null;
+        pendingName = "";
+        lastReport = null;
+        lastReportFor = null;
+    }
+
     public static void Open(SpaceShipData ship)
     {
         selectedGuid = ship?.guid;

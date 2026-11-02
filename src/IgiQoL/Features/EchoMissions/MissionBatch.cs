@@ -160,7 +160,8 @@ internal static class MissionBatchPatches
     private static EchoMissions F => EchoMissions.Instance;
 
     // At a station with a mission board: top up to MissionsAtOnce missions in one go, then point ECHO at the nearest.
-    // With every mission kind switched off and nothing held, ECHO skips missions and goes on to its activities.
+    // With every mission kind switched off and nothing held, ECHO skips missions and goes on to its activities;
+    // failed missions are still abandoned.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.DecideMissionActivity))]
     internal static bool DecideMissionActivityPrefix(ref bool __result)
@@ -171,7 +172,7 @@ internal static class MissionBatchPatches
             if (!GamePlayer.current.autopilotSettings.runMissions) return true;
             if (MissionKinds.NoneAllowed() && MissionBatch.Held() == 0)
             {
-                __result = false;
+                __result = IdleManager.TryAbandonFailedMission();
                 return false;
             }
             if (MissionBatch.Limit <= 1) return true;

@@ -34,9 +34,6 @@ public sealed class RefineryFilter : Feature
     // The material the open refinery screen is filtered to; null shows all ore. Each visit builds a new screen, which starts unfiltered.
     internal static RefinedMaterial? Filter;
 
-    internal static readonly AccessTools.FieldRef<RefineryMaterialBadge, RefinedMaterial> BadgeMaterial =
-        AccessTools.FieldRefAccess<RefineryMaterialBadge, RefinedMaterial>("material");
-
     internal static void Toggle(RefinedMaterial material)
     {
         Filter = Filter == material ? null : material;
@@ -134,7 +131,7 @@ internal static class RefineryFilterPatches
         try
         {
             foreach (var badge in ___materialsParent.GetComponentsInChildren<RefineryMaterialBadge>())
-                badge.gameObject.AddComponent<MaterialFilterClick>().material = RefineryFilter.BadgeMaterial(badge);
+                badge.gameObject.AddComponent<MaterialFilterClick>().material = badge.material;
         }
         catch (Exception e) { F.Fail(e, nameof(AwakePostfix)); }
     }

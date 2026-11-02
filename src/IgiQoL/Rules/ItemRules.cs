@@ -21,7 +21,7 @@ public sealed class ItemRule
     public bool IsVanilla => tractorCap == 0 && dockAction == DockAction.Default;
 }
 
-// Per-save item rules (SaveData feature record "ItemRules"). A save without the record is seeded once from item-rules.json.
+// Per-save item rules (SaveData feature record "ItemRules"). A save without rules (no record, or an empty one) is seeded from item-rules.json on load.
 public static class ItemRules
 {
     public const string FeatureKey = "ItemRules";
@@ -72,12 +72,11 @@ public static class ItemRules
         try
         {
             var record = SaveData.Feature(FeatureKey, false);
-            if (record != null)
+            if (record != null && record.Count > 0)
             {
                 Apply(record, "save");
                 return;
             }
-            SaveData.Feature(FeatureKey, true);
             Clear();
             if (!File.Exists(ImportPath)) return;
             try

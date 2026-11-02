@@ -187,7 +187,8 @@ internal static class RefineryFilterCheck
         RefinedMaterial material, OreItemData low, OreItemData high, OreItemData other)
     {
         var shown = Active(contents);
-        var detail = new StringBuilder($"filter={RefineryFilter.Filter?.ToString() ?? "none"} selected={contents.selectedOre?.item.identifier}:");
+        var selectedOre = contents.selectedOre;
+        var detail = new StringBuilder($"filter={RefineryFilter.Filter?.ToString() ?? "none"} selected={(selectedOre != null ? selectedOre.item.identifier : null)}:");
         bool ok = RefineryFilter.Filter == material && contents.selectedOre != null && Rollups.YieldOf(contents.selectedOre, material) > 0f;
         bool hasLow = false, hasHigh = false, hasOther = false;
         float last = float.MaxValue;

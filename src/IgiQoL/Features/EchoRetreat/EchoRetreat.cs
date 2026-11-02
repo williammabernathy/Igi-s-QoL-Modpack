@@ -128,7 +128,7 @@ internal static class EchoRetreatPatches
 
     // Runs every frame; the feature itself only looks every half second.
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(IdleManager), "Update")]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.Update))]
     private static void UpdatePostfix(IdleManager __instance)
     {
         if (!F.Active) return;

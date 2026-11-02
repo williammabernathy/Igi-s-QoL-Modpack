@@ -65,17 +65,17 @@ public sealed class CargoPins : Feature
         return null;
     }
 
-    // A ship whose cargo the crown button empties: one of yours, not the one you fly, not a hired mercenary.
+    // A ship whose cargo you can pin: one of yours, in the fleet or parked in a hangar, not the one you fly, not a hired mercenary. A pin on a parked ship applies once it joins the fleet.
     public static SpaceShipData PinnableOwner(Inventory inventory)
     {
         var ship = Owner(inventory);
         return ship != null && ship != GamePlayer.current.currentSpaceShip && PlayerCargo.CanManage(ship) ? ship : null;
     }
 
-    public static void Toggle(SpaceShipData ship, InventoryItemType item)
+    public static void Toggle(SpaceShipData ship, string identifier)
     {
         var s = ShipSettings.Edit(ship.guid);
-        if (!s.pins.Remove(item.identifier)) s.pins.Add(item.identifier);
+        if (!s.pins.Remove(identifier)) s.pins.Add(identifier);
         ShipSettings.Save(ship.guid);
     }
 
@@ -198,7 +198,7 @@ internal static class CargoPinsPatches
             if (!kb[key].wasPressedThisFrame || __instance.contained == null || UIHelper.IsTypingInInputField()) return;
             var ship = CargoPins.PinnableOwner(__instance.inventory);
             if (ship == null) return;
-            CargoPins.Toggle(ship, __instance.contained.item);
+            CargoPins.Toggle(ship, __instance.contained.item.identifier);
             CargoPins.RefreshMarks(ship);
         }
         catch (Exception e) { F.Fail(e, nameof(SlotUpdatePostfix)); }

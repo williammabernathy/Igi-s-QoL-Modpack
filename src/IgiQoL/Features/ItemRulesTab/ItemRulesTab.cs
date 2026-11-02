@@ -50,7 +50,22 @@ public sealed class ItemRulesTab : Feature
         return byKey;
     }
 
-    private static string CategoryName(ItemCategory c) => SettingRows.Pretty(c.ToString());
+    private static string CategoryName(ItemCategory c)
+    {
+        string name = Translation.Translate(c.GetDisplayName());
+        return string.IsNullOrEmpty(name) || name.StartsWith("@") ? SettingRows.Pretty(c.ToString()) : name;
+    }
+
+    // "identifier@level" into its parts; false for a key without a level.
+    private static bool SplitLevel(string key, out string id, out int level)
+    {
+        id = null;
+        level = 0;
+        int at = key.IndexOf('@');
+        if (at <= 0 || !int.TryParse(key.Substring(at + 1), out level)) return false;
+        id = key.Substring(0, at);
+        return true;
+    }
 
     private static string ItemName(InventoryItemType t) =>
         Translation.Translate(t.displayName) + (t.itemLevel > 0 ? " L" + t.itemLevel : "");
@@ -193,6 +208,8 @@ public sealed class ItemRulesTab : Feature
             Action remove = () => { ItemRules.Remove(k); ItemRules.Write(); Rebuild(); };
             if (known.TryGetValue(key, out var type))
                 RuleRow(content, ItemName(type), type.rarity.GetColor(), ItemRules.ByItem[key], remove, type);
+            else if (SplitLevel(key, out var baseId, out int level) && known.TryGetValue(baseId, out var baseType))
+                RuleRow(content, ItemName(baseType) + " L" + level, baseType.rarity.GetColor(), ItemRules.ByItem[key], remove, baseType);
             else
                 RuleRow(content, key + " (not in this game version)", null, ItemRules.ByItem[key], remove);
         }

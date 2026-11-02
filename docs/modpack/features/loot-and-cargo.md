@@ -70,7 +70,7 @@ Without it, a single full ship sets ECHO's "inventory full" and the whole fleet 
 
 The gold crown button of the fleet cargo window moves a fleet ship's whole hold to the flagship, including the ammo that ship fires. Pinned item types stay aboard; everything else still moves in one click. Two ways to pin:
 
-- Hover over a stack in a fleet ship's cargo and press `PinKey` (P), as F marks a favourite. Pinned stacks get a gold lock in the bottom left corner, and the item's tooltip says whether it's pinned.
+- Hover over a stack in one of your ships' cargo (a fleet ship, or one parked in the hangar; the pin applies while the ship is in your fleet) and press `PinKey` (P), as F marks a favourite. Pinned stacks get a gold lock in the bottom left corner, and the item's tooltip says whether it's pinned.
 - In the ship's [settings popup](interface.md#ship-settings-popup): "Keep the ammo this ship fires on board" keeps whatever ammo and torpedoes its current fit uses, and "Pin an item" pins or unpins an item aboard (or a pin for an item that's no longer aboard).
 
 A pin covers every stack and level of the item type, on that ship only. Pins are saved with the ship's other settings, so a [loadout](stations.md#ship-loadouts) carries them; after a refit to another ammo type, a pin on the old ammo stays until you remove it, while the ammo switch follows the fit. The "flagship full" notice only counts stacks the button tried to move. Shared fleet holds leave pinned stacks aboard too; ECHO's unloading, the fleet auto-deposit and the Deposit button ignore pins.
@@ -97,5 +97,5 @@ The Pop out button at the top of the Scanner tab opens the Scanner as a [window 
 - The map draws the location to scale, with your flagship as a white dot, your fleet in blue and enemies in red. Boardable ships, wrecks, loot and asteroids with ore use the same icons as the edge markers, and loot and ore are tinted by rarity. The thin rectangle is what the game camera shows now.
 - Dots follow their targets four times a second, and the set of ships and contacts is read once a second.
 - Under the map, the Contacts header's +/- button folds the list away so the map takes the whole window; that choice is remembered. The list is the tab's list without its settings and help text.
-- Click a dot to select its row, scrolled into view and highlighted, or click a row to ring its dot. One contact is selected at a time. A loot row rings every stack of that item, and an ore row rings every asteroid of that ore.
+- Click a dot to select its row, scrolled into view and highlighted, or click a row to ring its dot. One contact is selected at a time. A loot row rings every stack of that item, and an ore row rings every asteroid listed under that ore (an asteroid with surface ore is listed under its surface ore; a core-ore row rings the asteroids whose only listed ore it is).
 - Board, Salvage, Tractor and Mine work as in the tab, but leave the window and the QoL window as they are.

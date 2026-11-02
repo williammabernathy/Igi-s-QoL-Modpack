@@ -84,13 +84,13 @@ internal static class DpsMeterCheck
         yield return new WaitForSeconds(1.2f);
         var listA = a.Body.GetComponentInChildren<MeterList>();
         var listB = b.Body.GetComponentInChildren<MeterList>();
-        listA?.Tick();
-        listB?.Tick();
+        if (listA != null) listA.Tick();
+        if (listB != null) listB.Tick();
         if (CombatLog.Fights.Count == 0 || CombatLog.Fights[0].dealt + CombatLog.Fights[0].taken <= 0)
             ctx.Skip("meters-rows", "no damage recorded in the newest fight");
         else
         {
-            string rowsDetail = $"dealt rows={listA?.RowCount} top={listA?.TopFraction:0.00} '{listA?.TopNumber}'; taken rows={listB?.RowCount} top={listB?.TopFraction:0.00} '{listB?.TopNumber}'";
+            string rowsDetail = $"dealt rows={(listA != null ? listA.RowCount : 0)} top={(listA != null ? listA.TopFraction : 0f):0.00} '{(listA != null ? listA.TopNumber : "")}'; taken rows={(listB != null ? listB.RowCount : 0)} top={(listB != null ? listB.TopFraction : 0f):0.00} '{(listB != null ? listB.TopNumber : "")}'";
             bool dealt = CombatLog.Fights[0].dealt <= 0 || (listA != null && listA.RowCount > 0 && Mathf.Approximately(listA.TopFraction, 1f));
             bool taken = CombatLog.Fights[0].taken <= 0 || (listB != null && listB.RowCount > 0 && Mathf.Approximately(listB.TopFraction, 1f));
             if (dealt && taken) ctx.Pass("meters-rows", rowsDetail);

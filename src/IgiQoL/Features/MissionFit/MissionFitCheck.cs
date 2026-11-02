@@ -106,7 +106,8 @@ internal static class MissionFitCheck
             bool expect = offers.Contains(m) && !GamePlayer.current.missions.Contains(m)
                 && MissionFit.Needs(m, out var type, out var layer) && !MissionFit.Fits(type, layer);
             var chip = child.Find("Text/Tags/" + MissionFit.ChipName);
-            var icon = child.Find("IconTile")?.GetComponent<CanvasGroup>();
+            var iconTile = child.Find("IconTile");
+            var icon = iconTile != null ? iconTile.GetComponent<CanvasGroup>() : null;
             bool dimmed = icon != null && Mathf.Approximately(icon.alpha, MissionFit.DimAlpha);
             bool ok = chip != null
                 ? expect && dimmed && chip.GetComponent<CanvasGroup>() == null

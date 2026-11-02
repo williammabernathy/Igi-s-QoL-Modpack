@@ -87,7 +87,7 @@ internal static class ScannerPopout
 
 // The location drawn flat: its bounds scaled to fit the pop-out, a pooled dot per ship and contact, and the rectangle
 // the game camera shows. Dot positions refresh every quarter second and the contact set every second, into dots that
-// are made once and reused, so nothing is allocated per refresh.
+// are made once and reused; the ship walk (FindObjectsByType) is the one allocation per refresh.
 internal sealed class ScannerMap : MonoBehaviour
 {
     private const float PositionSeconds = 0.25f;
@@ -130,7 +130,6 @@ internal sealed class ScannerMap : MonoBehaviour
     private readonly Pool[] contactPools = new Pool[4];
     private Pool enemyPool, fleetPool;
     private Dot flagshipDot;
-    private readonly List<Asteroid> asteroids = new();
     private Rect bounds;
     private Vector2 areaSize;
     private float nextPosition, nextCollect;
@@ -374,20 +373,17 @@ internal sealed class ScannerMap : MonoBehaviour
         Contacts.PruneLoot();
         foreach (var item in Contacts.Loot)
             if (item.data?.itemType != null) Give(contactPools[(int)ContactMarkers.Kind.Loot], item, scanLevel, item.data.itemType.rarity.GetColor());
-        var poi = BasePoiManager.current;
-        if (poi != null)
+        // The 1 s scene cache; a piece destroyed since the last scan reads as null.
+        foreach (var t in OrePreference.OrePreference.SceneAsteroids())
         {
-            poi.GetComponentsInChildren(asteroids);
-            foreach (var a in asteroids)
-            {
-                var data = a.asteroidData;
-                if (data == null || data.isVisualOnly) continue;
-                bool surface = data.surfaceAmount > 0 && data.surfaceItem != null;
-                bool core = scanLevel > 0 && data.innerCoreAmount > 0 && data.innerCoreItem != null;
-                if (!surface && !core) continue;
-                Give(contactPools[(int)ContactMarkers.Kind.Ore], a, scanLevel, (surface ? data.surfaceItem : data.innerCoreItem).item.rarity.GetColor());
-            }
-            asteroids.Clear();
+            var a = t as Asteroid;
+            if (a == null) continue;
+            var data = a.asteroidData;
+            if (data == null || data.isVisualOnly) continue;
+            bool surface = data.surfaceAmount > 0 && data.surfaceItem != null;
+            bool core = scanLevel > 0 && data.innerCoreAmount > 0 && data.innerCoreItem != null;
+            if (!surface && !core) continue;
+            Give(contactPools[(int)ContactMarkers.Kind.Ore], a, scanLevel, (surface ? data.surfaceItem : data.innerCoreItem).item.rarity.GetColor());
         }
 
         var flagship = Fleet.Flagship;
@@ -567,7 +563,7 @@ internal static class ScannerPopoutCheck
             yield return new WaitForSeconds(0.5f);
             bool cleared = !map.IsSelected(item);
             var rowButton = row != null ? row.GetComponent<Button>() : null;
-            rowButton?.onClick.Invoke();
+            if (rowButton != null) rowButton.onClick.Invoke();
             yield return new WaitForSeconds(0.5f);
             string rowDetail = $"cleared={cleared} lit={map.IsSelected(item)}";
             if (cleared && rowButton != null && map.IsSelected(item)) ctx.Pass("scanner-select-from-row", rowDetail);

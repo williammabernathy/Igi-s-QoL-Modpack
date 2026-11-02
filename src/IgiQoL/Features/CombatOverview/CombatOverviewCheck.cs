@@ -57,10 +57,10 @@ internal static class CombatOverviewCheck
 
         // Collapse keeps the header only; expanding brings the saved height back.
         var collapse = FindButton(p, "-");
-        collapse?.onClick.Invoke();
+        if (collapse != null) collapse.onClick.Invoke();
         float collapsedHeight = rt.sizeDelta.y;
         bool bodyHidden = !p.Body.gameObject.activeSelf;
-        collapse?.onClick.Invoke();
+        if (collapse != null) collapse.onClick.Invoke();
         string collapseDetail = $"collapsed height={collapsedHeight:0} bodyHidden={bodyHidden} expanded height={rt.sizeDelta.y:0} saved h={state.h:0}";
         if (collapse != null && Mathf.Approximately(collapsedHeight, Popout.HeaderHeight) && bodyHidden && Mathf.Approximately(rt.sizeDelta.y, state.h)) ctx.Pass("collapse", collapseDetail);
         else ctx.Fail("collapse", collapseDetail);
@@ -94,7 +94,7 @@ internal static class CombatOverviewCheck
         yield return new WaitForSeconds(1.2f);
         var list = OverviewList.Instance;
         // Counted right after a refresh, so ships arriving or dying in between don't skew it.
-        list?.Tick();
+        if (list != null) list.Tick();
         int ships = 0;
         SpaceShip enemy = null;
         foreach (var s in Object.FindObjectsByType<SpaceShip>(FindObjectsInactive.Exclude))

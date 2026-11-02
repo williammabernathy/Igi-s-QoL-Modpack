@@ -404,7 +404,8 @@ public sealed class EchoKit : Feature
 
     internal static Asteroid MinedAsteroid(SpaceShip ship)
     {
-        var a = ship.GetModule<MiningModule>()?.priorityTarget as Asteroid;
+        var mining = ship.GetModule<MiningModule>();
+        var a = mining != null ? mining.priorityTarget as Asteroid : null;
         return a != null && (a.hasSurfaceOre || a.hasInnerCore && !a.innerCoreDepleted) ? a : null;
     }
 

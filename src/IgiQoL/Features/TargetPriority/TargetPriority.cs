@@ -976,7 +976,8 @@ internal static class TargetPriorityPatches
         var best = TargetRanking.Pick(module, list, r.rules, r, validate: true);
         if (best == null || best == current || !TargetRanking.ClearlyBetter(module.transform.position, best, current, r.rules, r)) return;
         module.SetAutoTarget(best);
-        module.torpedoBayModule?.AddManualTarget(best, overrideTarget: false);
+        var bay = module.torpedoBayModule;
+        if (bay != null) bay.AddManualTarget(best, overrideTarget: false);
     }
 
     // Weapons with a rule pick among enemies they can hit and have in range; without one (or with nothing in reach)

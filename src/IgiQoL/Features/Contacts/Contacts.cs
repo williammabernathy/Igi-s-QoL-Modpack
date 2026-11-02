@@ -50,7 +50,7 @@ public sealed class Contacts : Feature
     public ConfigEntry<bool> MarkLoot;
     public ConfigEntry<bool> MarkOres;
 
-    // Every TractorableItem spawned since startup (the game keeps no list of its own); pruned of destroyed pieces on read.
+    // Every TractorableItem that gets its data: spawned loot and turrets packing themselves up (the game keeps no list of its own); pruned of destroyed pieces on read.
     public static readonly List<TractorableItem> Loot = new();
 
     public const string PopoutId = "scanner";
@@ -345,7 +345,8 @@ public sealed class Contacts : Feature
                 }
                 bool marked = farA != null && ContactMarkers.Instance != null && ContactMarkers.Instance.Marks(farA, out var anchor) && anchor.y < 0.01f;
                 bool plainMarked = plainA != null && ContactMarkers.Instance != null && ContactMarkers.Instance.Marks(plainA, out _);
-                string md = $"preferred far asteroid found={(farA != null)} marked at bottom={marked}; other ore marked={plainMarked}; markers shown={ContactMarkers.Instance?.ShownCount}";
+                var markers = ContactMarkers.Instance;
+                string md = $"preferred far asteroid found={(farA != null)} marked at bottom={marked}; other ore marked={plainMarked}; markers shown={(markers != null ? markers.ShownCount : 0)}";
                 if (marked && !plainMarked) ctx.Pass("ore-markers", md);
                 else ctx.Fail("ore-markers", md);
             }
@@ -433,16 +434,16 @@ public sealed class Contacts : Feature
     }
 }
 
-[HarmonyPatch(typeof(LootManager), nameof(LootManager.SpawnLootItem))]
+[HarmonyPatch(typeof(TractorableItem), nameof(TractorableItem.SetData))]
 internal static class LootSpawnPatch
 {
-    private static void Postfix(TractorableItem __result)
+    private static void Postfix(TractorableItem __instance)
     {
         if (!Contacts.Instance.Active) return;
         try
         {
-            if (__result == null) return;
-            Contacts.Loot.Add(__result);
+            if (__instance == null || Contacts.Loot.Contains(__instance)) return;
+            Contacts.Loot.Add(__instance);
             // Destroyed pieces are otherwise only dropped when something reads the list.
             if ((Contacts.Loot.Count & 63) == 0) Contacts.PruneLoot();
         }
@@ -624,8 +625,10 @@ public sealed class ContactsList : MonoBehaviour
         scanLevel = Asteroid.GetTooltipScanLevel();
         var poiManager = BasePoiManager.current;
         if (poiManager != null)
-            foreach (var a in poiManager.GetComponentsInChildren<Asteroid>())
+            foreach (var t in OrePreference.OrePreference.SceneAsteroids())
             {
+                var a = t as Asteroid;
+                if (a == null) continue;
                 var data = a.asteroidData;
                 if (data == null || data.isVisualOnly) continue;
                 asteroidsHere++;

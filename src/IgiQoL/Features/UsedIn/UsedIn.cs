@@ -67,10 +67,17 @@ public sealed class UsedIn : Feature
             list.Sort((a, b) =>
             {
                 int by = string.CompareOrdinal(Translation.Translate(a.displayName), Translation.Translate(b.displayName));
-                if (by == 0) by = string.CompareOrdinal((a.parentRecipe ?? a).identifier, (b.parentRecipe ?? b).identifier);
+                if (by == 0) by = string.CompareOrdinal(ParentOf(a).identifier, ParentOf(b).identifier);
                 return by != 0 ? by : a.craftingRarity.CompareTo(b.craftingRarity);
             });
         return index;
+    }
+
+    // The recipe a rarity variant belongs to, or the recipe itself.
+    internal static CraftingRecipe ParentOf(CraftingRecipe r)
+    {
+        var parent = r.parentRecipe;
+        return parent != null ? parent : r;
     }
 
     private static void Add(InventoryItemType item, CraftingRecipe recipe)
@@ -111,7 +118,7 @@ public sealed class UsedIn : Feature
         int lines = 0;
         foreach (var r in recipes)
         {
-            var parent = r.parentRecipe ?? r;
+            var parent = ParentOf(r);
             if (parent != line)
             {
                 line = parent;
@@ -133,7 +140,7 @@ public sealed class UsedIn : Feature
         int lines = 0;
         foreach (var r in recipes)
         {
-            var parent = r.parentRecipe ?? r;
+            var parent = ParentOf(r);
             if (parent != line) { line = parent; lines++; }
         }
         return lines;

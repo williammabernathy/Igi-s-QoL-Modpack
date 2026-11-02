@@ -197,13 +197,15 @@ public sealed class FleetStripRow : MonoBehaviour
         var data = row.shipData;
         if (data == null) return;
         data.tractorOff = !data.tractorOff;
-        (data.unit as SpaceShip)?.ApplyTractorToggle();
+        var unit = data.unit as SpaceShip;
+        if (unit != null) unit.ApplyTractorToggle();
         Refresh();
     }
 
     private void OnDrones()
     {
-        var bay = (Ship())?.GetModule<DroneBayModule>();
+        var ship = Ship();
+        var bay = ship != null ? ship.GetModule<DroneBayModule>() : null;
         if (bay == null || !bay.CanDeployReturn()) return;
         if (bay.AreDronesDeployed())
         {

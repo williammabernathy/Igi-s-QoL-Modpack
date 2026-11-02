@@ -1,5 +1,6 @@
 using System;
 using Behaviour.Bootstrap;
+using Behaviour.UI;
 using Behaviour.UI.HUD;
 using Behaviour.Unit;
 using HarmonyLib;
@@ -79,6 +80,20 @@ internal static class GameEventPatches
     {
         if (!CoreFeature.Instance.Active) return;
         try { GameEvents.RaiseHudReady(); }
+        catch (Exception e) { Plugin.Log.LogError($"[Core] {nameof(GameEventPatches)}: {e}"); }
+    }
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(MainMenuUI), "Start")]
+    private static void MainMenuStartPostfix()
+    {
+        if (!CoreFeature.Instance.Active) return;
+        try
+        {
+            SaveData.Discard();
+            StartupReport.ShowOnce();
+            GameEvents.RaiseMainMenuShown();
+        }
         catch (Exception e) { Plugin.Log.LogError($"[Core] {nameof(GameEventPatches)}: {e}"); }
     }
 }

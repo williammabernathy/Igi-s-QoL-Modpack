@@ -47,7 +47,11 @@ public sealed class DroneModes : Feature
         var s = ShipSettings.Get(data.guid);
         mode = s.droneMode;
         radius = s.droneRadius;
-        if (s.droneAnchor != null && s.droneAnchor != data.guid) anchor = FindShip(s.droneAnchor) ?? commander;
+        if (s.droneAnchor != null && s.droneAnchor != data.guid)
+        {
+            var found = FindShip(s.droneAnchor);
+            anchor = found != null ? found : commander;
+        }
         return mode != DroneMode.Game;
     }
 
@@ -78,7 +82,11 @@ public sealed class DroneModes : Feature
                 if (!(m is SalvageModule)) m = anchor.GetModule<SalvageModule>();
                 break;
             default:
-                if (!(m is CombatModule)) m = anchor.GetModule<CombatModule>() ?? m;
+                if (!(m is CombatModule))
+                {
+                    var combat = anchor.GetModule<CombatModule>();
+                    if (combat != null) m = combat;
+                }
                 break;
         }
         return m != null ? m.priorityTarget : null;
@@ -463,7 +471,8 @@ public sealed class DroneModes : Feature
         enemies.Sort((a, b) => Edge(a).CompareTo(Edge(b)));
         var closest = enemies[0];
         float closestDist = Edge(closest);
-        var shipModule = commander.GetModule<CombatModule>() ?? commander.targetProvider;
+        AbstractTargetingModule shipModule = commander.GetModule<CombatModule>();
+        if (shipModule == null) shipModule = commander.targetProvider;
         try
         {
             // Guard: the pick through the game's own FindClosestFilteredTarget, just inside and just outside the radius.

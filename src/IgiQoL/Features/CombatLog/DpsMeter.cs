@@ -174,7 +174,7 @@ internal static class DpsMeter
         p.State.Save(p.Id);
         // The title shows the view and scope, so those rebuild the window; the rest only redraws the bars.
         if (rebuild) Popouts.Rebuild(p.Id);
-        else p.Body.GetComponentInChildren<MeterList>()?.Apply();
+        else { var list = p.Body.GetComponentInChildren<MeterList>(); if (list != null) list.Apply(); }
     }
 
     private static void BuildOptions(Popout p, RectTransform column)
@@ -236,7 +236,8 @@ internal static class DpsMeter
                 p.State.options["picks"].AsJsonObject[guid] = next;
                 p.State.Save(p.Id);
                 Paint(image, caption, next);
-                p.Body.GetComponentInChildren<MeterList>()?.Apply();
+                var list = p.Body.GetComponentInChildren<MeterList>();
+                if (list != null) list.Apply();
             }, 64f);
             caption = button.GetComponentInChildren<TMP_Text>();
             Paint(image, caption, MeterSettings.Read(p.State).Pick(guid));

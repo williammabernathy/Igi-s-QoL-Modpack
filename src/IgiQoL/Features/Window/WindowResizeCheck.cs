@@ -39,7 +39,8 @@ internal static class WindowResizeCheck
         yield return null;
         yield return null;
         var root = ModWindow.Root;
-        var handle = root != null ? root.Find("Resize")?.GetComponent<ResizeHandle>() : null;
+        var resize = root != null ? root.Find("Resize") : null;
+        var handle = resize != null ? resize.GetComponent<ResizeHandle>() : null;
         if (handle == null)
         {
             ctx.Fail("resize", "no window or no resize handle");

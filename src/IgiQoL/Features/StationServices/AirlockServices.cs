@@ -72,7 +72,7 @@ internal sealed class AirlockServices : MonoBehaviour
 
     private void Update()
     {
-        if (Time.unscaledTime < nextRefresh) return;
+        if (buttons == null || Time.unscaledTime < nextRefresh) return;
         nextRefresh = Time.unscaledTime + 1f;
         var f = StationServices.Instance;
         if (!f.Active || !f.AirlockButtons.Value)

@@ -365,9 +365,7 @@ public static class ShipPopup
         {
             int i = choice.GetIndex();
             if (i >= ids.Count) return;
-            var e = ShipSettings.Edit(guid);
-            if (!e.pins.Remove(ids[i])) e.pins.Add(ids[i]);
-            ShipSettings.Save(guid);
+            CargoPins.Toggle(ship, ids[i]);
             CargoPins.RefreshMarks(ship);
             Open(ship);
         }, 70f);

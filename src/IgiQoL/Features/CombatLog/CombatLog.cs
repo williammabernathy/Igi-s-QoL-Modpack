@@ -194,7 +194,8 @@ public sealed class CombatLog : Feature
         else ctx.Fail("dealt", d);
 
         var theirTurret = enemy.GetComponentInChildren<AbstractTurret>();
-        object weaponKey = (object)theirTurret.item?.equipmentBuilder ?? theirTurret.GetType();
+        var theirBuilder = theirTurret.item != null ? theirTurret.item.equipmentBuilder : null;
+        object weaponKey = theirBuilder != null ? (object)theirBuilder : theirTurret.GetType();
         var takenRow = Find(View.TakenByWeapon, weaponKey);
         before = takenRow?.total ?? 0;
         lost = Hit(new DamageData(theirTurret) { power = 2000f, type = DamageType.Energy }, flagship);
@@ -244,7 +245,8 @@ public sealed class CombatLog : Feature
     public static void Reset()
     {
         Fights.Clear();
-        Session = new Fight(Time.time);
+        // No hit yet, so the first one adds no fighting time.
+        Session = new Fight(Time.time) { last = float.NegativeInfinity };
         Version++;
     }
 
@@ -286,7 +288,8 @@ public sealed class CombatLog : Feature
         {
             fight.taken += sum;
             Session.taken += sum;
-            object weapon = turret != null ? (object)turret.item?.equipmentBuilder ?? turret.GetType() : typeof(AbstractUnit);
+            var builder = turret != null && turret.item != null ? turret.item.equipmentBuilder : null;
+            object weapon = turret != null ? (builder != null ? (object)builder : turret.GetType()) : typeof(AbstractUnit);
             Add(fight, Session, View.TakenByWeapon, weapon, source, turret, type, shield, armor, hull, crit, killed);
             Add(fight, Session, View.TakenByType, typeKey, source, turret, type, shield, armor, hull, crit, killed);
             Add(fight, Session, View.TakenFromShip, source != null ? Definition(source) : typeof(DamageData), source, turret, type, shield, armor, hull, crit, killed);
@@ -342,7 +345,11 @@ public sealed class CombatLog : Feature
         return turret != null ? turret : Definition(source);
     }
 
-    private static object Definition(AbstractUnit unit) => (object)unit.unitData?.unitDefinition ?? unit;
+    private static object Definition(AbstractUnit unit)
+    {
+        var definition = unit.unitData != null ? unit.unitData.unitDefinition : null;
+        return definition != null ? (object)definition : unit;
+    }
 
     // Damage by a drone counts for the ship that launched it.
     private static AbstractUnit Commander(AbstractUnit unit) => unit is Drone d && d.droneCommander != null ? d.droneCommander : unit;

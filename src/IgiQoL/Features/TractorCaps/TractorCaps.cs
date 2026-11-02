@@ -29,7 +29,7 @@ public sealed class TractorCaps : Feature
     public override string Title => "Loot pickup limits";
     public override string Description => "Your ships stop pulling in an item automatically once they carry the limit set for it on the Item rules tab (or never pull it in, with -1), and can leave cheap bulky loot alone. Loot they leave says why on its tooltip and on its Scanner row. Clicking the item yourself still picks it up.";
     public override string SettingsTab => "Item rules";
-    public override Type[] PatchClasses => new[] { typeof(TractorCapsPatch), typeof(TractorCapsTooltipPatch) };
+    public override Type[] PatchClasses => new[] { typeof(TractorCapsPatches) };
 
     public ConfigEntry<int> MinCreditsPerM3;
 
@@ -172,10 +172,12 @@ public sealed class TractorCaps : Feature
     }
 }
 
-[HarmonyPatch(typeof(TractorableItem), nameof(TractorableItem.CanBeAutoTractoredBy))]
-internal static class TractorCapsPatch
+[HarmonyPatch]
+internal static class TractorCapsPatches
 {
-    private static void Postfix(TractorableItem __instance, AbstractUnit unit, ref bool __result)
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(TractorableItem), nameof(TractorableItem.CanBeAutoTractoredBy))]
+    private static void CanBeAutoTractoredByPostfix(TractorableItem __instance, AbstractUnit unit, ref bool __result)
     {
         if (!TractorCaps.Instance.Active) return;
         try
@@ -183,15 +185,13 @@ internal static class TractorCapsPatch
             if (__result && Fleet.IsPlayerShip(unit) && !TractorCaps.Allows((SpaceShipData)unit.unitData, __instance.data.itemType))
                 __result = false;
         }
-        catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(TractorCapsPatch)); }
+        catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(CanBeAutoTractoredByPostfix)); }
     }
-}
 
-// Tooltips of loot in space (and of the Scanner's loot rows) say why your ships leave the item alone.
-[HarmonyPatch(typeof(CompareTooltip), "AddContextualFooterHints")]
-internal static class TractorCapsTooltipPatch
-{
-    private static void Postfix(CompareTooltip __instance, InventoryItemType item, ItemTooltipContext context)
+    // Tooltips of loot in space (and of the Scanner's loot rows) say why your ships leave the item alone.
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(CompareTooltip), "AddContextualFooterHints")]
+    private static void FooterHintsPostfix(CompareTooltip __instance, InventoryItemType item, ItemTooltipContext context)
     {
         if (!TractorCaps.Instance.Active || context != ItemTooltipContext.InSpace) return;
         try
@@ -199,6 +199,6 @@ internal static class TractorCapsTooltipPatch
             string why = TractorCaps.WhySkipped(item);
             if (why != null) __instance.AddTextLine("Not picked up automatically: " + why).Text.color = ColorHelper.reddish;
         }
-        catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(TractorCapsTooltipPatch)); }
+        catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(FooterHintsPostfix)); }
     }
 }

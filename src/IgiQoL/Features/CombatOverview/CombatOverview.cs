@@ -350,21 +350,30 @@ internal sealed class OverviewList : MonoBehaviour
         int debuffs = Effects.AllDebuffs(s);
         Effects.Collect(s, effectList, abilityList);
         int buffs = abilityList.Count;
+        int shownDebuffs = 0;
         foreach (var e in effectList)
-            if (!e.isDebuff) buffs++;
-        effectList.Clear();
-        abilityList.Clear();
+        {
+            if (e.isDebuff) shownDebuffs++;
+            else buffs++;
+        }
         Set(r.buffs, buffs.ToString());
         Set(r.debuffs, debuffs.ToString());
         var debuffColor = debuffs > 0 ? ColorHelper.red90 : ColorHelper.offWhite;
         if (r.debuffs.color != debuffColor) r.debuffs.color = debuffColor;
         var target = Aggro.Target(s);
         Set(r.target, target != null ? Aggro.Name(target) : "-");
-        if (!r.details.activeSelf) return;
+        if (!r.details.activeSelf)
+        {
+            effectList.Clear();
+            abilityList.Clear();
+            return;
+        }
 
         Set(r.resists, "<color=#8FA3B8>Resists</color>  " + Join(Stats.Section(s), true));
-        int hidden = debuffs - Effects.DebuffCount(s);
-        var effects = Stats.EffectsSection(s);
+        int hidden = debuffs - shownDebuffs;
+        var effects = Stats.EffectsSection(effectList, abilityList);
+        effectList.Clear();
+        abilityList.Clear();
         Set(r.effects, "<color=#8FA3B8>Effects</color>  " + (effects != null ? Join(effects, false) : "none")
                        + (hidden > 0 ? " | <color=#E64D4D>" + hidden + (hidden == 1 ? " stat debuff" : " stat debuffs") + "</color>" : ""));
         Set(r.weapons, "<color=#8FA3B8>Weapons</color>  " + Weapons(s));

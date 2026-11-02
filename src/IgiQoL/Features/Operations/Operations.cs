@@ -454,7 +454,8 @@ public sealed class OperationsList : MonoBehaviour
         public ExitAction shown;
     }
 
-    // None once the crew is already leaving or the operation is over; the game's own calls are no-ops then.
+    // None once the crew is already leaving or the operation is over. In the extraction phase the game's Abandon would
+    // complete the extraction, so the button hides there too.
     public static ExitAction ExitFor(DungeonOperation op)
     {
         if (op.isComplete || op._awaitingPodReturn || op.phase == MissionPhase.Extraction || op.phase == MissionPhase.Complete) return ExitAction.None;

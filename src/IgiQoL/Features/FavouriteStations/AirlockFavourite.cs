@@ -58,7 +58,7 @@ internal sealed class AirlockFavourite : MonoBehaviour
 
     private void Update()
     {
-        if (Time.unscaledTime < nextRefresh) return;
+        if (button == null || Time.unscaledTime < nextRefresh) return;
         nextRefresh = Time.unscaledTime + 0.5f;
         var f = FavouriteStations.Instance;
         if (!f.Active)

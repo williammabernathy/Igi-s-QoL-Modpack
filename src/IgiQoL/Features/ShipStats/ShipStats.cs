@@ -73,24 +73,33 @@ public sealed class ShipStats : Feature
     internal static TooltipSection EffectsSection(AbstractUnit unit)
     {
         Effects.Collect(unit, CardEffects, CardAbilities);
-        if (CardEffects.Count + CardAbilities.Count == 0) return null;
+        var section = EffectsSection(CardEffects, CardAbilities);
+        CardEffects.Clear();
+        CardAbilities.Clear();
+        return section;
+    }
+
+    // The same section from lists the caller already collected, so a caller that needs the lists for more than the
+    // section collects once.
+    internal static TooltipSection EffectsSection(List<TemporaryEffect> effects, List<ActivatedAbility> abilities)
+    {
+        if (effects.Count + abilities.Count == 0) return null;
         var section = new TooltipSection(EffectsTitle);
-        foreach (var e in CardEffects)
+        int debuffs = 0;
+        foreach (var e in effects)
         {
+            if (e.isDebuff) debuffs++;
             var color = e.isDebuff ? ColorHelper.debuffBorder : ColorHelper.buffBorder;
             string name = Translation.Translate(e.displayName);
             if (e.stackSize > 1) name += " x" + e.stackSize;
             var row = new TooltipRow(name, TimeLeft(e.durationRemaining), null) { dotColor = color };
             section.rows.Add(row.WithFill(e.duration > 0f ? e.durationRemaining / e.duration : 0f, color));
         }
-        foreach (var a in CardAbilities)
+        foreach (var a in abilities)
             section.rows.Add(new TooltipRow(Translation.Translate(a.displayName), a.toggleActive ? "on" : "active", null)
                 { dotColor = a.toggledAbility ? ColorHelper.orange75 : ColorHelper.buffBorder });
-        int debuffs = Effects.DebuffCount(unit);
         section.count = Count(section.rows.Count - debuffs, "buff") + " | " + Count(debuffs, "debuff");
         section.countColor = debuffs > 0 ? ColorHelper.red90 : ColorHelper.poiTooltipMuted;
-        CardEffects.Clear();
-        CardAbilities.Clear();
         return section;
     }
 

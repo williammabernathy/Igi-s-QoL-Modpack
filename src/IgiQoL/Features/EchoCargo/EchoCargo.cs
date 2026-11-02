@@ -687,7 +687,13 @@ public static class CargoRules
                 if (dest != null)
                 {
                     int room = Math.Max(0, rule.keepAmount - dest.GetCount(item));
-                    if (room > 0 && Cargo.Move(ship.cargo, dest, item, room) > 0) moved++;
+                    if (room > 0)
+                    {
+                        int want = Math.Min(room, stack.count);
+                        int n = Cargo.Move(ship.cargo, dest, item, room);
+                        if (n > 0) moved++;
+                        if (n < want) clear = false;
+                    }
                 }
                 continue;
             }
