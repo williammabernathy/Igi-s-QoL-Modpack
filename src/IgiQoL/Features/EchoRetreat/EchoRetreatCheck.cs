@@ -97,7 +97,9 @@ internal static class EchoRetreatCheck
         }
         if (!EchoRetreat.CanLeaveHere())
         {
-            ctx.Skip("retreat", $"ECHO wouldn't leave here (location {MapPointOfInterest.current?.name}, travelling {travel.TravelActive()}, operation running {Singleton<DungeonManager>.Instance?.HasAnyActiveOperation})");
+            var poi = MapPointOfInterest.current;
+            var dungeons = Singleton<DungeonManager>.Instance;
+            ctx.Skip("retreat", $"ECHO wouldn't leave here (location {(poi != null ? poi.name : "none")}, travelling {travel.TravelActive()}, operation running {(dungeons != null ? dungeons.HasAnyActiveOperation : false)})");
             yield break;
         }
         var here = MapPointOfInterest.current;
@@ -118,7 +120,7 @@ internal static class EchoRetreatCheck
             bool left = travel.TravelActive();
             var target = travel.targetPoi as Source.Galaxy.POI.SpaceStation;
             string status = SidePanel.instance.idleStatusMessage.text;
-            string detail = $"left {here?.name}={left} for {(travel.targetPoi != null ? travel.targetPoi.name : "none")} (a station: {target != null}); status '{status}'";
+            string detail = $"left {(here != null ? here.name : "none")}={left} for {(travel.targetPoi != null ? travel.targetPoi.name : "none")} (a station: {target != null}); status '{status}'";
             if (left && target != null && status.StartsWith("Retreating")) ctx.Pass("retreat", detail);
             else ctx.Fail("retreat", detail);
             if (target == null) yield break;

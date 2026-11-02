@@ -90,10 +90,13 @@ public sealed class EchoMissions : Feature
 public sealed class MissionKind
 {
     public readonly string Id, Label, Help;
+    // The activity the game offers this kind under (MissionGenerator.GetMissionType).
+    public readonly GameplayType Type;
 
-    public MissionKind(string id, string label, string help)
+    public MissionKind(string id, GameplayType type, string label, string help)
     {
         Id = id;
+        Type = type;
         Label = label;
         Help = help;
     }
@@ -105,25 +108,25 @@ public static class MissionKinds
     // courier switch already covers. Id = MissionGenerator.identifier (its class name).
     public static readonly MissionKind[] All =
     {
-        new("BountyHunt", "Combat: Eliminate Pirate Presence / Eliminate (faction) forces",
+        new("BountyHunt", GameplayType.Combat, "Combat: Eliminate Pirate Presence / Eliminate (faction) forces",
             "Fly to a location and destroy the enemy ships there. Short."),
-        new("ClearSalvageField", "Combat: Reclaim Salvage Rights",
+        new("ClearSalvageField", GameplayType.Combat, "Combat: Reclaim Salvage Rights",
             "Clear the guards and turrets from a wreck field. Short."),
-        new("ClearAsteroidField", "Combat: Reclaim Asteroid Belt",
+        new("ClearAsteroidField", GameplayType.Combat, "Combat: Reclaim Asteroid Belt",
             "Chase hostile miners from an asteroid field. The miners arrive over time, so ECHO sometimes leaves and comes back."),
-        new("ClearDungeon", "Combat: Clear Pirate Base",
+        new("ClearDungeon", GameplayType.Combat, "Combat: Clear Pirate Base",
             "An installation exploration: your crew raids a pirate base (3-5 minutes), finds credits and items aboard, and loses some crew, which ECHO hires again at the station. In two 30-minute test runs these paid far more credits than the other combat missions (about 0.3M and 1.3M credits found aboard against 5-50K). The Autopilot tab's operations setting can also rule them out."),
-        new("CaptureShip", "Combat: Capture Enemy Vessel",
+        new("CaptureShip", GameplayType.Combat, "Combat: Capture Enemy Vessel",
             "Disable a ship and board it with your crew. The Autopilot tab's operations setting can also rule these out."),
-        new("SalvageWreck", "Salvage: Recover (item)",
+        new("SalvageWreck", GameplayType.Salvage, "Salvage: Recover (item)",
             "Salvage one named item from a wreck at a new salvage location."),
-        new("SalvageSamples", "Salvage: Salvage (material)",
+        new("SalvageSamples", GameplayType.Salvage, "Salvage: Salvage (material)",
             "Salvage an amount of a material at a salvage location, some with a radiation hazard."),
-        new("MineOre", "Mining: Mine (ore)",
+        new("MineOre", GameplayType.Mining, "Mining: Mine (ore)",
             "Mine an amount of an ore."),
-        new("OreSamples", "Mining: Collect (ore)",
+        new("OreSamples", GameplayType.Mining, "Mining: Collect (ore)",
             "Mine an amount of an ore at a new asteroid field, some with a hazard."),
-        new("HelpMiner", "Mining: Support (ore) Mining",
+        new("HelpMiner", GameplayType.Mining, "Mining: Support (ore) Mining",
             "Mine an ore next to a faction's miners; on harder missions enemies arrive and the miner has to be protected."),
     };
 
@@ -142,10 +145,59 @@ public static class MissionKinds
         return true;
     }
 
-    // Docked at a board: with only "Clear Pirate Base" allowed every mission ECHO is offered is one, and with nothing
-    // allowed it is offered none. The generated missions are taken off the board again.
+    // Whether every kind of one activity is off. ECHO is only offered missions of the flagship's preferred activity, so
+    // that is the question that decides whether it has any mission to wait for. Generic (no turrets to tell) offers
+    // nothing at all, so the all-kinds answer is the best available. An activity with no kinds here (Cargo: Courier
+    // missions stay on the Autopilot tab's own switch) is never blocked.
+    public static bool NoneAllowedFor(GameplayType type)
+    {
+        if (type == GameplayType.Generic) return NoneAllowed();
+        var f = EchoMissions.Instance;
+        if (f == null || !f.Active) return false;
+        bool any = false;
+        foreach (var k in All)
+        {
+            if (k.Type != type) continue;
+            any = true;
+            if (f.Kinds[k.Id].Value) return false;
+        }
+        return any;
+    }
+
+    // Combat kinds the check isolates one at a time.
+    private static string[] CombatIds()
+    {
+        var ids = new List<string>();
+        foreach (var k in All)
+            if (k.Type == GameplayType.Combat) ids.Add(k.Id);
+        return ids.ToArray();
+    }
+
+    // Docked at a board: with one combat kind allowed every mission ECHO is offered is of that kind (two kinds offer
+    // different mission names), and with nothing allowed it is offered none. The generated missions are taken off the
+    // board again. Which kinds a station can offer depends on its level and the Autopilot tab's operations setting, so
+    // every combat kind is tried and the check needs two that the station offers.
     public static void Check(SelfCheckContext ctx)
     {
+        var f = EchoMissions.Instance;
+        var saved = new Dictionary<string, bool>();
+        foreach (var kv in f.Kinds) saved[kv.Key] = kv.Value.Value;
+        try
+        {
+            // The game offers ECHO only the preferred activity's kinds, so switching off all of those is what leaves
+            // ECHO with nothing to take, whatever the other activities allow.
+            foreach (var kv in f.Kinds) kv.Value.Value = true;
+            foreach (var k in All)
+                if (k.Type == GameplayType.Combat) f.Kinds[k.Id].Value = false;
+            string perType = $"combat kinds off, others on: none for Combat {NoneAllowedFor(GameplayType.Combat)}, none for Mining {NoneAllowedFor(GameplayType.Mining)}, none at all {NoneAllowed()}";
+            if (NoneAllowedFor(GameplayType.Combat) && !NoneAllowedFor(GameplayType.Mining) && !NoneAllowed()) ctx.Pass("kinds-per-activity", perType);
+            else ctx.Fail("kinds-per-activity", perType);
+        }
+        finally
+        {
+            foreach (var kv in saved) f.Kinds[kv.Key].Value = kv.Value;
+        }
+
         var interior = SpaceStationInterior.instance;
         var board = interior != null && interior.HasMissionBoard(missionCheck: true) ? interior.spacestation.missionBoard : null;
         if (board == null)
@@ -161,27 +213,39 @@ public static class MissionKinds
             ctx.Skip("kinds", $"the flagship's preferred activity is {type}; the check uses combat missions");
             return;
         }
-        var f = EchoMissions.Instance;
-        var saved = new Dictionary<string, bool>();
-        foreach (var kv in f.Kinds) saved[kv.Key] = kv.Value.Value;
         var offered = new List<Mission>();
         try
         {
-            foreach (var kv in f.Kinds) kv.Value.Value = kv.Key == "ClearDungeon";
-            string expected = Source.Util.Translation.Translate("@ClearDungeonMissionName");
-            var names = new List<string>();
-            int wrong = 0;
-            for (int i = 0; i < 6; i++)
+            var seen = new List<string>();      // kind: names offered, for the log line
+            var offering = new List<HashSet<string>>();
+            foreach (string id in CombatIds())
             {
-                var m = interior.GetMissionAvailableForAutopilot();
-                if (m == null) { names.Add("none"); continue; }
-                offered.Add(m);
-                names.Add(m.name);
-                if (m.name != expected) wrong++;
+                foreach (var kv in f.Kinds) kv.Value.Value = kv.Key == id;
+                var names = new HashSet<string>();
+                for (int i = 0; i < 6; i++)
+                {
+                    var m = interior.GetMissionAvailableForAutopilot();
+                    if (m == null) continue;
+                    offered.Add(m);
+                    names.Add(m.name);
+                }
+                seen.Add($"{id}: [{string.Join(", ", names)}]");
+                if (names.Count > 0) offering.Add(names);
             }
-            string detail = $"only '{expected}': offered [{string.Join(", ", names)}]";
-            if (offered.Count >= 3 && wrong == 0) ctx.Pass("kinds", detail);
-            else ctx.Fail("kinds", detail);
+            string detail = "one kind at a time: " + string.Join("; ", seen);
+            if (offering.Count < 2)
+                ctx.Skip("kinds", $"this station offers ECHO fewer than two combat kinds ({detail})");
+            else
+            {
+                // A different kind must come out as different missions: no name may be offered under two kinds.
+                var all = new HashSet<string>();
+                bool overlap = false;
+                foreach (var set in offering)
+                    foreach (var n in set)
+                        overlap |= !all.Add(n);
+                if (!overlap) ctx.Pass("kinds", detail);
+                else ctx.Fail("kinds", "a mission name came from two kinds: " + detail);
+            }
 
             foreach (var kv in f.Kinds) kv.Value.Value = false;
             var none = interior.GetMissionAvailableForAutopilot();

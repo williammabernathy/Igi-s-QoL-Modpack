@@ -72,42 +72,70 @@ public sealed class Separation : Feature
         if (ShipSettings.Get(g).separation == true && record != null && record["separation"].IsBoolean && record["separation"].AsBoolean) ctx.Pass("settings-roundtrip", detail);
         else ctx.Fail("settings-roundtrip", detail);
 
-        // Push direction: a fleet ship placed half a hull from the flagship is pushed straight away from it.
+        // Push direction: a fleet ship placed half a hull from the flagship is pushed straight away from it. Any other
+        // ship near the pair adds a push of its own, so the check picks a side where none is close and says which ships
+        // crowd it otherwise.
         SpaceShip wing = null;
         foreach (var d in GamePlayer.current.activeFleet)
             if (d != null && d.unit is SpaceShip s && s != flagship && s.rigidbody != null) { wing = s; break; }
         if (wing == null)
         {
-            ctx.Skip("push", "no fleet ship in space");
+            foreach (var n in new[] { "push", "apart", "live", "other-ships" }) ctx.Skip(n, "no fleet ship in space");
             yield break;
         }
         var we = ShipSettings.Edit(wing.spaceShipData.guid);
         var wingBefore = we.separation;
         Vector2 home = flagship.rigidbody.position;
-        Vector2 start = home + Vector2.right * 0.5f;
-        wing.transform.position = start;
-        wing.rigidbody.position = start;
-        var push = SeparationPatches.ComputePush(wing, Gap.Value);
-        string pushDetail = $"push=({push.x:0.00},{push.y:0.00}) wing at +0.5u east of the flagship";
-        if (push.x > 0.5f && Mathf.Abs(push.y) < push.x * 0.5f) ctx.Pass("push", pushDetail);
-        else ctx.Fail("push", pushDetail);
+        Vector2 pushDir = Vector2.zero;
+        string crowd = "";
+        foreach (var dir in new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down })
+        {
+            crowd = SeparationPatches.Nearby(wing, flagship, home + dir * 0.5f, Gap.Value);
+            if (crowd.Length == 0) { pushDir = dir; break; }
+        }
+        if (pushDir == Vector2.zero) ctx.Skip("push", "other ships crowd the flagship: " + crowd);
+        else
+        {
+            Vector2 start = home + pushDir * 0.5f;
+            wing.transform.position = start;
+            wing.rigidbody.position = start;
+            Physics2D.SyncTransforms();
+            var push = SeparationPatches.ComputePush(wing, Gap.Value);
+            float along = Vector2.Dot(push, pushDir), across = Mathf.Abs(Vector2.Dot(push, new Vector2(-pushDir.y, pushDir.x)));
+            string pushDetail = $"push=({push.x:0.00},{push.y:0.00}) wing at +0.5u {pushDir} of the flagship, along {along:0.00} across {across:0.00}, other ships near: {SeparationPatches.NearbyText(wing, flagship, start, Gap.Value)}";
+            if (along > 0.5f && across < along * 0.5f) ctx.Pass("push", pushDetail);
+            else ctx.Fail("push", pushDetail);
+        }
 
         // Apart: lined up side by side with a gap between the hulls, the bounding circles still overlap but the
         // outlines don't, so there is no push.
         wing.rigidbody.rotation = flagship.rigidbody.rotation;
         wing.transform.rotation = flagship.transform.rotation;
         float side = flagship.height + wing.height + Gap.Value + 1f;
-        Vector2 beside = home + (Vector2)flagship.transform.up * side;
-        wing.transform.position = beside;
-        wing.rigidbody.position = beside;
-        Physics2D.SyncTransforms();
-        var hullGap = flagship.surfaceCollider.Distance(wing.surfaceCollider);
-        float circles = Mathf.Max(flagship.radius, flagship.height) + Mathf.Max(wing.radius, wing.height) + Gap.Value;
-        var apart = SeparationPatches.ComputePush(wing, Gap.Value);
-        string apartDetail = $"centres {side:0.0} apart (circles reach {circles:0.0}), hull gap {hullGap.distance:0.00}, push=({apart.x:0.00},{apart.y:0.00})";
-        if (!hullGap.isValid || hullGap.distance < Gap.Value || side >= circles) ctx.Skip("apart", "couldn't line the hulls up: " + apartDetail);
-        else if (apart == Vector2.zero) ctx.Pass("apart", apartDetail);
-        else ctx.Fail("apart", apartDetail);
+        Vector2 up = flagship.transform.up;
+        Vector2 beside = home + up * side;
+        string apartCrowd = SeparationPatches.Nearby(wing, flagship, beside, Gap.Value);
+        if (apartCrowd.Length > 0)
+        {
+            beside = home - up * side;
+            string otherSide = SeparationPatches.Nearby(wing, flagship, beside, Gap.Value);
+            if (otherSide.Length > 0) apartCrowd = apartCrowd + " / " + otherSide;
+            else apartCrowd = "";
+        }
+        if (apartCrowd.Length > 0) ctx.Skip("apart", "other ships crowd the flagship's sides: " + apartCrowd);
+        else
+        {
+            wing.transform.position = beside;
+            wing.rigidbody.position = beside;
+            Physics2D.SyncTransforms();
+            var hullGap = flagship.surfaceCollider.Distance(wing.surfaceCollider);
+            float circles = Mathf.Max(flagship.radius, flagship.height) + Mathf.Max(wing.radius, wing.height) + Gap.Value;
+            var apart = SeparationPatches.ComputePush(wing, Gap.Value);
+            string apartDetail = $"centres {side:0.0} apart (circles reach {circles:0.0}), hull gap {hullGap.distance:0.00}, push=({apart.x:0.00},{apart.y:0.00}), other ships near: {SeparationPatches.NearbyText(wing, flagship, beside, Gap.Value)}";
+            if (!hullGap.isValid || hullGap.distance < Gap.Value || side >= circles) ctx.Skip("apart", "couldn't line the hulls up: " + apartDetail);
+            else if (apart == Vector2.zero) ctx.Pass("apart", apartDetail);
+            else ctx.Fail("apart", apartDetail);
+        }
 
         // Live: in the game's own physics step, the fleet ship's destination is its normal one plus the push.
         var targetModule = wing.targetProvider;
@@ -121,6 +149,7 @@ public sealed class Separation : Feature
         if (enemy == null || targetModule == null)
         {
             ctx.Skip("live", "no enemy for the fleet ship to fight");
+            ctx.Skip("other-ships", "no enemy for the fleet ship to fight");
             yield break;
         }
         var route = new List<Source.Galaxy.MapPointOfInterest>(GamePlayer.current.waypoints);
@@ -131,13 +160,17 @@ public sealed class Separation : Feature
         try
         {
             targetModule.SetManualTarget(enemy);
+            // The flagship may have moved toward its own target during the wait for enemies: place the wing now.
+            Vector2 start = flagship.rigidbody.position + Vector2.right * 0.5f;
+            SeparationPatches.Reset();
             wing.transform.position = start;
             wing.rigidbody.position = start;
+            Physics2D.SyncTransforms();
             for (int i = 0; i < 5; i++) yield return new WaitForFixedUpdate();
             SeparationPatches.TryGetState(wing, out var st);
             // Steered at the pushed point during ApplyThrust, with the game's own destination restored afterwards.
             applied = st != null && st.push.sqrMagnitude > 0.01f && (st.applied - (st.baseDestination + st.push)).sqrMagnitude < 0.0001f
-                && (wing.currentDestination - st.baseDestination).sqrMagnitude < 0.0001f;
+                && (wing.currentDestination - wing.ClampDestination(st.baseDestination)).sqrMagnitude < 0.0001f;
             liveDetail = st == null
                 ? $"no state (override={wing.overrideTarget.HasValue} hold={wing.holdPosition} target={(targetModule.priorityTarget != null)})"
                 : $"{wing.spaceShipData.GetShipName()}: push=({st.push.x:0.0},{st.push.y:0.0}) steered at {st.applied}, game destination {wing.currentDestination} kept";
@@ -154,8 +187,8 @@ public sealed class Separation : Feature
         // Other ships: an enemy dropped onto the flagship gets a push of its own only with OtherShips on.
         var other = enemy as SpaceShip;
         float wait = Time.realtimeSinceStartup + 20f;
-        while (other != null && other.targetProvider?.priorityTarget == null && Time.realtimeSinceStartup < wait) yield return new WaitForSeconds(0.5f);
-        if (other == null || other.rigidbody == null || other.targetProvider?.priorityTarget == null || other.overrideTarget.HasValue || other.holdPosition)
+        while (other != null && (other.targetProvider == null || other.targetProvider.priorityTarget == null) && Time.realtimeSinceStartup < wait) yield return new WaitForSeconds(0.5f);
+        if (other == null || other.rigidbody == null || other.targetProvider == null || other.targetProvider.priorityTarget == null || other.overrideTarget.HasValue || other.holdPosition)
         {
             ctx.Skip("other-ships", "no enemy ship with a target of its own");
             yield break;
@@ -257,6 +290,30 @@ internal static class SeparationPatches
         return push.sqrMagnitude > cap * cap ? push.normalized * cap : push;
     }
 
+    // Self-check only: the ships other than the unit and its partner whose circles reach this spot, "" when none.
+    // They push as well, so a check that expects only the partner's push can't run there.
+    internal static string Nearby(AbstractUnit unit, AbstractUnit partner, Vector2 at, float gap)
+    {
+        var sb = new System.Text.StringBuilder();
+        float r = Mathf.Max(unit.radius, unit.height, 0.5f);
+        foreach (var nav in ShipNavigator.navigators)
+        {
+            if (nav == null || nav.unit == null || nav.unit == unit || nav.unit == partner || nav.rb == null || !nav.isActiveAndEnabled) continue;
+            if (nav.unit.travelling || nav.unit.isCarrierFighter) continue;
+            float d = Vector2.Distance(at, nav.rb.position);
+            if (d >= r + nav.ownRadius + gap) continue;
+            if (sb.Length > 0) sb.Append(", ");
+            sb.Append(nav.unit.name).Append(' ').Append(d.ToString("0.0")).Append(" u");
+        }
+        return sb.ToString();
+    }
+
+    internal static string NearbyText(AbstractUnit unit, AbstractUnit partner, Vector2 at, float gap)
+    {
+        string s = Nearby(unit, partner, at, gap);
+        return s.Length == 0 ? "none" : s;
+    }
+
     // ApplyThrust is where the game steers toward currentDestination each physics step. The push is added for that
     // call only and the game's own destination is put back afterwards, so nothing the game stores is shifted.
     [HarmonyPrefix]
@@ -270,10 +327,10 @@ internal static class SeparationPatches
         {
             if (!(__instance is SpaceShip ship) || ship.isCarrierFighter) return;
             var module = ship.targetProvider;
-            if (ship.travelling || ship.holdPosition || ship.overrideTarget.HasValue || module == null || module.priorityTarget == null
-                || !feature.IsOn(ship))
+            if (!feature.IsOn(ship) || ship.travelling || ship.holdPosition || ship.overrideTarget.HasValue || module == null
+                || module.priorityTarget == null)
             {
-                states.Remove(ship);
+                if (states.Count > 0) states.Remove(ship);
                 return;
             }
             if (!states.TryGetValue(ship, out var s))
@@ -297,11 +354,13 @@ internal static class SeparationPatches
         catch (Exception e) { feature.Fail(e, nameof(SeparationPatches)); }
     }
 
+    // The game clamps currentDestination to the map at the top of ApplyThrust, so the pushed point was clamped and the
+    // stored one must be the clamped game destination, as if there had been no push.
     [HarmonyPostfix]
     [HarmonyPatch(typeof(AbstractUnit), "ApplyThrust")]
     private static void ApplyThrustPostfix(AbstractUnit __instance, Vector2? __state)
     {
-        if (__state.HasValue) __instance.currentDestination = __state.Value;
+        if (__state.HasValue) __instance.currentDestination = __instance.ClampDestination(__state.Value);
     }
 
     internal static bool TryGetState(AbstractUnit unit, out SeparationState state) => states.TryGetValue(unit, out state);

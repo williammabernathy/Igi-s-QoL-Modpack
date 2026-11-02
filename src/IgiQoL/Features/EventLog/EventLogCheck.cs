@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Behaviour.Gameplay;
 using Behaviour.Item;
 using Behaviour.Managers;
@@ -75,7 +76,7 @@ internal static class EventLogCheck
         opLog.Record(op);
         opLog.entries.Remove(op);
         var opLine = EventLog.Last(LogKind.Operation);
-        string opExpected = $"ECHO: {Translation.Translate("@DungeonMiningOutpostName")} at Check Field: succeeded; 4 defenders killed, 1 captured; 2 crew killed, 3 wounded; 6 items from 1 loot kinds, {Source.Util.GameMath.FormatNumber(315800)} credits";
+        string opExpected = $"ECHO: {Translation.Translate("@DungeonMiningOutpostName")} at Check Field: succeeded; 4 defenders killed, 1 captured; 2 crew killed, 3 wounded; 6 items from 1 loot kind, {Source.Util.GameMath.FormatNumber(315800)} credits";
         if (opLine != null && opLine.text == opExpected) ctx.Pass("operation", opLine.text);
         else ctx.Fail("operation", $"got '{opLine?.text}', expected '{opExpected}'");
 
@@ -99,6 +100,97 @@ internal static class EventLogCheck
         else ctx.Fail("tab", d);
         yield return ctx.Screenshot("window-log");
         ModWindow.Close();
+
+        yield return CheckPopout(ctx);
+    }
+
+    // The pop-out lists the newest lines first, keeps to its own line count and filter, and docks back into the tab.
+    private static IEnumerator CheckPopout(SelfCheckContext ctx)
+    {
+        const string id = EventLogTab.PopoutId;
+        string pref = PlayerPrefs.GetString(PopoutState.Pref(id), "");
+        bool wasOpen = Popouts.IsOpen(id);
+        ctx.Cleanup(() =>
+        {
+            Popouts.Close(id);
+            PlayerPrefs.SetString(PopoutState.Pref(id), pref);
+            Popouts.ForgetState(id);
+            if (wasOpen) Popouts.Open(id);
+        });
+        Popouts.Close(id);
+        var state = Popouts.State(id);
+        state.show = PopoutShow.Always;
+        state.collapsed = false;
+        state.options[EventLogTab.FilterOption] = -1;
+        state.options[EventLogTab.LinesOption] = 10;
+        for (int i = 0; i < 12; i++) Singleton<EventLogManager>.Instance.NewEvent("igi", "IgiQoL check pop-out line " + i);
+        Popouts.Open(id);
+        var p = Popouts.Get(id);
+        if (p == null)
+        {
+            ctx.Fail("popout", "the pop-out did not open");
+            yield break;
+        }
+        yield return null;
+        var list = p.GetComponentInChildren<EventLogTab.LogList>();
+        // Redraw now and read the log in the same frame: game notices and event lines keep arriving, so the rows are
+        // compared with the log's own newest entries, not with the lines pushed above.
+        if (list != null) list.Invalidate();
+        yield return null;
+        var shown = LineTexts(list, 2);
+        var entries = EventLog.Entries;
+        bool same = list != null && list.RowCount == 10 && shown.Count == 10 && entries.Count >= 10;
+        for (int i = 0; same && i < 10; i++)
+        {
+            var e = entries[entries.Count - 1 - i];
+            same = shown[i] == (e.repeats > 1 ? e.text + " (x" + e.repeats + ")" : e.text);
+        }
+        string d = $"rows={(list != null ? list.RowCount : -1)} first='{(shown.Count > 0 ? shown[0] : null)}' newest='{(entries.Count > 0 ? entries[entries.Count - 1].text : null)}'";
+        if (same) ctx.Pass("popout", d);
+        else ctx.Fail("popout", d);
+        yield return ctx.Screenshot("log-popout");
+
+        // Its own filter: notifications only, while the tab keeps showing everything.
+        int rows = 0;
+        bool onlyNotices = true;
+        if (list != null)
+        {
+            list.filterKind = (int)LogKind.Notice;
+            list.Invalidate();
+            yield return null;
+            rows = list.RowCount;
+            var column = list.transform;
+            for (int i = 0; i < column.childCount; i++)
+            {
+                var row = column.GetChild(i);
+                if (!row.gameObject.activeSelf || row.childCount < 3) continue;
+                onlyNotices &= row.GetChild(1).GetComponent<TMP_Text>().text == EventLogTab.KindName(LogKind.Notice);
+            }
+        }
+        d = $"rows={rows} onlyNotices={onlyNotices} tabFilter={EventLogTab.filter}";
+        if (rows > 0 && onlyNotices && EventLogTab.filter == -1) ctx.Pass("popout-filter", d);
+        else ctx.Fail("popout-filter", d);
+
+        Popouts.DockBack(id);
+        yield return null;
+        d = $"open={Popouts.IsOpen(id)} window={ModWindow.IsOpen} tab={ModWindow.CurrentTab}";
+        if (!Popouts.IsOpen(id) && ModWindow.IsOpen && ModWindow.CurrentTab == "log") ctx.Pass("popout-dock", d);
+        else ctx.Fail("popout-dock", d);
+        ModWindow.Close();
+    }
+
+    // The texts of the log lines (not the loot summary) in a LogList, in the order shown; cell 2 is the line's text.
+    private static List<string> LineTexts(EventLogTab.LogList list, int cell)
+    {
+        var texts = new List<string>();
+        if (list == null) return texts;
+        var column = list.transform;
+        for (int i = 0; i < column.childCount; i++)
+        {
+            var row = column.GetChild(i);
+            if (row.gameObject.activeSelf && row.childCount > cell) texts.Add(row.GetChild(cell).GetComponent<TMP_Text>().text);
+        }
+        return texts;
     }
 
     // Two stacks of the same ore pulled into the flagship's hold through the game's own pickup add up on one line.
@@ -115,6 +207,12 @@ internal static class EventLogCheck
         foreach (var t in InventoryItemType.all)
             if (t.itemCategory == ItemCategory.Ore) { ore = t; break; }
         var cargo = ship.spaceShipData.cargo;
+        // The game's pickup clamps to free space, so a full hold would pick up less than the 7 the check expects.
+        if (ore == null || cargo.GetSpaceAvailable() < 7f * ore.m3)
+        {
+            ctx.Skip("loot", ore == null ? "no ore item type" : "flagship hold can't take the ore");
+            yield break;
+        }
         int cargo0 = cargo.GetCount(ore);
         EventLog.Loot.TryGetValue(ore, out int total0);
         int picked = 0;

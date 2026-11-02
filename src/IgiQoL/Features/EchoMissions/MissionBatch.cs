@@ -120,22 +120,12 @@ public static class MissionBatch
         var focus = Singleton<FocusedMissionHandler>.Instance;
         var focused = focus.focusedMission;
         var before = new HashSet<Mission>(GamePlayer.current.missions);
+
+        // Limit 1 is the game's own decision: the prefix hands over and takes nothing. (Calling the game's decision
+        // here would undock and fly to the mission, which the checks after this one don't expect.) It doesn't need an
+        // open board, so it runs before the skips below.
         try
         {
-            int held0 = Held();
-            f.MissionsAtOnce.Value = Mathf.Max(3, held0 + 2);
-            bool result = idle.DecideMissionActivity();
-            var taken = new List<string>();
-            foreach (var m in GamePlayer.current.missions)
-                if (!before.Contains(m)) taken.Add($"{m.name} @ {m.GetActivePoi(forEcho: true)?.name} idle={m.idle}");
-            var next = NextOpen();
-            string detail = $"held {held0} -> {Held()} (limit {f.MissionsAtOnce.Value}), returned {result}, took [{string.Join("; ", taken)}], tracker on {focus.focusedMission?.name}, nearest open {next?.name}";
-            if (result && Held() == f.MissionsAtOnce.Value && taken.Count == f.MissionsAtOnce.Value - held0 && next != null && focus.focusedMission == next)
-                ctx.Pass("missions-at-once", detail);
-            else ctx.Fail("missions-at-once", detail);
-
-            // Limit 1 is the game's own decision: the prefix hands over and takes nothing. (Calling the game's decision
-            // here would undock and fly to the mission, which the checks after this one don't expect.)
             f.MissionsAtOnce.Value = 1;
             int count = GamePlayer.current.missions.Count;
             bool unused = false;
@@ -143,6 +133,51 @@ public static class MissionBatch
             string vanilla = $"missions {count} -> {GamePlayer.current.missions.Count}, game decides {handsOver}";
             if (handsOver && GamePlayer.current.missions.Count == count) ctx.Pass("missions-at-once-off", vanilla);
             else ctx.Fail("missions-at-once-off", vanilla);
+        }
+        finally { f.MissionsAtOnce.Value = saved; }
+
+        // In each of these the prefix hands over to the game and takes nothing, as it should; the game would take
+        // nothing either (IdleManager.TryFindNewMission), so there is nothing to measure.
+        foreach (var m in before)
+            if (m.storyId == null && m.failed)
+            {
+                ctx.Skip("missions-at-once", $"a failed mission ({m.name}) is held; the game abandons it before taking another");
+                return;
+            }
+        int heldNow = Held();
+        if (heldNow >= 4)
+        {
+            ctx.Skip("missions-at-once", $"already holding {heldNow} missions; the limit setting stops at 5, too few left to take");
+            return;
+        }
+        var probe = interior.GetMissionAvailableForAutopilot();
+        if (probe != null) interior.spacestation.missionBoard.availableMissions.Remove(probe);
+        if (probe == null)
+        {
+            ctx.Skip("missions-at-once", "the board offers no mission for the flagship's preferred activity, so ECHO takes none and the game decides");
+            return;
+        }
+        if (IdleManager.MissionDungeonExceedsRisk(probe) || !IdleManager.ShipHasLoadoutForMission(probe))
+        {
+            ctx.Skip("missions-at-once", $"the board offers '{probe.name}', which ECHO won't take (too risky or the flagship lacks the loadout)");
+            return;
+        }
+        try
+        {
+            int held0 = Held();
+            f.MissionsAtOnce.Value = Mathf.Max(3, held0 + 2);
+            bool result = false;
+            // The prefix alone: the game's own decision would undock and fly off. Handled = the prefix took the decision;
+            // true means it handed over to the game, which this setup (limit above 1, open board) must not do.
+            bool handled = !MissionBatchPatches.DecideMissionActivityPrefix(ref result);
+            var taken = new List<string>();
+            foreach (var m in GamePlayer.current.missions)
+                if (!before.Contains(m)) taken.Add($"{m.name} @ {m.GetActivePoi(forEcho: true)?.name} idle={m.idle}");
+            var next = NextOpen();
+            string detail = $"held {held0} -> {Held()} (limit {f.MissionsAtOnce.Value}), handled {handled}, returned {result}, took [{string.Join("; ", taken)}], tracker on {focus.focusedMission?.name}, nearest open {next?.name}";
+            if (handled && result && Held() == f.MissionsAtOnce.Value && taken.Count == f.MissionsAtOnce.Value - held0 && next != null && focus.focusedMission == next)
+                ctx.Pass("missions-at-once", detail);
+            else ctx.Fail("missions-at-once", detail);
         }
         finally
         {
@@ -160,7 +195,8 @@ internal static class MissionBatchPatches
     private static EchoMissions F => EchoMissions.Instance;
 
     // At a station with a mission board: top up to MissionsAtOnce missions in one go, then point ECHO at the nearest.
-    // With every mission kind switched off and nothing held, ECHO skips missions and goes on to its activities.
+    // With every mission kind of the flagship's preferred activity switched off and nothing held, ECHO skips missions and goes on to its activities;
+    // failed missions are still abandoned.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.DecideMissionActivity))]
     internal static bool DecideMissionActivityPrefix(ref bool __result)
@@ -169,9 +205,11 @@ internal static class MissionBatchPatches
         try
         {
             if (!GamePlayer.current.autopilotSettings.runMissions) return true;
-            if (MissionKinds.NoneAllowed() && MissionBatch.Held() == 0)
+            var flagship = Fleet.Flagship;
+            bool noneToTake = flagship != null ? MissionKinds.NoneAllowedFor(flagship.GetPreferredGameplayType()) : MissionKinds.NoneAllowed();
+            if (noneToTake && MissionBatch.Held() == 0)
             {
-                __result = false;
+                __result = IdleManager.TryAbandonFailedMission();
                 return false;
             }
             if (MissionBatch.Limit <= 1) return true;

@@ -163,11 +163,13 @@ public static class Services
                 int bought = 0;
                 long spent = 0;
                 string shortReason = null;
+                bool seenOnSale = false;
                 // A shop may split one item over several stacks; a handful of passes covers that.
                 for (int pass = 0; want > 0 && pass < 8; pass++)
                 {
                     var stack = ShopStack(ss, type);
-                    if (stack == null) { shortReason = "not sold here"; break; }
+                    if (stack == null) { shortReason = seenOnSale ? "the shop has no more" : "not sold here"; break; }
+                    seenOnSale = true;
                     if (faction != null && !stack.item.EnoughRepWithFaction(faction)) { shortReason = "reputation too low to buy it"; break; }
                     if (player.level < stack.item.shopItemData.levelRequirement) { shortReason = "your level is too low to buy it"; break; }
                     int n = Math.Min(want, stack.count);
@@ -298,19 +300,6 @@ public static class Services
 
     // ---- Sell: the Item rules tab's dock actions (Sell, Sell above N) for your own docking, like EchoCargo does for ECHO.
 
-    // Vanilla IdleManager.ShouldKeepInCargo, widened to the ammo each fleet ship uses.
-    private static bool Protected(SpaceShipData s, Inventory.InventoryItem stack)
-    {
-        if (stack.favourite) return true;
-        var item = stack.item;
-        if (item.itemCategory == ItemCategory.Ammo)
-        {
-            var unit = Fleet.Unit(s);
-            return unit == null || unit.DoWeUseAmmo(item);
-        }
-        return item.itemCategory == ItemCategory.Usable && item.storageOverride == StorageOverride.None;
-    }
-
     public static ServiceReport Sell(bool run)
     {
         var r = new ServiceReport();
@@ -327,7 +316,7 @@ public static class Services
                 var item = stack.item;
                 var rule = ItemRules.Resolve(item);
                 if (rule.dockAction != DockAction.Sell && rule.dockAction != DockAction.SellAbove) continue;
-                if (Protected(s, stack)) continue;
+                if (Items.KeepAboard(s, stack)) continue;
                 var dest = Cargo.DepositTarget(ss, item);
                 int stored = 0;
                 if (dest != null)
@@ -358,16 +347,13 @@ public static class Services
                         plannedM3[dest] = m + deposit * item.m3;
                     }
                     if (deposit < step.deposit)
-                    {
-                        r.problems.Add($"{Name(item)}: storage is full, kept {count - deposit} aboard {s.GetShipName()}.");
-                        continue;
-                    }
-                    count -= deposit;
-                    if (count <= 0) continue;
-                    step = CargoRules.Plan(rule, count, stored + deposit, reserved, sellable);
+                        r.problems.Add($"{Name(item)}: storage is full, kept {count - deposit - step.sell} aboard {s.GetShipName()}.");
                 }
+                else if (step.deposit > 0)
+                    r.problems.Add($"{Name(item)}: no storage here takes it, kept {count - step.sell} aboard {s.GetShipName()}.");
+                // Sell above N's part above N sells whether or not the deposit fit.
                 if (step.sell <= 0) continue;
-                int n = Math.Min(step.sell, count);
+                int n = step.sell;
                 long value = item.sellValue * n;
                 if (run)
                 {
@@ -381,7 +367,39 @@ public static class Services
                 r.lines.Add($"{s.GetShipName()}: {n} {Name(item)}, {Money(value)}");
             }
         }
+        // Data items never sit in cargo: the game keeps them in the player-wide data inventory. Station storage holds what
+        // earlier visits deposited here, and the armory the gear stored anywhere. Riskiest last.
+        var echo = EchoCargo.EchoCargo.Instance;
+        if (echo.SellFromData.Value) SellStored(r, run, ss, player.dataInventory, "Data inventory");
+        if (echo.SellFromStorage.Value) SellStored(r, run, ss, ss.materialStorage, "Station storage");
+        if (echo.SellFromArmory.Value) SellStored(r, run, ss, player.globalInventory, "Armory");
         return r;
+    }
+
+    private static void SellStored(ServiceReport r, bool run, SpaceStation ss, Inventory storage, string label)
+    {
+        var player = GamePlayer.current;
+        bool armory = storage == player.globalInventory;
+        HashSet<string> pieces = null;
+        var quoted = new Dictionary<InventoryItemType, int>();   // quotes only: what earlier stacks of the type would sell
+        foreach (var stack in new List<Inventory.InventoryItem>(storage.items))
+        {
+            var item = stack.item;
+            quoted.TryGetValue(item, out int q);
+            int n = CargoRules.StoredSell(ss, stack, q);
+            if (n <= 0 || armory && CargoRules.ArmoryKeeps(item, ref pieces)) continue;
+            long value = item.sellValue * n;
+            if (run)
+            {
+                player.credits += value;
+                if (item.itemCategory != ItemCategory.Data) ss.shopInventory.Add(item, n, item.buyBack);
+                storage.Remove(stack, n);
+            }
+            else quoted[item] = q + n;
+            r.credits += value;
+            r.count++;
+            r.lines.Add($"{label}: {n} {Name(item)}, {Money(value)}");
+        }
     }
 
     // ---- Crew: replace the crew your ships lost to hull hits (CrewLosses): from the crew reserve (free), then willing
@@ -419,6 +437,7 @@ public static class Services
                 int usedR = 0;
                 if (!run) reserveUsed.TryGetValue(type, out usedR);
                 int take = Math.Min(want, Math.Max(0, player.unassignedCrew.GetCrewCount(type) - usedR));
+                long creditEach = 0;   // set when the credits, not the supply, held a hire back
                 if (take > 0)
                 {
                     if (run)
@@ -441,7 +460,12 @@ public static class Services
                     {
                         long budget = run ? player.credits : player.credits - r.credits - spent;
                         int n = Math.Min(want - added, own ? shipWilling : stationWilling);
-                        if (cost > 0) n = (int)Math.Min(n, Math.Max(0L, budget / cost));
+                        if (cost > 0)
+                        {
+                            int affordable = (int)Math.Min(n, Math.Max(0L, budget / cost));
+                            if (affordable < n) creditEach = cost;
+                            n = affordable;
+                        }
                         if (n <= 0) continue;
                         if (run)
                         {
@@ -463,7 +487,12 @@ public static class Services
                     int price = PersonnelCenter.GetBuyPrice(crewType, ss.level);
                     int buy = Math.Min(want - added, stock - usedS);
                     long budget = run ? player.credits : player.credits - r.credits - spent;
-                    if (price > 0) buy = (int)Math.Min(buy, Math.Max(0L, budget / price));
+                    if (price > 0)
+                    {
+                        int affordable = (int)Math.Min(buy, Math.Max(0L, budget / price));
+                        if (affordable < buy) creditEach = price;
+                        buy = affordable;
+                    }
                     if (buy > 0 && (!run || center.TryPurchaseCrew(type, buy)))
                     {
                         long cost = (long)buy * price;
@@ -482,7 +511,8 @@ public static class Services
                 if (added > 0) parts.Add(CrewCount(added, type));
                 if (added < want)
                     r.problems.Add($"{s.GetShipName()}: {CrewCount(want - added, type)} short, "
-                                   + (center == null ? "none in your reserve or brigs and no personnel center here." : "not in your reserve or brigs or for hire here."));
+                                   + (creditEach > 0 ? $"not enough credits ({Money(creditEach)} each)."
+                                      : center == null ? "none in your reserve or brigs and no personnel center here." : "not in your reserve or brigs or for hire here."));
             }
             // A full ship has nothing left to replace, whatever the count says (crew of another type took the places).
             if (run && s.GetFreeCrewSpace() == 0) CrewLosses.Clear(s);

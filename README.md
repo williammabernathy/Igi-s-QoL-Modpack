@@ -1,6 +1,6 @@
 # Vanguard Galaxy mods
 
-My modding workspace for Vanguard Galaxy (Steam app 3471800), played on Linux through Proton. The main thing in it is Igi's QoL Modpack, one BepInEx plugin with 33 quality-of-life features. Around it are the tools for keeping mods working across game updates and a template for starting new ones.
+My modding workspace for Vanguard Galaxy (Steam app 3471800), played on Linux through Proton. The main thing in it is Igi's QoL Modpack, one BepInEx plugin with 42 quality-of-life features. Around it are the tools for keeping mods working across game updates and a template for starting new ones.
 
 The modpack, the tools and the template were developed and tested on Linux only, with the game running under Proton. The game itself is a Windows build, so they should also work on Windows, but nobody has tried them there yet. Reports from Windows players are welcome.
 

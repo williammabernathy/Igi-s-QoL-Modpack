@@ -27,18 +27,46 @@ public sealed class JumpsRemaining : Feature
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
         var info = TravelInfo.instance;
-        JumpsLabel.Set(info, 3);
-        var label = JumpsLabel.Label;
-        bool ok = label != null && label.transform.parent == info.distanceText.transform.parent && label.text.EndsWith(": 3");
-        string detail = label == null ? "label not created" : $"text='{label.text}' parent={label.transform.parent.name} pos={((RectTransform)label.transform).anchoredPosition}";
-        if (ok) ctx.Pass("label", detail);
-        else ctx.Fail("label", detail);
-        info.ToggleVisible(true);
-        ctx.Cleanup(() =>
+        if (info == null || GamePlayer.current == null) { ctx.Skip("label", "no travel panel"); yield break; }
+        // Drive the real UpdateTravelInfo so the postfix reads the waypoint count. Panel visibility and the
+        // waypoint list are put back before the check ends, so the panel never stays on screen.
+        var waypoints = GamePlayer.current.waypoints;
+        var savedWaypoints = waypoints.ToArray();
+        bool wasVisible = info.visible;
+        string text = null;
+        string parentName = null;
+        bool sameParent = false;
+        bool active = false;
+        Exception thrown = null;
+        try
         {
-            info.ToggleVisible(false);
-            if (JumpsLabel.Label != null) JumpsLabel.Label.gameObject.SetActive(false);
-        });
+            waypoints.Clear();
+            waypoints.Add(null);
+            waypoints.Add(null);
+            waypoints.Add(null);
+            info.ToggleVisible(true);
+            info.UpdateTravelInfo(1f, 1f, 1f, 1f);
+            var label = JumpsLabel.Label;
+            if (label != null)
+            {
+                text = label.text;
+                parentName = label.transform.parent.name;
+                sameParent = label.transform.parent == info.distanceText.transform.parent;
+                active = label.gameObject.activeSelf;
+            }
+        }
+        catch (Exception e) { thrown = e; }
+        finally
+        {
+            waypoints.Clear();
+            waypoints.AddRange(savedWaypoints);
+            info.ToggleVisible(wasVisible);
+            if (!wasVisible && JumpsLabel.Label != null) JumpsLabel.Label.gameObject.SetActive(false);
+        }
+        string detail = thrown != null ? thrown.GetType().Name + ": " + thrown.Message : text == null ? "label not created" : $"text='{text}' parent={parentName} active={active}";
+        // 3 waypoints is 2 jumps: the first one is where the fleet is.
+        if (thrown == null && text != null && sameParent && active && text.EndsWith(": 2")) ctx.Pass("label", detail);
+        else ctx.Fail("label", detail);
         yield break;
     }
 }

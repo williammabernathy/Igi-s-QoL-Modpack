@@ -57,7 +57,8 @@ public sealed class EventLog : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("log", "Log", 8, EventLogTab.Build);
+        ModWindow.AddTab(this, "log", "Log", 8, EventLogTab.Build);
+        EventLogTab.RegisterPopout(this);
         GameEvents.Arrived += OnArrived;
     }
 
@@ -100,7 +101,7 @@ public sealed class EventLog : Feature
             kinds++;
         }
         string money = credits > 0 ? ", " + Source.Util.GameMath.FormatNumber(credits) + " credits" : "";
-        return $"{(e.isAutonomous ? "ECHO: " : "")}{what} at {e.poiName}: {outcome}; {e.hostileKilled} defenders killed, {e.hostilesCaptured} captured; {e.friendlyKilled} crew killed, {e.friendlyWounded} wounded; {items} items from {kinds} loot kinds{money}";
+        return $"{(e.isAutonomous ? "ECHO: " : "")}{what} at {e.poiName}: {outcome}; {e.hostileKilled} defenders killed, {e.hostilesCaptured} captured; {e.friendlyKilled} crew killed, {e.friendlyWounded} wounded; {items} items from {kinds} loot {(kinds == 1 ? "kind" : "kinds")}{money}";
     }
 
     public static void Clear()

@@ -1,6 +1,6 @@
 # Igi's QoL Modpack
 
-One BepInEx plugin (`igi.qol`, in `BepInEx/plugins/IgiQoL/`) with 33 quality-of-life features for Vanguard Galaxy: a mod window with its own tabs, more say over ECHO's decisions, fleet-wide station services, ship loadouts, per-ship combat settings, logs and a damage parser. Every feature can be switched off on its own. The defaults play like the unmodded game, apart from the added HUD elements (the QoL button, the Scanner counter and markers, the fleet bars and command strip, the jump and mission distance lines) and one ECHO fix: it no longer pays for crew that can't fit aboard. Tested on game version 0.8.3.4.
+One BepInEx plugin (`igi.qol`, in `BepInEx/plugins/IgiQoL/`) with 42 quality-of-life features for Vanguard Galaxy: a mod window with its own tabs, more say over ECHO's decisions, fleet-wide station services, ship loadouts, per-ship combat settings, logs and a damage parser. Every feature can be switched off on its own. The defaults play like the unmodded game, apart from the added HUD elements (the QoL button, the Scanner counter and markers, the fleet bars and command strip, the jump and mission distance lines, the sort buttons on the mission board and the missions window, the Favourite button and the service buttons in the airlock) and one ECHO fix: it no longer pays for crew that can't fit aboard. Tested on game version 0.8.3.4.
 
 The modpack was developed and tested on Linux only, with the game running under Proton. Proton runs the game's Windows build, so the mod should work the same on Windows, but nobody has tested it there yet.
 
@@ -10,7 +10,7 @@ The modpack was developed and tested on Linux only, with the game running under 
 
 1. Install BepInEx 5 (`win_x64`, version 5.4.23 or later) into the game folder and start the game once. On Linux under Proton, BepInEx also needs a DLL override; [setup.md](../setup.md#installing-bepinex) explains it.
 2. Download `IgiQoL-<version>.zip` from the [releases page](https://github.com/williammabernathy/Igi-s-QoL-Modpack/releases) and extract it into the game folder. It adds `BepInEx/plugins/IgiQoL/`.
-3. Start the game. `BepInEx/LogOutput.log` should have a line like `IgiQoL startup: 34 active, 1 disabled, 0 failed` (the disabled one is the developer harness).
+3. Start the game. `BepInEx/LogOutput.log` should have a line like `IgiQoL startup: 43 active, 1 disabled, 0 failed` (the disabled one is the developer harness).
 
 To update, extract the new zip over the old one. To remove the mod, delete `BepInEx/plugins/IgiQoL/` (and `BepInEx/config/igi.qol.cfg` and `BepInEx/config/IgiQoL/` if you want its settings and files gone too).
 
@@ -22,11 +22,11 @@ The features, by area:
 
 | Area | Features |
 |---|---|
-| [Window and HUD](features/interface.md) | Mod window, ship settings popup, fleet command strip, fleet shield and armor bars, text size, jumps remaining, mission distance |
+| [Window and HUD](features/interface.md) | Mod window, ship settings popup, fleet command strip, fleet shield and armor bars, text size, jumps remaining, mission distance, mission sort, mission fit |
 | [ECHO, the autopilot](features/echo.md) | Activity priority, ECHO decisions, missions, retreat, abilities and deployables, preferred ores, ECHO's operations, cargo rules |
-| [Fleet and combat](features/fleet-combat.md) | Target priority, engagement distance, keep distance in combat, missile retargeting, drone modes, drones on arrival |
-| [Loot and cargo](features/loot-and-cargo.md) | Item rules, loot pickup limits, shared fleet holds, Scanner |
-| [Stations, loadouts and crafting](features/stations.md) | Station services, ship loadouts, crafting roll-up, Operations tab |
+| [Fleet and combat](features/fleet-combat.md) | Target priority, engagement distance, keep distance in combat, retreat for repairs, ship stats on hover, combat overview, missile retargeting, drone modes, drones on arrival |
+| [Loot and cargo](features/loot-and-cargo.md) | Item rules, loot pickup limits, shared fleet holds, pinned cargo, Scanner |
+| [Stations, loadouts and crafting](features/stations.md) | Station services, ship loadouts, crafting roll-up, refinery filter, "Used in" tooltips, Operations tab, favourite stations |
 | [Logs, reference and other mods](features/logs-and-reference.md) | Event log, DPS parser, stat reference, notes, other mods |
 
 [settings.md](settings.md) lists every setting with its default and range.
@@ -36,12 +36,13 @@ The features, by area:
 | Where | What |
 |---|---|
 | `BepInEx/config/igi.qol.cfg` | Every setting, one section per feature |
-| The save game, key `Player.igiQol` | Per-ship settings and loadouts, item rules, preferred ores, ECHO's activity list and ability rules, running crafting roll-ups and crew losses |
+| The save game, key `Player.igiQol` | Per-ship settings and loadouts, item rules, preferred ores, ECHO's activity list and ability rules, running crafting roll-ups, crew losses and favourite stations |
 | `BepInEx/config/IgiQoL/item-rules.json` | Optional. Starting item rules for saves that have none ([format](features/loot-and-cargo.md#starting-rules-for-new-saves)) |
-| `BepInEx/config/IgiQoL/notes.json` | The Notes tab |
+| `BepInEx/config/IgiQoL/notes.json` | The Notes tab. It's written through a temporary `notes.json.tmp`; a file the mod can't parse is renamed to `notes.json.broken-<number>` instead of being overwritten |
 | `BepInEx/config/IgiQoL/combat-log.txt` | Only with the DPS parser's `WriteFile` on |
+| The game's Unity PlayerPrefs | Where the mod window and the [pop-out windows](features/interface.md#pop-out-windows) sit, their size, their options and the open tab (also the open note on the Notes tab) |
 | `BepInEx/config/IgiQoL/dumps/` | Only from the developer harness |
-| Next to the game's `Saves` folder | `igiqol-*.png` screenshots, only from the developer harness |
+| Next to the game's `Saves` folder (Unity's `LocalLow/Bat Roost Games/VanguardGalaxy`) | `igiqol-*.png` screenshots, only from the developer harness |
 
 The mod keeps its own data under that one key and leaves the game's values in their vanilla form (drone modes, for example, are saved as the game's Free roam or Follow ship), so a save should still load without the mod and only lose the mod's data. Loading such a save in an unmodded game hasn't been tested yet; keep a backup.
 

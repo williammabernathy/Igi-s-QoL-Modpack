@@ -46,8 +46,8 @@ public sealed class ContactsBadge : MonoBehaviour
         UiCards.Stretch((RectTransform)text.transform);
         var button = rt.gameObject.AddComponent<Button>();
         button.targetGraphic = bg;
-        button.onClick.AddListener(() => ModWindow.Open("contacts"));
-        FleetBarParts.SetTooltip(button, null, "What is left at this location. Click for the Scanner tab.");
+        button.onClick.AddListener(OnClick);
+        FleetBarParts.SetTooltip(button, null, "What is left at this location. Click for the Scanner tab, or to find the Scanner window when it is open.");
         Instance = rt.gameObject.AddComponent<ContactsBadge>();
         Instance.rt = rt;
         Instance.bg = bg;
@@ -74,14 +74,17 @@ public sealed class ContactsBadge : MonoBehaviour
         catch (Exception e) { Contacts.Instance.Fail(e, nameof(ContactsBadge)); }
     }
 
+    // The check's way to read what the counter shows now, not up to a second ago.
+    internal void RefreshNow()
+    {
+        hudShown = HudManager.Instance != null && HudManager.Instance.showHud;
+        Refresh();
+    }
+
     private void Refresh()
     {
-        int b = 0;
-        foreach (var unit in BoardableUnit.all)
-            if (unit != null && unit.gameObject.activeInHierarchy) b++;
-        int w = SalvageContainer.all.Count;
-        int l = Contacts.PruneLoot();
-        bool show = Contacts.Instance.HudCounter.Value && hudShown && Fleet.Flagship != null && b + w + l > 0;
+        int total = Contacts.CountHere(out int b, out int w, out int l);
+        bool show = Contacts.Instance.HudCounter.Value && hudShown && Fleet.Flagship != null && total > 0;
         bg.enabled = text.enabled = button.interactable = show;
         if (!show) return;
         Follow();
@@ -100,6 +103,13 @@ public sealed class ContactsBadge : MonoBehaviour
         var qol = HudButton.Instance != null ? (RectTransform)HudButton.Instance.transform : null;
         var below = qol != null && qol.parent == rt.parent ? qol : dock;
         rt.anchoredPosition = below.anchoredPosition + new Vector2(0f, below.rect.height + 4f);
+    }
+
+    private static void OnClick()
+    {
+        var popout = Popouts.Get(Contacts.PopoutId);
+        if (popout != null) popout.Flash();
+        else ModWindow.Open("contacts");
     }
 
     private void OnDestroy()

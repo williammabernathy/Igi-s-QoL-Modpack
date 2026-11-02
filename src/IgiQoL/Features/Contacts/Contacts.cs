@@ -9,7 +9,9 @@ using Behaviour.Salvage;
 using Behaviour.Tractoring;
 using Behaviour.UI;
 using Behaviour.UI.HUD;
+using Behaviour.UI.Shared;
 using Behaviour.UI.Movement;
+using Behaviour.UI.Tooltip;
 using Behaviour.Unit;
 using Behaviour.Util;
 using Behaviour.Weapons;
@@ -22,6 +24,7 @@ using Source.Data.Persistable;
 using Source.Galaxy;
 using Source.Item;
 using Source.MissionSystem;
+using Source.Player;
 using Source.Util;
 using TMPro;
 using UnityEngine;
@@ -47,14 +50,16 @@ public sealed class Contacts : Feature
     public ConfigEntry<bool> MarkLoot;
     public ConfigEntry<bool> MarkOres;
 
-    // Every TractorableItem spawned since startup (the game keeps no list of its own); pruned of destroyed pieces on read.
+    // Every TractorableItem that gets its data: spawned loot and turrets packing themselves up (the game keeps no list of its own); pruned of destroyed pieces on read.
     public static readonly List<TractorableItem> Loot = new();
+
+    public const string PopoutId = "scanner";
 
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
         HudCounter = cfg.Bind(Id, "HudCounter", true, SettingInfo.Describe("Counter above the Dock button",
-            "Shows how many boardable ships, wrecks and loot stacks are left at your location. Click it to open the Scanner tab."));
+            "Shows how many boardable ships, wrecks and loot stacks are left at your location. Click it to open the Scanner tab, or to flash the Scanner window when it is open."));
         MarkBoardable = cfg.Bind(Id, "MarkBoardable", true, SettingInfo.Describe("Edge markers: boardable ships",
             $"Marks the {ContactMarkers.MaxPerKind} nearest boardable ships that are off screen at the screen edge, with their distance. Click a marker to open boarding."));
         MarkWrecks = cfg.Bind(Id, "MarkWrecks", true, SettingInfo.Describe("Edge markers: wrecks",
@@ -67,7 +72,8 @@ public sealed class Contacts : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("contacts", "Scanner", 5, Build);
+        ModWindow.AddTab(this, "contacts", "Scanner", 5, Build);
+        ScannerPopout.Register(this);
         GameEvents.SaveLoaded += OnSaveLoaded;
         GameEvents.HudReady += OnHudReady;
     }
@@ -95,16 +101,30 @@ public sealed class Contacts : Feature
         return Loot.Count;
     }
 
-    public static void Board(BoardableUnit b)
+    // What the HUD counter shows: boardable ships, wrecks and loot stacks here. The Scanner pop-out's "when relevant" uses the same count.
+    public static int CountHere(out int boardable, out int wrecks, out int loot)
     {
-        ModWindow.Close();
+        boardable = 0;
+        foreach (var unit in BoardableUnit.all)
+            if (unit != null && unit.gameObject.activeInHierarchy) boardable++;
+        wrecks = SalvageContainer.all.Count;
+        loot = PruneLoot();
+        return boardable + wrecks + loot;
+    }
+
+    public static bool HasContacts() => Fleet.Flagship != null && CountHere(out _, out _, out _) > 0;
+
+    // closeWindow: the tab and the edge markers close the QoL window first; the Scanner pop-out leaves everything open.
+    public static void Board(BoardableUnit b, bool closeWindow = true)
+    {
+        if (closeWindow) ModWindow.Close();
         HudManager.Instance.ToggleBoardingPanel(b);
     }
 
     // SalvageContainer.OnMouseUpAsButton without the mouse-over-UI check (the click comes from this window).
-    public static void Salvage(SalvageContainer c)
+    public static void Salvage(SalvageContainer c, bool closeWindow = true)
     {
-        ModWindow.Close();
+        if (closeWindow) ModWindow.Close();
         var list = FleetCommands.WithLoadout(FleetCommands.GetClickWorkCandidates(), GameplayType.Salvage);
         if (list.Count > 0) FleetCommands.IssueClickWork(list, c);
         c.OnTargetedHandling();
@@ -114,9 +134,9 @@ public sealed class Contacts : Feature
     }
 
     // Asteroid.OnMouseDown without the mouse-over-UI check (the click comes from this window).
-    public static void Mine(Asteroid a)
+    public static void Mine(Asteroid a, bool closeWindow = true)
     {
-        ModWindow.Close();
+        if (closeWindow) ModWindow.Close();
         var list = FleetCommands.GetClickWorkCandidates();
         string note = a.GetLoadoutNotification(list);
         if (note != null) InventoryInteractionManager.ShowRedNotification(note);
@@ -145,6 +165,9 @@ public sealed class Contacts : Feature
 
     private static void Build(RectTransform content)
     {
+        var top = Kit.Row(content, 6f, 26f);
+        PopoutTabButton.Add(top, "Pop out", "Dock back", () => Popouts.IsOpen(PopoutId), () => Popouts.Open(PopoutId), () => Popouts.Close(PopoutId), 110f,
+            "Show the minimap and this list in a window of its own that stays on screen while you play.");
         SettingRows.AddEntries(content, Instance.Id, SettingRows.Rows.Options);
         Kit.Muted(content, "Everything at this location you can board, salvage, tractor or mine, nearest first. Distances are in map units from your ship; the list refreshes every second.");
         Kit.Column(content, 2f).gameObject.AddComponent<ContactsList>();
@@ -171,12 +194,97 @@ public sealed class Contacts : Feature
         else ctx.Fail("tab", detail + $" tab={ModWindow.CurrentTab} headings={boardHeading}/{wreckHeading}/{lootHeading}");
         yield return ctx.Screenshot("window-contacts");
 
-        if (ContactsBadge.Instance != null) ctx.Pass("counter", $"text='{ContactsBadge.Instance.Text}' shown={ContactsBadge.Instance.Shown}");
-        else ctx.Skip("counter", "no QoL button");
+        var badge = ContactsBadge.Instance;
+        if (badge == null) ctx.Skip("counter", "no QoL button");
+        else
+        {
+            // The badge against the same count it is drawn from: shown exactly when there is something here, saying each kind's number.
+            badge.RefreshNow();
+            int total = CountHere(out int b, out int w, out int l);
+            bool hud = HudManager.Instance != null && HudManager.Instance.showHud && Fleet.Flagship != null;
+            bool wantShown = Instance.HudCounter.Value && hud && total > 0;
+            string text = badge.Text;
+            // Each non-zero kind once, with its exact count, and nothing for a kind that isn't here.
+            var parts = new List<string>();
+            if (b > 0) parts.Add(b + " boardable");
+            if (w > 0) parts.Add(w + (w == 1 ? " wreck" : " wrecks"));
+            if (l > 0) parts.Add(l + " loot");
+            bool textOk = !wantShown || text == string.Join(" | ", parts);
+            string counterDetail = $"text='{text}' shown={badge.Shown} want={wantShown} counts={b}/{w}/{l}";
+            if (badge.Shown == wantShown && textOk) ctx.Pass("counter", counterDetail);
+            else ctx.Fail("counter", counterDetail);
+        }
         ModWindow.Close();
 
         yield return CheckMarkers(ctx);
+        yield return CheckLootReason(ctx);
         yield return CheckOres(ctx);
+        yield return ScannerPopoutCheck.Run(ctx);
+    }
+
+    // Loot your ships won't pick up says why on its Scanner row and on the row's tooltip.
+    private static IEnumerator CheckLootReason(SelfCheckContext ctx)
+    {
+        yield return SelfCheckContext.EnsureInSpace();
+        var ship = Fleet.Flagship;
+        if (ship == null || !Singleton<LootManager>.HasInstance || ship.GetModule<TractorModule>() == null || !TractorCaps.TractorCaps.Instance.Active)
+        {
+            ctx.Skip("loot-reason", "not in space, no tractor beam on the flagship, or Loot pickup limits is off");
+            yield break;
+        }
+        InventoryItemType ore = null;
+        foreach (var t in InventoryItemType.all)
+            if (t.itemCategory == ItemCategory.Ore && GamePlayer.current.RequiredItemCountForMissions(t) == 0) { ore = t; break; }
+        if (ore == null)
+        {
+            ctx.Skip("loot-reason", "no ore item type");
+            yield break;
+        }
+        var item = Singleton<LootManager>.Instance.SpawnLootItem(new TractorableItemData
+        {
+            itemType = ore,
+            itemAmount = 3,
+            jettisoned = true,
+            ownerFaction = Faction.player,
+            position = (Vector2)ship.transform.position + new Vector2(0f, 30f),
+        }, null);
+        ItemTooltipSource source = null;
+        try
+        {
+            Rules.ItemRules.UseForTest("{\"default\":{\"tractorCap\":-1}}");
+            ModWindow.Open("contacts");
+            yield return new WaitForSeconds(1.5f);
+            var list = ModWindow.IsOpen ? ModWindow.Content.GetComponentInChildren<ContactsList>() : null;
+            string expected = Translation.Translate(ore.displayName) + " x3 | never pick up";
+            TMP_Text row = null;
+            if (list != null)
+                foreach (var t in list.GetComponentsInChildren<TMP_Text>())
+                    if (t.text == expected) { row = t; break; }
+            if (row != null) ctx.Pass("loot-reason", "row '" + row.text + "'");
+            else ctx.Fail("loot-reason", "no row '" + expected + "'");
+
+            source = row != null ? row.GetComponent<ItemTooltipSource>() : null;
+            if (source == null || !UITooltip.TooltipEnabled) ctx.Skip("loot-reason-tooltip", "no row tooltip or tooltips are off");
+            else
+            {
+                UITooltip.Show(source, source.Prefab);
+                string line = null;
+                if (UITooltip._current != null)
+                    foreach (var t in UITooltip._current.Content.GetComponentsInChildren<TMP_Text>(true))
+                        if (t.text.StartsWith("Not picked up automatically: ", StringComparison.Ordinal)) line = t.text;
+                if (line == "Not picked up automatically: never pick up") ctx.Pass("loot-reason-tooltip", line);
+                else ctx.Fail("loot-reason-tooltip", "line '" + line + "'");
+                yield return ctx.Screenshot("window-contacts-loot-reason");
+            }
+        }
+        finally
+        {
+            if (source != null) UITooltip.Hide(source);
+            Rules.ItemRules.Load();
+            ModWindow.Close();
+            if (item != null) Object.DestroyImmediate(item.gameObject);
+            PruneLoot();
+        }
     }
 
     // Two Cerrax asteroids and one Amberic spawned next to the ship show up as two ore rows, the listed ore marked.
@@ -255,7 +363,8 @@ public sealed class Contacts : Feature
                 }
                 bool marked = farA != null && ContactMarkers.Instance != null && ContactMarkers.Instance.Marks(farA, out var anchor) && anchor.y < 0.01f;
                 bool plainMarked = plainA != null && ContactMarkers.Instance != null && ContactMarkers.Instance.Marks(plainA, out _);
-                string md = $"preferred far asteroid found={(farA != null)} marked at bottom={marked}; other ore marked={plainMarked}; markers shown={ContactMarkers.Instance?.ShownCount}";
+                var markers = ContactMarkers.Instance;
+                string md = $"preferred far asteroid found={(farA != null)} marked at bottom={marked}; other ore marked={plainMarked}; markers shown={(markers != null ? markers.ShownCount : 0)}";
                 if (marked && !plainMarked) ctx.Pass("ore-markers", md);
                 else ctx.Fail("ore-markers", md);
             }
@@ -343,16 +452,16 @@ public sealed class Contacts : Feature
     }
 }
 
-[HarmonyPatch(typeof(LootManager), nameof(LootManager.SpawnLootItem))]
+[HarmonyPatch(typeof(TractorableItem), nameof(TractorableItem.SetData))]
 internal static class LootSpawnPatch
 {
-    private static void Postfix(TractorableItem __result)
+    private static void Postfix(TractorableItem __instance)
     {
         if (!Contacts.Instance.Active) return;
         try
         {
-            if (__result == null) return;
-            Contacts.Loot.Add(__result);
+            if (__instance == null || Contacts.Loot.Contains(__instance)) return;
+            Contacts.Loot.Add(__instance);
             // Destroyed pieces are otherwise only dropped when something reads the list.
             if ((Contacts.Loot.Count & 63) == 0) Contacts.PruneLoot();
         }
@@ -388,6 +497,8 @@ public sealed class ContactsList : MonoBehaviour
         public Kind kind;
         public object key;
         public TMP_Text main, dist, value;
+        public RectTransform rt;
+        public UnityEngine.UI.Image bg;
     }
 
     private readonly List<BoardableUnit> boardables = new();
@@ -413,6 +524,42 @@ public sealed class ContactsList : MonoBehaviour
     public int WreckCount => wrecks.Count;
     public int LootGroupCount => groupList.Count;
     public int OreGroupCount => oreList.Count;
+    public int RowCount => rows.Count;
+
+    // Row actions leave the window they sit in open (the Scanner pop-out); the tab closes the QoL window first.
+    public bool KeepWindow;
+    // Rows highlight on click (the pop-out, where a minimap dot is the other half of a selection).
+    public bool SelectRows;
+    // The selected row's key (a unit, an item type or an ore key), kept while its row is gone.
+    public object Selected { get; private set; }
+
+    private static readonly Color SelectedColor = new(0.3f, 0.5f, 0.8f, 0.35f);
+    private static readonly Dictionary<OreItemData, string> surfaceKeys = new();
+    private static readonly Dictionary<OreItemData, string> coreKeys = new();
+
+    internal static string OreKey(OreItemData ore, bool core)
+    {
+        var cache = core ? coreKeys : surfaceKeys;
+        if (!cache.TryGetValue(ore, out var key)) cache[ore] = key = ore.item.identifier + (core ? "|core" : "|surface");
+        return key;
+    }
+
+    // The row key a contact belongs to: the unit itself, its loot's item type, or its surface ore (core ore when only that is listed).
+    internal static object KeyOf(Component c, int scanLevel)
+    {
+        switch (c)
+        {
+            case BoardableUnit or SalvageContainer: return c;
+            case TractorableItem item: return item.data?.itemType;
+            case Asteroid a:
+                var d = a.asteroidData;
+                if (d == null) return null;
+                if (d.surfaceAmount > 0 && d.surfaceItem != null) return OreKey(d.surfaceItem, false);
+                if (scanLevel > 0 && d.innerCoreAmount > 0 && d.innerCoreItem != null) return OreKey(d.innerCoreItem, true);
+                return null;
+        }
+        return null;
+    }
 
     private void Awake()
     {
@@ -496,8 +643,10 @@ public sealed class ContactsList : MonoBehaviour
         scanLevel = Asteroid.GetTooltipScanLevel();
         var poiManager = BasePoiManager.current;
         if (poiManager != null)
-            foreach (var a in poiManager.GetComponentsInChildren<Asteroid>())
+            foreach (var t in OrePreference.OrePreference.SceneAsteroids())
             {
+                var a = t as Asteroid;
+                if (a == null) continue;
                 var data = a.asteroidData;
                 if (data == null || data.isVisualOnly) continue;
                 asteroidsHere++;
@@ -510,7 +659,7 @@ public sealed class ContactsList : MonoBehaviour
 
     private void AddOre(OreItemData ore, bool core, int amount, Asteroid a, float d)
     {
-        string key = ore.item.identifier + (core ? "|core" : "|surface");
+        string key = OreKey(ore, core);
         if (!oreGroups.TryGetValue(key, out var g))
         {
             g = new OreGroup { key = key, ore = ore, core = core, nearest = float.MaxValue };
@@ -561,8 +710,8 @@ public sealed class ContactsList : MonoBehaviour
             var row = Kit.Row(column, 6f, 22f);
             var r = new Row { kind = Kind.Boardable, key = b, main = Kit.Label(row, "") };
             r.dist = Kit.Fixed(row, "", 50f, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
-            Kit.TextButton(row, "Board", () => Contacts.Board(unit), 70f);
-            rows.Add(r);
+            Kit.TextButton(row, "Board", () => Contacts.Board(unit, !KeepWindow), 70f);
+            Track(r, row);
         }
         if (boardables.Count == 0) Kit.Muted(column, "None");
 
@@ -574,12 +723,12 @@ public sealed class ContactsList : MonoBehaviour
             var row = Kit.Row(column, 6f, 22f);
             var r = new Row { kind = Kind.Wreck, key = c, main = Kit.Label(row, "") };
             r.dist = Kit.Fixed(row, "", 50f, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
-            Kit.TextButton(row, "Salvage", () => Contacts.Salvage(wreck), 70f);
-            rows.Add(r);
+            Kit.TextButton(row, "Salvage", () => Contacts.Salvage(wreck, !KeepWindow), 70f);
+            Track(r, row);
         }
         if (wrecks.Count == 0) Kit.Muted(column, "None");
 
-        Kit.Heading(column, "Loot (" + groupList.Count + " kinds)");
+        Kit.Heading(column, "Loot (" + groupList.Count + (groupList.Count == 1 ? " kind)" : " kinds)"));
         foreach (var g in groupList)
         {
             var type = g.type;
@@ -587,11 +736,12 @@ public sealed class ContactsList : MonoBehaviour
             var row = Kit.Row(column, 6f, 22f);
             var r = new Row { kind = Kind.Loot, key = type, main = Kit.Label(row, "") };
             r.main.color = type.rarity.GetColor();
-            Kit.ItemTooltip(r.main, type);
+            // Loot in space: the tooltip says why your ships leave it (see TractorCaps), without the inventory click hints.
+            Kit.ItemTooltip(r.main, type, ItemTooltipContext.InSpace, interactive: false);
             r.value = Kit.Fixed(row, "", 70f, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
             r.dist = Kit.Fixed(row, "", 50f, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
             if (tractor != null) Kit.TextButton(row, "Tractor", () => Contacts.Tractor(type), 70f);
-            rows.Add(r);
+            Track(r, row);
         }
         if (groupList.Count == 0) Kit.Muted(column, "None");
 
@@ -611,15 +761,56 @@ public sealed class ContactsList : MonoBehaviour
                 Kit.Tooltip(r.main, Translation.Translate(g.ore.item.displayName), g.ore.GetDescription());
                 r.value = Kit.Fixed(row, "", 70f, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
                 r.dist = Kit.Fixed(row, "", 50f, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
-                Kit.TextButton(row, "Mine", () => { if (oreGroups.TryGetValue(key, out var now) && now.closest != null) Contacts.Mine(now.closest); }, 70f);
-                rows.Add(r);
+                Kit.TextButton(row, "Mine", () => { if (oreGroups.TryGetValue(key, out var now) && now.closest != null) Contacts.Mine(now.closest, !KeepWindow); }, 70f);
+                Track(r, row);
             }
             if (oreList.Count == 0) Kit.Muted(column, "All mined out");
             Kit.Muted(column, scanLevel == 0 ? "Core ores show up here with the Basic Scanning mining skill, ore amounts with Advanced Scanning, as on the asteroid tooltips."
                 : scanLevel == 1 ? "Ore amounts show up here with the Advanced Scanning mining skill, as on the asteroid tooltips." : "Amounts are ore units left in those asteroids.");
         }
 
+        Highlight();
         Refresh();
+    }
+
+    private void Track(Row r, RectTransform row)
+    {
+        r.rt = row;
+        rows.Add(r);
+        if (!SelectRows) return;
+        r.bg = UiCards.AddBackground(row.gameObject, Color.clear);
+        r.bg.raycastTarget = true;
+        var button = row.gameObject.AddComponent<UnityEngine.UI.Button>();
+        button.targetGraphic = r.bg;
+        button.transition = UnityEngine.UI.Selectable.Transition.None;
+        object key = r.key;
+        button.onClick.AddListener(() => Select(key, false));
+    }
+
+    public void Select(object key, bool scroll)
+    {
+        Selected = key;
+        Highlight();
+        if (!scroll || key == null) return;
+        var row = RowOf(key);
+        if (row != null) UiScrollView.ScrollToTop(row);
+    }
+
+    public RectTransform RowOf(object key)
+    {
+        foreach (var r in rows)
+            if (object.Equals(r.key, key)) return r.rt;
+        return null;
+    }
+
+    private void Highlight()
+    {
+        foreach (var r in rows)
+        {
+            if (r.bg == null) continue;
+            var color = Selected != null && object.Equals(r.key, Selected) ? SelectedColor : Color.clear;
+            if (r.bg.color != color) r.bg.color = color;
+        }
     }
 
     private void Refresh()
@@ -642,7 +833,8 @@ public sealed class ContactsList : MonoBehaviour
                 default:
                 {
                     var g = groups[(InventoryItemType)r.key];
-                    main = Translation.Translate(g.type.displayName) + " x" + g.total + (g.pieces > 1 ? " (" + g.pieces + " stacks)" : "");
+                    string why = TractorCaps.TractorCaps.WhySkipped(g.type);
+                    main = Translation.Translate(g.type.displayName) + " x" + g.total + (g.pieces > 1 ? " (" + g.pieces + " stacks)" : "") + (why != null ? " | " + why : "");
                     value = GameMath.FormatNumber(g.type.sellValue * g.total) + " cr";
                     break;
                 }

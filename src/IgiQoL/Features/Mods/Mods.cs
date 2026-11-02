@@ -30,7 +30,7 @@ public sealed class Mods : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("mods", "Mods", 88, Build);
+        ModWindow.AddTab(this, "mods", "Mods", 88, Build);
         GameEvents.MainMenuShown += LogOnce;
     }
 

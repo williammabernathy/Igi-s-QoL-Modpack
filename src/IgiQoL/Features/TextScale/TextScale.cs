@@ -27,8 +27,9 @@ public sealed class TextScale : Feature
 
     public ConfigEntry<int> Percent;
 
-    // Applied to the font size during layout; 1 is vanilla.
-    internal static float Factor = 1f;
+    // The size the feature last set; 1 is vanilla. Factor reads 1 once the feature is off.
+    private static float current = 1f;
+    internal static float Factor => Instance != null && Instance.Active ? current : 1f;
 
     public override void BindConfig(ConfigFile cfg)
     {
@@ -43,20 +44,26 @@ public sealed class TextScale : Feature
         SetFactor(Percent.Value / 100f);
         Percent.SettingChanged += (_, _) =>
         {
-            SetFactor(Percent.Value / 100f);
-            // The mod window sizes its tabs for the text size when it opens.
-            if (!ModWindow.IsOpen) return;
-            string tab = ModWindow.CurrentTab;
-            ModWindow.Close();
-            ModWindow.Open(tab);
+            if (!Active) return;
+            try
+            {
+                SetFactor(Percent.Value / 100f);
+                // The mod window and the pop-outs size their columns for the text size when they're built.
+                Popouts.RebuildAll();
+                if (!ModWindow.IsOpen) return;
+                string tab = ModWindow.CurrentTab;
+                ModWindow.Close();
+                ModWindow.Open(tab);
+            }
+            catch (Exception e) { Fail(e, nameof(Percent)); }
         };
     }
 
     // Every text lays itself out again at the new size.
     internal static void SetFactor(float factor)
     {
-        if (Mathf.Approximately(factor, Factor)) return;
-        Factor = factor;
+        if (Mathf.Approximately(factor, current)) return;
+        current = factor;
         foreach (var t in Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include))
         {
             t.havePropertiesChanged = true;
@@ -98,12 +105,16 @@ public sealed class TextScale : Feature
             else ctx.Fail("layout", detail);
         }
         finally { Object.DestroyImmediate(go); }
+        // The layout block moved the factor on its own; put it back to the saved setting, and pick a test value that
+        // differs from it, since a ConfigEntry raises SettingChanged only when its value changes.
+        SetFactor(percent / 100f);
+        int test = percent == 130 ? 120 : 130;
 
         // Same path as the Settings tab: the value changes while the window is open on it, and the window rebuilds.
         ModWindow.Open("settings");
-        Percent.Value = 130;
+        Percent.Value = test;
         string setDetail = $"factor={Factor:0.##} open={ModWindow.IsOpen} tab={ModWindow.CurrentTab}";
-        if (Mathf.Approximately(Factor, 1.3f) && ModWindow.IsOpen && ModWindow.CurrentTab == "settings") ctx.Pass("setting", setDetail);
+        if (Mathf.Approximately(Factor, test / 100f) && ModWindow.IsOpen && ModWindow.CurrentTab == "settings") ctx.Pass("setting", setDetail);
         else ctx.Fail("setting", setDetail);
         yield return ctx.Screenshot("text-130");
         Percent.Value = percent;

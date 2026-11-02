@@ -27,6 +27,7 @@ public sealed class WindowFeature : Feature
 
     public ConfigEntry<Key> Hotkey;
     public ConfigEntry<ButtonPlace> Place;
+    public ConfigEntry<Key> PopoutInteractKey;
 
     public override void BindConfig(ConfigFile cfg)
     {
@@ -37,6 +38,8 @@ public sealed class WindowFeature : Feature
             "Where the QoL button sits while you fly. On top of the side menu: above the column of side menu buttons at the right, moving with them when the side panel opens and closes. Above the Dock button: the bottom middle of the HUD, where it stays put. " +
             "You can also drag the button; it keeps that distance from its place until you press Reset below.",
             "On top of the side menu", "Above the Dock button"));
+        PopoutInteractKey = cfg.Bind(Id, "PopoutInteractKey", Key.LeftCtrl, SettingInfo.Describe("Pop-out windows: key to use a click-through window",
+            "A pop-out window with click-through on lets your clicks on its body reach the game. Hold this key to use the window itself instead; its header always works. Type a key name such as LeftCtrl, LeftShift or LeftAlt; either Ctrl, Shift or Alt key counts. Ignored while you type in a text field."));
     }
 
     public override void OnActivated()
@@ -45,15 +48,17 @@ public sealed class WindowFeature : Feature
         GameEvents.HudReady += OnHudReady;
         Place.SettingChanged += (_, _) =>
         {
+            if (!Active) return;
             try { HudButton.Place(); }
             catch (Exception e) { Fail(e, nameof(Place)); }
         };
         Hotkey.SettingChanged += (_, _) =>
         {
+            if (!Active) return;
             try { HudButton.RefreshTooltips(); }
             catch (Exception e) { Fail(e, nameof(Hotkey)); }
         };
-        ModWindow.Register("settings", "Settings", 90, BuildSettings);
+        ModWindow.AddTab(this, "settings", "Settings", 90, BuildSettings);
     }
 
     private void OnHudReady()
@@ -101,7 +106,7 @@ public sealed class WindowFeature : Feature
         {
             if (kv.Key.Section == "Dev") continue;
             var owner = Array.Find(FeatureRegistry.All, f => f.Id == kv.Key.Section);
-            if (kv.Key.Key == "Enabled" || owner == null || owner.SettingsTab == null) entries++;
+            if (kv.Key.Key == "Enabled" || owner == null || owner.SettingsTab == null || !ModWindow.HasTab(owner.SettingsTab)) entries++;
         }
         int rows = 0;
         if (ModWindow.IsOpen)
@@ -114,6 +119,7 @@ public sealed class WindowFeature : Feature
         if (ModWindow.IsOpen && rows == entries) ctx.Pass("window-open", detail);
         else ctx.Fail("window-open", detail + $" open={ModWindow.IsOpen}");
         yield return ctx.Screenshot("window-settings");
+        yield return WindowResizeCheck.Run(ctx);
 
         if (HudButton.Instance == null) ctx.Skip("hud-button", "no dock button in this scene");
         else

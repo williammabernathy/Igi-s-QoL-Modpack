@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Behaviour.UI;
 using Behaviour.UI.Spacestation;
@@ -71,7 +72,7 @@ internal sealed class AirlockServices : MonoBehaviour
 
     private void Update()
     {
-        if (Time.unscaledTime < nextRefresh) return;
+        if (buttons == null || Time.unscaledTime < nextRefresh) return;
         nextRefresh = Time.unscaledTime + 1f;
         var f = StationServices.Instance;
         if (!f.Active || !f.AirlockButtons.Value)
@@ -86,10 +87,19 @@ internal sealed class AirlockServices : MonoBehaviour
     internal void Refresh()
     {
         KeepLast();
+        Apply();
         // Ours plus the game's own buttons can reach past the panel into the Undock button; then every label of ours gets
-        // its short form for the rest of this visit (the airlock lays the row out each frame, so the overlap shows on the
-        // next refresh).
-        if (!compact && RowOverflows()) compact = true;
+        // its short form until you leave the airlock screen. The row is measured after laying it out, and the labels are
+        // redone at once, so the first frame the airlock shows is already right.
+        if (!compact && RowOverflows())
+        {
+            compact = true;
+            Apply();
+        }
+    }
+
+    private void Apply()
+    {
         bool c = compact;
         var r = Services.Repair(false);
         Show(repair, r, (c ? "Repair " : "Repair fleet ") + Services.Money(r.credits), c ? "Repair" : "Repair fleet", "Repair fleet",
@@ -103,8 +113,17 @@ internal sealed class AirlockServices : MonoBehaviour
             "Tops up every ship's ammo to the \"ammo minutes\" target in ECHO's Autopilot tab: from your armory first, then from this station's shops."
             + (cells > 0 ? $" The ship you fly also gets up to {cells} warp fuel cell{(cells == 1 ? "" : "s")}." : ""));
         r = Services.Sell(false);
+        var echo = EchoCargo.EchoCargo.Instance;
+        var from = new List<string>(3);
+        if (echo.SellFromData.Value) from.Add("your data inventory");
+        if (echo.SellFromStorage.Value) from.Add("this station's storage");
+        if (echo.SellFromArmory.Value) from.Add("your armory");
+        string stored = from.Count == 0 ? ""
+            : " It also sells from " + (from.Count == 1 ? from[0] : string.Join(", ", from.GetRange(0, from.Count - 1)) + " and " + from[from.Count - 1])
+              + ", keeping N there for Sell above N.";
+        string armoryKept = echo.SellFromArmory.Value ? " The armory also keeps warp fuel, every ammo type your fleet fires and the pieces your saved loadouts use." : "";
         Show(sell, r, (c ? "Sell +" : "Sell by rules +") + Services.Money(r.credits), c ? "Sell" : "Sell by rules", "Sell by rules",
-            "Sells your fleet's cargo whose Item rules dock action is Sell; for Sell above N it stores up to N first. Favourites, mission items and the ammo a ship uses stay aboard.");
+            "Sells your fleet's cargo whose Item rules dock action is Sell; for Sell above N it stores up to N first." + stored + " Favourites, mission items and the ammo a ship uses stay aboard." + armoryKept);
         r = Services.Crew(false);
         string crewLabel = c ? "Crew" : "Replace crew";
         Show(crew, r, r.credits > 0 ? crewLabel + " " + Services.Money(r.credits) : crewLabel, crewLabel, "Replace crew",
@@ -128,6 +147,8 @@ internal sealed class AirlockServices : MonoBehaviour
                     break;
                 }
         }
+        // The airlock lays the row out once a frame; do it now so buttons shown or resized a moment ago are where they will be.
+        airlock.LayoutButtonRow();
         float limit;
         if (undock != null && undock.gameObject.activeInHierarchy)
         {
@@ -139,10 +160,11 @@ internal sealed class AirlockServices : MonoBehaviour
             ((RectTransform)airlock.transform).GetWorldCorners(corners);
             limit = corners[2].x;
         }
-        foreach (var go in buttons)
+        // Every button of the row counts, the Favourite button and the game's own included, not only ours.
+        foreach (var rt in airlock.buttonRow)
         {
-            if (!go.activeSelf) continue;
-            ((RectTransform)go.transform).GetWorldCorners(corners);
+            if (rt == null || !rt.gameObject.activeSelf) continue;
+            rt.GetWorldCorners(corners);
             if (corners[2].x > limit) return true;
         }
         return false;

@@ -226,13 +226,13 @@ public static class Kit
     }
 
     // The game's item hover card on any graphic; no-op when the HUD has no item tooltip prefab.
-    public static void ItemTooltip(Graphic target, InventoryItemType item)
+    public static void ItemTooltip(Graphic target, InventoryItemType item, ItemTooltipContext context = ItemTooltipContext.InInventory, bool interactive = true)
     {
         if (UITooltipParent.ItemTooltipPrefab == null) return;
         target.raycastTarget = true;
         var src = target.GetComponent<ItemTooltipSource>();
         if (src == null) src = target.gameObject.AddComponent<ItemTooltipSource>();
-        src.SetItem(item, 1, false, ItemTooltipContext.InInventory);
+        src.SetItem(item, 1, false, context, interactive: interactive);
     }
 
     public static string Icon(string fallback, params string[] candidates)

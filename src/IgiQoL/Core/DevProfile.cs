@@ -95,8 +95,8 @@ internal static class DevProfile
         Instrument();
         if (enemies > 0 && !SelfCheckContext.SpawnEnemies(enemies)) Plugin.Log.LogInfo("[Dev] profile: no enemies spawned");
         float until = Time.realtimeSinceStartup + 20f;
-        while (Time.realtimeSinceStartup < until && Hostiles() < Mathf.Min(enemies, 1)) yield return new WaitForSeconds(1f);
-        yield return new WaitForSeconds(5f);
+        while (Time.realtimeSinceStartup < until && Hostiles() < Mathf.Min(enemies, 1)) yield return new WaitForSecondsRealtime(1f);
+        yield return new WaitForSecondsRealtime(5f);
 
         var frames = new List<float>();
         var hostiles = new List<int>();
@@ -108,24 +108,32 @@ internal static class DevProfile
         bool skip = true;
         int allFrames = 0;
         long frameStart = Stopwatch.GetTimestamp();
-        while (Time.realtimeSinceStartup < end)
+        double wallMs;
+        // Always unpatch and clear the flags, even if the profile is abandoned part way through.
+        try
         {
-            yield return null;
-            allFrames++;
-            if (!skip) frames.Add(Time.unscaledDeltaTime * 1000f);
-            skip = false;
-            if (Time.realtimeSinceStartup >= nextCensus)
+            while (Time.realtimeSinceStartup < end)
             {
-                hostiles.Add(Hostiles());
-                units.Add(UnityEngine.Object.FindObjectsByType<AbstractUnit>(FindObjectsInactive.Exclude).Length);
-                nextCensus = Time.realtimeSinceStartup + 1f;
-                skip = true;
+                yield return null;
+                allFrames++;
+                if (!skip) frames.Add(Time.unscaledDeltaTime * 1000f);
+                skip = false;
+                if (Time.realtimeSinceStartup >= nextCensus)
+                {
+                    hostiles.Add(Hostiles());
+                    units.Add(UnityEngine.Object.FindObjectsByType<AbstractUnit>(FindObjectsInactive.Exclude).Length);
+                    nextCensus = Time.realtimeSinceStartup + 1f;
+                    skip = true;
+                }
             }
+            wallMs = (Stopwatch.GetTimestamp() - frameStart) * 1000.0 / Stopwatch.Frequency;
         }
-        double wallMs = (Stopwatch.GetTimestamp() - frameStart) * 1000.0 / Stopwatch.Frequency;
-        collecting = false;
-        SimMarker.collecting = false;
-        harmony.UnpatchSelf();
+        finally
+        {
+            collecting = false;
+            SimMarker.collecting = false;
+            harmony.UnpatchSelf();
+        }
         Report(frames, allFrames, hostiles, units, wallMs);
     }
 

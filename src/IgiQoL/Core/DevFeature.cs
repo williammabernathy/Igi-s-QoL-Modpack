@@ -83,7 +83,7 @@ public sealed class DevFeature : Feature
 
     private void OnMainMenuShown()
     {
-        if (autoLoadDone || string.IsNullOrEmpty(AutoLoadSave.Value)) return;
+        if (!Active || autoLoadDone || string.IsNullOrEmpty(AutoLoadSave.Value)) return;
         autoLoadDone = true;
         try
         {
@@ -129,7 +129,7 @@ public sealed class DevFeature : Feature
         }
         else
         {
-            yield return new WaitForSeconds(3f);
+            yield return new WaitForSecondsRealtime(3f);
             var config = Plugin.Instance.Config;
             bool saveOnSet = config.SaveOnConfigSet;
             config.SaveOnConfigSet = false;
@@ -195,7 +195,7 @@ public sealed class DevFeature : Feature
                 yield return new WaitForEndOfFrame();
                 string path = Application.persistentDataPath + "/igiqol-screenshot.png";
                 ScreenCapture.CaptureScreenshot(path);
-                yield return new WaitForSeconds(2f);
+                yield return new WaitForSecondsRealtime(2f);
                 Plugin.Log.LogInfo($"[Dev] screenshot -> {path}");
             }
 
@@ -206,14 +206,16 @@ public sealed class DevFeature : Feature
             }
             config.SaveOnConfigSet = saveOnSet;
 
-            if (ProfileSeconds.Value > 0) yield return DevProfile.Run(ProfileSeconds.Value, ProfileEnemies.Value);
-            if (EchoSoakSeconds.Value > 0) yield return Soak(EchoSoakSeconds.Value);
+            var devCtx = new SelfCheckContext { FeatureId = Id };
+            if (ProfileSeconds.Value > 0) yield return Protected(DevProfile.Run(ProfileSeconds.Value, ProfileEnemies.Value), devCtx);
+            if (EchoSoakSeconds.Value > 0) yield return Protected(Soak(EchoSoakSeconds.Value), devCtx);
+            fail += devCtx.FailCount;
         }
 
         Plugin.Log.LogInfo($"Self-check complete: {pass} pass, {fail} fail, {skip} skip");
         if (QuitAfterSeconds.Value > 0)
         {
-            yield return new WaitForSeconds(QuitAfterSeconds.Value);
+            yield return new WaitForSecondsRealtime(QuitAfterSeconds.Value);
             Application.Quit();
         }
     }

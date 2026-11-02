@@ -32,7 +32,7 @@ public sealed class Guide : Feature
     public override string Description => "The Stat reference tab: damage types with the weapons that deal them and the armour weak to them, every armour type's resistance, how a hit is reduced on its way to the hull, and your ship's handling and crit numbers, all read from the game's data.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 
-    public override void OnActivated() => ModWindow.AddTab("guide", "Stat reference", 85, Build);
+    public override void OnActivated() => ModWindow.AddTab(this, "guide", "Stat reference", 85, Build);
 
     internal sealed class WeaponType
     {
@@ -114,7 +114,10 @@ public sealed class Guide : Feature
     {
         Collect();
 
-        var hit = Section(content, "How a hit lands", first: true);
+        bool usedIn = UsedIn.UsedIn.Instance != null && UsedIn.UsedIn.Instance.Active;
+        if (usedIn) UsedIn.UsedInSearch.Build(Section(content, "Forge recipes that use an item", first: true));
+
+        var hit = Section(content, "How a hit lands", first: !usedIn);
         Kit.Text(hit, "1. The weapon rolls its damage: power / 5, times 0.8 to 1.25, spread over its shots per second. A critical hit multiplies it by 2 plus the weapon's critical damage bonus; with the Mega crit skill one hit can crit more than once.");
         Kit.Text(hit, "2. The weapon's bonus for its damage type and its general damage bonus are added on top.");
         Kit.Text(hit, "3. The target's damage reduction and its resistance to that damage type take their share off. Together they never remove more than 80%.");
@@ -179,8 +182,8 @@ public sealed class Guide : Feature
         float top = ship.GetReachableTopSpeed();
         float side = rb.mass > 0f ? ship.engine.sideThrust / rb.mass : 0f;
         Kit.Text(lines, $"Tonnage {ship.unitData.unitDefinition.tonnage}: the hull's mass is tonnage x 10 ({rb.mass:0}). Engines push against it, so a heavier hull with the same engine is slower to speed up, turn and sidestep.");
-        Kit.Text(lines, $"Acceleration {accel:0.00} units/s² (thrust / mass), top speed {top:0.0} units/s, about {(accel > 0f ? top / accel : 0f):0} s from standstill.");
-        Kit.Text(lines, $"Sidestep {side:0.00} units/s² (side thrust / mass): {0.5f * side * 9f:0.0} units in 3 s from standing, too little to dodge missiles, which turn on a 4-11 unit circle. Turning speed is rotational thrust against the hull's inertia, so it also falls with tonnage.");
+        Kit.Text(lines, $"Acceleration {accel:0.00} units per second squared (thrust / mass), top speed {top:0.0} units/s, about {(accel > 0f ? top / accel : 0f):0} s from standstill.");
+        Kit.Text(lines, $"Sidestep {side:0.00} units per second squared (side thrust / mass): {0.5f * side * 9f:0.0} units in 3 s from standing, too little to dodge missiles, which turn on a 4-11 unit circle. Turning speed is rotational thrust against the hull's inertia, so it also falls with tonnage.");
         float precision = ship.GetPrecisionCrit();
         Kit.Text(lines, $"Base crit chance 3% + {precision * 100f:0.0}% from Precision ({ship.GetStat(EquipStat.Precision):0}), before weapon crit bonuses. Each crit multiplies damage by 2 plus the critical damage bonus (x{2f + ship.GetStat(EquipStat.CriticalDamage):0.00} for this ship).");
         var resists = new StringBuilder();
@@ -198,7 +201,7 @@ public sealed class Guide : Feature
             string key = "@EquipStat" + s + "Description";
             if (!Translation.Exists(key)) continue;
             string name = Translation.Exists("@EquipStat" + s) ? Translation.Translate("@EquipStat" + s) : s.ToString();
-            descriptions ??= Section(content, "The game's own stat descriptions");
+            if (descriptions == null) descriptions = Section(content, "The game's own stat descriptions");
             Kit.Text(descriptions, "<b>" + name + "</b>: " + Translation.Translate(key));
         }
     }

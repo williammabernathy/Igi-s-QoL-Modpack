@@ -10,12 +10,13 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[Window]`
 
-[Mod window](features/interface.md#mod-window)
+[Mod window](features/interface.md#mod-window), [pop-out windows](features/interface.md#pop-out-windows)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `Hotkey` | Hotkey | `F6` | a key name: `F6`, `F7`, `Backquote`, `K`, ... |
 | `ButtonPlace` | QoL button in space | `SideMenu` | `SideMenu`, `DockButton` |
+| `PopoutInteractKey` | Pop-out windows: key to use a click-through window | `LeftCtrl` | a key name: `LeftCtrl`, `LeftShift`, `LeftAlt`, `F8`, ...; either Ctrl, Shift or Alt key counts |
 
 ### `[TextScale]`
 
@@ -44,6 +45,19 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 ### `[MissionDistance]`
 
 [Mission distance](features/interface.md#mission-distance): only `Enabled`.
+
+### `[MissionSort]`
+
+[Mission sort](features/interface.md#mission-sort)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `Board` | Mission board order | `GameOrder` | `GameOrder`, `Type`, `Level`, `Difficulty` |
+| `Window` | Missions window order | `GameOrder` | `GameOrder`, `Type`, `Level`, `Difficulty`, `Distance` |
+
+### `[MissionFit]`
+
+[Mission fit](features/interface.md#mission-fit): only `Enabled`.
 
 ## ECHO, the autopilot
 
@@ -125,6 +139,9 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `ApplyToAutoDeposit` | Apply when fleet cargo auto-deposits on dock | `true` | `true`, `false` |
+| `SellFromData` | Sell from the data inventory | `true` | `true`, `false` |
+| `SellFromStorage` | Sell from station storage | `false` | `true`, `false` |
+| `SellFromArmory` | Sell from the armory | `false` | `true`, `false` |
 
 ## Fleet and combat
 
@@ -134,9 +151,11 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `Rule` | Target choice | `Nearest` | `Nearest`, `LowestHull`, `HighestHull`, `MostDamage`, `AttackingFlagship`, `SmallestFirst`, `LargestFirst`, `LowestLevel`, `HighestLevel` |
+| `Rule` | Target choice | `Nearest` | `Nearest`, `LowestHull`, `HighestHull`, `MostDamage`, `AttackingFlagship`, `SmallestFirst`, `LargestFirst`, `LowestLevel`, `HighestLevel`, `WeakestToMyWeapons`, `DebuffedFirst` |
 | `RepickSeconds` | Re-check the target every (seconds) | `0` | 0 to 30 |
 | `FinishBelowPercent` | Don't switch away from targets below (hull %) | `0` | 0 to 100 |
+| `WeakestGuardPercent` | Weakest to my weapons: needs a lead of (%) | `25` | 0 to 200 |
+| `DebuffedGuardPercent` | Debuffed first: needs a lead of (%) | `25` | 0 to 200 |
 
 ### `[EngagementDistance]`
 
@@ -151,6 +170,22 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | `Default` | Keep distance from other ships | `false` | `true`, `false` |
 | `Gap` | Gap between hulls (units) | `2` | 0.5 to 10 |
 | `OtherShips` | Other ships keep distance too | `false` | `true`, `false` |
+
+### `[FleetRetreat]`
+
+[Retreat for repairs](features/fleet-combat.md#retreat-for-repairs): only `Enabled`. The threshold is set per ship in the popup.
+
+### `[ShipStats]`
+
+[Ship stats on hover](features/fleet-combat.md#ship-stats-on-hover): only `Enabled`.
+
+### `[CombatOverview]`
+
+[Combat overview](features/fleet-combat.md#combat-overview). Its show condition, opacity, click-through and "Ships shown" are per machine, in the window's Options.
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `Hotkey` | Hotkey | `F7` | a key name: `F7`, `F8`, ...; `None` turns it off |
 
 ### `[MissileRetarget]`
 
@@ -194,6 +229,14 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 |---|---|---|---|
 | `Overflow` | Pass cargo to ships with room | `false` | `true`, `false` |
 
+### `[CargoPins]`
+
+[Pinned cargo](features/loot-and-cargo.md#pinned-cargo)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `PinKey` | Pin key | `P` | a key name: `P`, `K`, `F7`, ... |
+
 ### `[Contacts]`
 
 [Scanner](features/loot-and-cargo.md#scanner)
@@ -230,6 +273,14 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 [Crafting roll-up](features/stations.md#crafting-roll-up): only `Enabled`.
 
+### `[RefineryFilter]`
+
+[Refinery filter](features/stations.md#refinery-filter): only `Enabled`.
+
+### `[UsedIn]`
+
+["Used in" tooltips](features/stations.md#used-in-tooltips): only `Enabled`.
+
 ### `[Operations]`
 
 [Operations tab](features/stations.md#operations-tab)
@@ -237,6 +288,12 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `PlayerAutoBuyOut` | Accept buyouts automatically | `false` | `true`, `false` |
+| `BoardingCompartment` | Boardings | `None` | `None` or the name of one of the game's compartment types, for example `Armory`, `CargoHold`, `Bridge`, `LivingQuarters`, `ReactorRoom`, `MessHall`, `Brig`, `OfficersLounge` |
+| `InstallationCompartment` | Installations | `None` | `None` or a compartment type name, the same list as `BoardingCompartment`; installations mostly have rooms such as `StorageBay`, `ControlRoom`, `GeneratorRoom`, `ServerRoom`, `Workshop` |
+
+### `[FavouriteStations]`
+
+[Favourite stations](features/stations.md#favourite-stations): only `Enabled`. The list itself is kept in the save.
 
 ## Logs, reference and other mods
 

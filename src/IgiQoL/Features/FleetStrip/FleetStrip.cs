@@ -68,8 +68,9 @@ public sealed class FleetStrip : Feature
             }
             int expected = (MissileRetarget.MissileRetarget.Instance.Active ? 1 : 0) + (DronesOnArrival.DronesOnArrival.Instance.Active ? 1 : 0)
                 + (EngagementDistance.EngagementDistance.Instance.Active ? 1 : 0) + (DroneModes.DroneModes.Instance.Active ? 2 : 0)
-                + (Separation.Separation.Instance.Active ? 1 : 0)
-                + (TargetPriority.TargetPriority.Instance.Active ? 3 + TargetPriority.TargetPriority.CombatWeaponCount(ship) : 0);
+                + (Separation.Separation.Instance.Active ? 1 : 0) + (FleetRetreat.FleetRetreat.Instance.Active ? 1 : 0)
+                + (TargetPriority.TargetPriority.Instance.Active ? 5 + TargetPriority.TargetPriority.CombatWeaponCount(ship) : 0)
+                + (CargoPins.CargoPins.Instance.Active ? 1 : 0);
             string detail = $"open={ShipPopup.IsOpen} controls={controls} expected={expected} ship={ship.GetShipName()}";
             if (ShipPopup.IsOpen && controls == expected) ctx.Pass("popup", detail);
             else ctx.Fail("popup", detail);
@@ -196,13 +197,15 @@ public sealed class FleetStripRow : MonoBehaviour
         var data = row.shipData;
         if (data == null) return;
         data.tractorOff = !data.tractorOff;
-        (data.unit as SpaceShip)?.ApplyTractorToggle();
+        var unit = data.unit as SpaceShip;
+        if (unit != null) unit.ApplyTractorToggle();
         Refresh();
     }
 
     private void OnDrones()
     {
-        var bay = (Ship())?.GetModule<DroneBayModule>();
+        var ship = Ship();
+        var bay = ship != null ? ship.GetModule<DroneBayModule>() : null;
         if (bay == null || !bay.CanDeployReturn()) return;
         if (bay.AreDronesDeployed())
         {

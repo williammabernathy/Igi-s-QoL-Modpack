@@ -28,8 +28,13 @@ internal static class PatchOverlap
         // Patches are attributed by the assembly that holds the patch method: Harmony ids can be random
         // (Harmony.CreateAndPatchAll without an id) or unrelated to the plugin GUID.
         var plugins = new Dictionary<Assembly, string>();
+        // A DLL with several [BepInPlugin] classes is one entry named after all of them.
         foreach (var info in Chainloader.PluginInfos.Values)
-            if (info.Instance != null) plugins[info.Instance.GetType().Assembly] = info.Metadata.Name;
+        {
+            if (info.Instance == null) continue;
+            var assembly = info.Instance.GetType().Assembly;
+            plugins[assembly] = plugins.TryGetValue(assembly, out var known) ? known + ", " + info.Metadata.Name : info.Metadata.Name;
+        }
 
         var result = new List<Shared>();
         foreach (var method in Harmony.GetAllPatchedMethods())

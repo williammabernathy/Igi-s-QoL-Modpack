@@ -9,9 +9,9 @@ How `src/IgiQoL` is put together and the rules every feature follows. Building a
 | `Plugin.cs` | The BepInEx plugin (`igi.qol`). Logs the game version against `TestedGameVersion`, then starts the registry |
 | `Core/` | The feature registry, the `Feature` base class, game events, save data, per-ship settings, the startup report, the `[Dev]` harness and its dumps and profiler |
 | `Features/<Name>/` | One folder per feature: the `Feature` subclass, its Harmony patch classes, its tab, its self-check |
-| `Game/` | Small helpers over game objects shared by several features: `Fleet` (flagship, fleet ship list, data-to-unit), `Cargo` (count, move, deposit target), `Items` (rule keys) |
+| `Game/` | Small helpers over game objects shared by several features: `Fleet` (flagship, fleet ship list, data-to-unit), `Cargo` (count, move, deposit target), `Items` (rule keys, the ammo a ship's fit fires), `Resists` (the share of a hit a unit takes by damage type, shields and hull, then armour), `Effects` (the buffs and debuffs on a unit), `Aggro` (a unit's target, what an NPC's threat table is after, and who is targeting a unit) |
 | `Rules/` | `ItemRules`, the per-save item rule table that loot pickup limits, ECHO cargo rules and station services read |
-| `UI/` | The mod window and its widgets (`Kit`), settings rows, the ship settings popup, drag handles, fleet row layout |
+| `UI/` | The mod window and its widgets (`Kit`), pop-out windows (`Popout`), settings rows, the ship settings popup, drag handles, fleet row layout, link clicks (`LinkClicks`), shared UI templates (`Templates`) |
 
 ## Startup and lifecycle
 
@@ -44,12 +44,12 @@ sequenceDiagram
 | `PatchClasses` | The `[HarmonyPatch]` classes to apply |
 | `SettingsTab` | The tab that shows this feature's settings (e.g. `"ECHO"`); the Settings tab then shows only the on/off switch |
 | `BindConfig` | Call `base.BindConfig(cfg)` (binds `Enabled`), then bind settings with `SettingInfo.Describe(label, help, ...)` |
-| `OnActivated` | Subscribe to `GameEvents`, add a tab with `ModWindow.AddTab(id, title, order, build)` |
+| `OnActivated` | Subscribe to `GameEvents`, add a tab with `ModWindow.AddTab(owner, id, title, order, build)` |
 | `SelfCheck` | The in-game test, see [dev-harness.md](dev-harness.md) |
 
 ## Game events
 
-`Core/GameEvents.cs` raises four events. Each subscriber runs in its own try/catch; an exception logs `[Core] <Event> handler <Type.Method>` and switches off the subscriber's feature only (when the handler is an instance method on a `Feature`).
+`Core/GameEvents.cs` raises four events. Each subscriber runs in its own try/catch; an exception logs `[Core] <Event> handler <Type.Method>` and switches off the subscriber's feature only (when the handler is an instance method on a `Feature`). Handlers that are instance methods of a feature that is off are skipped.
 
 | Event | When | Use it for |
 |---|---|---|
@@ -75,7 +75,11 @@ sequenceDiagram
 
 ## Mod window and settings
 
-`ModWindow.AddTab(id, title, order, build)` registers a tab; `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. `ModWindow.Open(id)`, `Show(id)` (rebuild) and `Close()` are the rest of the API. Widgets come from `Kit`: `Row`, `Column`, `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Dropdown`, `Tile`, `Tooltip`.
+`ModWindow.AddTab(owner, id, title, order, build)` registers a tab (a tab whose owner feature is off is hidden; pass `null` for a tab several features share); `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. `ModWindow.Open(id)`, `Show(id)` (rebuild) and `Close()` are the rest of the API. Widgets come from `Kit`: `Row`, `Column`, `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Dropdown`, `Tile`, `Tooltip`.
+
+A view that floats outside the window registers a `PopoutKind` with `Popouts.Register` from `OnActivated`: an id, a title, the owning feature, default and minimum size, the default show condition with its `Relevant` test, a `Build(popout, body)` for the body and an optional `BuildOptions` for rows of its own in the Options panel. `Popouts.Open(id)`, `Close(id)`, `Toggle(id)` and `Rebuild(id)` drive it. The frame handles dragging, collapsing, resizing, opacity, click-through, the show condition and saving the layout; the kind's own options go in `popout.State.options`, saved with `State.Save(popout.Id)`. The combat overview (`Features/CombatOverview/`) is the example.
+
+A view with a tab sets `DockTab` to the tab's id: its header gets a Dock button (`Popouts.DockBack(id)`) and its strip chip's `x` docks it back. On the tab, `PopoutTabButton.Add` makes a pop-out button whose caption follows the view's state. `Multiple = true` allows several windows of one kind, with ids `<kind>-<n>`: `Popouts.OpenNew(kind, init)` creates one, `Windows(kind)` lists them open or closed, `AnyOpen` and `CloseAll` cover the lot, and `Remove(id)` forgets one with its layout. `TitleOf(state)` gives each window its own title. The Log (`Features/EventLog/EventLogTab.cs`) is the small single-window example and the note windows (`Features/Notes/NotesPopout.cs`) the small multi-window one.
 
 Config entries become rows through `SettingRows.AddSection(column, feature)` and `AddEntries(column, section)`, which read the label, help and choices from `SettingInfo`. A feature that sets `SettingsTab` builds its rows on that tab; the Settings tab shows every feature's on/off switch and the rows of features without a tab. When the owning tab's feature is off, the rows fall back to the Settings tab.
 
@@ -117,4 +121,4 @@ private static void SomeMethodPostfix(SomeGameType __instance)
 5. Build, run the harness with `OnlyChecks = <Id>`, then the full harness.
 6. Document it in the matching page under `docs/modpack/features/`, add its settings to [settings.md](settings.md), and bump the feature and startup counts in [README.md](README.md).
 
-Local working notes (`SESSION_LOG.md`, `PHASE_*.md`, `WISHLIST.txt` and the planning files in `docs/`) are gitignored and stay on the machine they were written on.
+Task tracking lives in one local file at the repo root: `FEATURELIST.md` (open features, bugs found in play, checks still owed in play, dropped ideas, standing decisions, harness notes). It's gitignored and stays on the machine it was written on.

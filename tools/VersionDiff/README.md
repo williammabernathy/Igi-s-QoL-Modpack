@@ -110,8 +110,8 @@ Markdown, in this order:
 | Code | Meaning |
 |---|---|
 | 0 | Nothing is broken. `body changed` and `signature changed` alone still give 0, since the patch may well still work |
-| 1 | At least one target is missing or ambiguous, a patch parameter doesn't match, a reference is unresolved or a string lookup is broken |
-| 2 | Bad arguments or missing files |
+| 1 | At least one target is missing, ambiguous or unsupported, a patch parameter doesn't match, a reference is unresolved or a string lookup is broken |
+| 2 | Bad arguments or missing files, including a `0Harmony.dll` the tool can't find next to the game (see Limits) |
 
 ### Limits
 
@@ -119,6 +119,9 @@ Markdown, in this order:
 - A getter or setter target decompiles as the whole property, so a change to the other accessor shows up too.
 - The type behind `Traverse.Create(x)` is guessed from the static type of `x`, so a lookup on a variable typed as a base class is checked against that base class.
 - `TargetMethod()`/`TargetMethods()` patches and patches applied with `harmony.Patch(...)` in code aren't analysed.
+- Enum members the mod stores by name (item categories, rarities, compartment types in the config) compile to constants, so a renamed member passes `patches`. Run `VersionDiff data` on the old and new dumps after a game update to see category and rarity names change.
+- A `Traverse` held in a variable (`var t = Traverse.Create(x); t.Property("name")`) is reported as `dynamic` and never fails; check those by hand.
+- `unsupported` targets (no declaring type or method name to resolve) fail the run, and so does a missing `0Harmony.dll`: without it Cecil can't decode the mod's `MethodType` arguments and every such target would look unsupported. The tool looks for `BepInEx/core/0Harmony.dll` two folders above the game's `Managed` folder: the one the newest `game-versions/` snapshot records in `managed-dir.txt`, else `--new`.
 
 ## `data`
 

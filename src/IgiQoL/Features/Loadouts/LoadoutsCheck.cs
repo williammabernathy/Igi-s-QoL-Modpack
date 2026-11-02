@@ -133,14 +133,25 @@ internal static class LoadoutsCheck
             ship.RemoveCrew(hireType, 3);
             long credits = player.credits;
             center.available.TryGetValue(hireType, out int stockBefore);
-            r = LoadoutApply.Apply(ship, a);
-            yield return new WaitForSeconds(1f);
-            center.available.TryGetValue(hireType, out int stockAfter);
-            long spent = credits - player.credits;
-            if (reserved > 0) player.unassignedCrew.AddCrew(hireType, reserved, false);
-            d = $"{hireType}: stock {stockBefore}->{stockAfter}, spent {spent} cr; {Report(r)}";
-            if (Fit(ship) == before && stockAfter == stockBefore - 3 && spent > 0) ctx.Pass("hire", d);
-            else ctx.Fail("hire", d);
+            long spent = 0;
+            int stockAfter = stockBefore;
+            try
+            {
+                r = LoadoutApply.Apply(ship, a);
+                yield return new WaitForSeconds(1f);
+                center.available.TryGetValue(hireType, out stockAfter);
+                spent = credits - player.credits;
+                d = $"{hireType}: stock {stockBefore}->{stockAfter}, spent {spent} cr; {Report(r)}";
+                if (Fit(ship) == before && stockAfter == stockBefore - 3 && spent > 0) ctx.Pass("hire", d);
+                else ctx.Fail("hire", d);
+            }
+            finally
+            {
+                // The check hired for real: put the reserve crew, the credits and the station's stock back.
+                if (reserved > 0) player.unassignedCrew.AddCrew(hireType, reserved, false);
+                player.credits = credits;
+                if (stockBefore > 0) center.available[hireType] = stockBefore;
+            }
         }
 
         // Swap two weapons of the same slot size, then put them back.
@@ -246,18 +257,29 @@ internal static class LoadoutsCheck
         }
 
         // Flying a ship restores the ECHO settings of the loadout last applied to it.
-        var original = player.autopilotSettings.ToJson();
+        string originalText = player.autopilotSettings.ToJson().ToString();
         var echo = Loadout.FromJson(Json(aj));
         echo.name = NameEcho;
+        // Two fields differ from the live settings, so a switch that copies only one of them can't pass.
         int minutes = player.autopilotSettings.ammoMinutes + 7;
-        echo.echo["autopilot"].AsJsonObject["ammoMinutes"] = minutes;
+        var wanted = Json(originalText).AsJsonObject;
+        wanted["ammoMinutes"] = minutes;
+        wanted["noTravel"] = !player.autopilotSettings.noTravel;
+        string expected = AutopilotSettings.FromJson(wanted).ToJson().ToString();
+        echo.echo["autopilot"] = wanted;
+        echo.echo.Remove("priority");   // the check is about the autopilot settings; don't leave the priority list changed
         LoadoutStore.Put(ship.guid, echo);
         LoadoutStore.SetLastApplied(ship.guid, NameEcho);
-        Loadouts.OnFlownShipChanged(ship);
-        int got = player.autopilotSettings.ammoMinutes;
-        player.autopilotSettings = AutopilotSettings.FromJson(original);
-        if (got == minutes) ctx.Pass("echo-on-switch", $"ammoMinutes -> {got}");
-        else ctx.Fail("echo-on-switch", $"ammoMinutes {got}, expected {minutes}");
+        string got;
+        try
+        {
+            Loadouts.OnFlownShipChanged(ship);
+            got = player.autopilotSettings.ToJson().ToString();
+        }
+        // Same path the feature restores through: it copies into the live object the Autopilot tab holds.
+        finally { LoadoutApply.RestoreEcho(new JsonObject { { "autopilot", Json(originalText) } }); }
+        if (got == expected) ctx.Pass("echo-on-switch", $"ammoMinutes -> {minutes}, noTravel flipped, whole settings match");
+        else ctx.Fail("echo-on-switch", $"settings {got}, expected {expected}");
 
         LoadoutStore.Put(ship.guid, a);
         LoadoutStore.SetLastApplied(ship.guid, NameA);
@@ -282,6 +304,19 @@ internal static class LoadoutsCheck
         else if (button != null && button.gameObject.activeInHierarchy) ctx.Pass("hangar-button", $"at {((RectTransform)button).anchoredPosition}");
         else ctx.Fail("hangar-button", button == null ? "no button" : "button hidden");
         yield return ctx.Screenshot("hangar-loadouts");
+
+        // Hired mercenaries aren't offered, and applying to one is refused.
+        bool listed = LoadoutsTab.Ships().Exists(s => s.commanderData is Source.Personnel.Mercenary);
+        if (!listed) ctx.Pass("no-mercenary", "no hired ship in the Loadouts list");
+        else ctx.Fail("no-mercenary", "a hired ship is in the Loadouts list");
+        var merc = player.activeFleet.Find(s => s != null && s.commanderData is Source.Personnel.Mercenary);
+        if (merc == null) ctx.Skip("no-mercenary-reason", "no mercenary hired");
+        else
+        {
+            string why = LoadoutApply.CannotApplyReason(merc);
+            if (why != null && why.Contains("hired ship")) ctx.Pass("no-mercenary-reason", why);
+            else ctx.Fail("no-mercenary-reason", why ?? "no reason given");
+        }
     }
 
     private static JsonValue Json(string text) => LightJson.Serialization.JsonReader.Parse(text);

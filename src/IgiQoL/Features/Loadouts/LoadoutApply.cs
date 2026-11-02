@@ -8,6 +8,7 @@ using Behaviour.Unit;
 using IgiQoL.Core;
 using LightJson;
 using Source.Galaxy.POI;
+using Source.Galaxy.POI.Station;
 using Source.Item;
 using Source.Personnel;
 using Source.Player;
@@ -37,6 +38,9 @@ public static class LoadoutApply
         // The hangar's own refit rule (PersonalHangar.SelectShip); IsLentOut would also count your personal fleet.
         if (ship.IsCarrierAssigned || ship.IsWorkBayAssigned || ship.IsPatrolAssigned || ship.IsEmpireFleetAssigned)
             return ship.GetShipName() + " is assigned elsewhere; the hangar can't refit it either.";
+        // A hired mercenary leaves with everything fitted (GamePlayer.DismissFleetShip).
+        if (!GamePlayer.current.spaceShips.Contains(ship))
+            return ship.GetShipName() + " is a hired ship; loadouts apply to your own ships only.";
         return null;
     }
 
@@ -150,6 +154,7 @@ public static class LoadoutApply
         public Candidate match;
         public bool substitute;
         public InventoryItemType result;
+        public bool changed;
 
         public string Label => kind switch
         {
@@ -171,6 +176,7 @@ public static class LoadoutApply
         public string rarity;
         public int level;
         public int left = 1;
+        public bool favourite;
     }
 
     private static void Equipment(SpaceShipData ship, Loadout l, ApplyReport r)
@@ -211,7 +217,7 @@ public static class LoadoutApply
             Candidate best = null;
             foreach (var c in pool)
             {
-                if (c.left <= 0 || c.type != type || c.rarity != rarity || !Fits(ship, s, c.item)) continue;
+                if (c.left <= 0 || c.favourite || c.type != type || c.rarity != rarity || !Fits(ship, s, c.item)) continue;
                 if (best == null || c.fittedIn == s || (best.fittedIn != s && c.level > best.level)) best = c;
             }
             Claim(s, best, true);
@@ -224,34 +230,47 @@ public static class LoadoutApply
         foreach (var s in slots)
             if (s.match != null && s.match.fittedIn != null && s.match.fittedIn != s) movedFrom.Add(s.match.fittedIn);
         int changed = 0;
+        // Changed = the slot ends up with a different piece: a match from another slot or an inventory, emptied, or its
+        // own piece moved out. Decided by where the match came from, not by item identity: pieces without a builder share
+        // one InventoryItemType instance, so the same identity can be fitted here and lie in the armory at once.
         foreach (var s in slots)
         {
-            if (s.match != null) s.result = s.match.item;
-            else if (s.want.IsNull) s.result = null;
+            if (s.match != null)
+            {
+                s.result = s.match.item;
+                s.changed = s.match.fittedIn != s;
+            }
+            else if (s.want.IsNull)
+            {
+                s.result = null;
+                s.changed = s.current != null;
+            }
             else
             {
-                s.result = s.current != null && !movedFrom.Contains(s) ? s.current : null;
-                r.problems.Add($"Missing for {s.Label}: {Loadout.Describe(s.want)}" + (s.result != null ? "; kept the fitted one." : "."));
+                bool kept = s.current != null && !movedFrom.Contains(s);
+                s.result = kept ? s.current : null;
+                s.changed = s.current != null && !kept;
+                r.problems.Add($"Missing for {s.Label}: {Loadout.Describe(s.want)}" + (kept ? "; kept the fitted one." : "."));
             }
             if (s.substitute) r.problems.Add($"{s.Label}: the saved {Loadout.Describe(s.want)} is gone; fitted {Loadout.Describe(s.match.item.ToJson())} instead.");
-            if (s.result != s.current) changed++;
+            if (s.changed) changed++;
         }
         if (changed == 0) return;
 
         int stored = 0;
         foreach (var s in slots)
         {
-            if (s.match != null && s.match.inventory != null && s.result != s.current) s.match.inventory.Remove(s.result, 1);
+            if (s.changed && s.match != null && s.match.inventory != null) s.match.inventory.Remove(s.result, 1, skipFavourited: !s.match.favourite);
         }
         foreach (var s in slots)
         {
-            if (s.current == null || s.result == s.current || movedFrom.Contains(s)) continue;
+            if (!s.changed || s.current == null || movedFrom.Contains(s)) continue;
             Inventory.global.Add(s.current, 1);
             stored++;
         }
         foreach (var s in slots)
         {
-            if (s.result == s.current) continue;
+            if (!s.changed) continue;
             switch (s.kind)
             {
                 case Kind.Hardpoint: ship.hardpoints[s.index] = s.result; break;
@@ -296,7 +315,9 @@ public static class LoadoutApply
         foreach (var entry in new List<Inventory.InventoryItem>(inv.items))
         {
             if (entry?.item == null || entry.item.equipmentDefinition == null) continue;
-            pool.Add(NewCandidate(entry.item, inv, null, entry.count));
+            var c = NewCandidate(entry.item, inv, null, entry.count);
+            c.favourite = entry.favourite;
+            pool.Add(c);
         }
     }
 
@@ -387,7 +408,10 @@ public static class LoadoutApply
             if (move < surplus) r.problems.Add($"{surplus - move} {CrewName(type)} stayed aboard: the crew reserve is full.");
         }
 
-        var center = SpaceStationInterior.instance?.spacestation?.personnelCenter;
+        var interior = SpaceStationInterior.instance;
+        var station = interior != null ? interior.spacestation : null;
+        var center = station != null ? station.personnelCenter : null;
+        if (center != null) center.EnsureCrewPopulated();
         foreach (var type in types)
         {
             int shortBy = Want(l, type) - Count(ship.crewData, type);
@@ -401,10 +425,10 @@ public static class LoadoutApply
                 fromReserve += take - overflow;
                 shortBy -= take - overflow;
             }
-            if (shortBy > 0 && center != null && CrewType.allCrew.TryGetValue(type, out var crewType))
+            if (shortBy > 0 && center != null && CrewType.TryGet(type, out var crewType))
             {
-                center.available.TryGetValue(type, out int stock);
-                long price = crewType.cost;
+                center.Available.TryGetValue(type, out int stock);
+                long price = PersonnelCenter.GetBuyPrice(crewType, station.level);
                 int buy = System.Math.Min(System.Math.Min(shortBy, stock), ship.GetFreeCrewSpace());
                 if (price > 0) buy = (int)System.Math.Min(buy, player.credits / price);
                 if (buy > 0 && center.TryPurchaseCrew(type, buy))

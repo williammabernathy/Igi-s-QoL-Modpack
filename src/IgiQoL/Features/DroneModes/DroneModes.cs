@@ -47,7 +47,11 @@ public sealed class DroneModes : Feature
         var s = ShipSettings.Get(data.guid);
         mode = s.droneMode;
         radius = s.droneRadius;
-        if (s.droneAnchor != null && s.droneAnchor != data.guid) anchor = FindShip(s.droneAnchor) ?? commander;
+        if (s.droneAnchor != null && s.droneAnchor != data.guid)
+        {
+            var found = FindShip(s.droneAnchor);
+            anchor = found != null ? found : commander;
+        }
         return mode != DroneMode.Game;
     }
 
@@ -78,7 +82,11 @@ public sealed class DroneModes : Feature
                 if (!(m is SalvageModule)) m = anchor.GetModule<SalvageModule>();
                 break;
             default:
-                if (!(m is CombatModule)) m = anchor.GetModule<CombatModule>() ?? m;
+                if (!(m is CombatModule))
+                {
+                    var combat = anchor.GetModule<CombatModule>();
+                    if (combat != null) m = combat;
+                }
                 break;
         }
         return m != null ? m.priorityTarget : null;
@@ -112,6 +120,14 @@ public sealed class DroneModes : Feature
         _ => "",
     };
 
+    private static void SkipGatherer(SelfCheckContext ctx, string reason) => SkipAfter(ctx, reason, "gatherer", "gatherer-guard", "gatherer-assist");
+
+    // An early exit leaves the later checks without a line; the harness counts lines, so each reports why it didn't run.
+    private static void SkipAfter(SelfCheckContext ctx, string reason, params string[] names)
+    {
+        foreach (var n in names) ctx.Skip(n, reason);
+    }
+
     // Mining and salvage drones in Ship's target join the ship's asteroid or wreck. The flagship's last drone slot is
     // swapped for a mining drone (asteroids here) or a salvage drone (a wreck is spawned if there is none) for the
     // check, and everything is put back afterwards.
@@ -121,7 +137,7 @@ public sealed class DroneModes : Feature
         var poi = GamePlayer.current.currentPointOfInterest;
         if (slots.Count == 0 || poi == null)
         {
-            ctx.Skip("gatherer", slots.Count == 0 ? "flagship has no drone slots" : "no current location");
+            SkipGatherer(ctx, slots.Count == 0 ? "flagship has no drone slots" : "no current location");
             yield break;
         }
         bool mining = UnityEngine.Object.FindAnyObjectByType<Asteroid>() != null;
@@ -167,7 +183,7 @@ public sealed class DroneModes : Feature
             }
             if (gatherer == null)
             {
-                ctx.Skip("gatherer", kind + " didn't deploy");
+                SkipGatherer(ctx, kind + " didn't deploy");
                 yield break;
             }
             var gm = gatherer.targetProvider;
@@ -176,7 +192,7 @@ public sealed class DroneModes : Feature
                 if (t != null && DroneModes.CanWork(gm, t)) { job = t; break; }
             if (job == null)
             {
-                ctx.Skip("gatherer", "nothing " + gatherer.name + " can work on here");
+                SkipGatherer(ctx, "nothing " + gatherer.name + " can work on here");
                 yield break;
             }
             // Guard: the drone's own list, just outside and just inside the radius around the ship.
@@ -260,7 +276,8 @@ public sealed class DroneModes : Feature
         });
 
         var e = ShipSettings.Edit(g);
-        (e.droneMode, e.droneRadius) = (DroneMode.Guard, 14f);
+        // Clear the anchor: the saved one may point at a ship that isn't in the fleet, which the popup lists as an extra entry.
+        (e.droneMode, e.droneRadius, e.droneAnchor) = (DroneMode.Guard, 14f, null);
         ShipSettings.Save(g);
         ShipSettings.Invalidate();
         var r = ShipSettings.Get(g);
@@ -271,19 +288,49 @@ public sealed class DroneModes : Feature
         else ctx.Fail("settings-roundtrip", detail);
 
         // The popup shows "Drones stay with" once a mode is set, listing this ship and the others in the fleet.
-        ShipPopup.Open(data);
-        TMP_Dropdown anchorDropdown = null;
-        if (ShipPopup.IsOpen)
+        TMP_Dropdown OpenAnchorDropdown()
+        {
+            ShipPopup.Close();
+            ShipPopup.Open(data);
+            if (!ShipPopup.IsOpen) return null;
             foreach (var dd in ShipPopup.Body.GetComponentsInChildren<TMP_Dropdown>(false))
-                if (dd.options.Count > 0 && dd.options[0].text == "This ship") { anchorDropdown = dd; break; }
+                if (dd.options.Count > 0 && dd.options[0].text == "This ship") return dd;
+            return null;
+        }
+        string OptionList(TMP_Dropdown dd) => dd == null ? "no visible 'Drones stay with' dropdown" : $"options: {string.Join(", ", dd.options.ConvertAll(o => o.text))}, selected {dd.value}";
         int others = 0;
         foreach (var d in GamePlayer.current.activeFleet)
             if (d != null && d.guid != g) others++;
-        string popupDetail = anchorDropdown == null ? "no visible 'Drones stay with' dropdown" : $"options: {string.Join(", ", anchorDropdown.options.ConvertAll(o => o.text))}; fleet ships besides this one: {others}";
-        if (anchorDropdown != null && anchorDropdown.options.Count == 1 + others) ctx.Pass("popup-anchor", popupDetail);
+        var anchorDropdown = OpenAnchorDropdown();
+        string popupDetail = $"{OptionList(anchorDropdown)}; fleet ships besides this one: {others}";
+        if (anchorDropdown != null && anchorDropdown.options.Count == 1 + others && anchorDropdown.value == 0) ctx.Pass("popup-anchor", popupDetail);
         else ctx.Fail("popup-anchor", popupDetail);
         yield return ctx.Screenshot("ship-popup-drones");
+
+        // A saved anchor that is the ship itself means "This ship", not a stranger.
+        ShipSettings.Edit(g).droneAnchor = g;
+        ShipSettings.Save(g);
+        anchorDropdown = OpenAnchorDropdown();
+        string selfDetail = $"anchor = own guid: {OptionList(anchorDropdown)}; fleet ships besides this one: {others}";
+        if (anchorDropdown != null && anchorDropdown.options.Count == 1 + others && anchorDropdown.value == 0) ctx.Pass("popup-anchor-self", selfDetail);
+        else ctx.Fail("popup-anchor-self", selfDetail);
+
+        // An anchor outside the active fleet stays listed, with the ship's name when it is one of yours.
+        SpaceShipData parked = null;
+        foreach (var owned in GamePlayer.current.spaceShips)
+            if (owned != null && owned.guid != g && !GamePlayer.current.activeFleet.Contains(owned)) { parked = owned; break; }
+        string staleGuid = parked != null ? parked.guid : "no-such-ship";
+        string staleLabel = parked != null ? parked.GetShipName() + " (not in your fleet)" : "(a ship not in your fleet)";
+        ShipSettings.Edit(g).droneAnchor = staleGuid;
+        ShipSettings.Save(g);
+        anchorDropdown = OpenAnchorDropdown();
+        string staleDetail = $"anchor {(parked != null ? "a parked ship of yours" : "an unknown ship")}, expected last entry '{staleLabel}': {OptionList(anchorDropdown)}; fleet ships besides this one: {others}";
+        if (anchorDropdown != null && anchorDropdown.options.Count == 2 + others && anchorDropdown.options[anchorDropdown.options.Count - 1].text == staleLabel
+            && anchorDropdown.value == anchorDropdown.options.Count - 1) ctx.Pass("popup-anchor-stale", staleDetail);
+        else ctx.Fail("popup-anchor-stale", staleDetail);
         ShipPopup.Close();
+        ShipSettings.Edit(g).droneAnchor = null;
+        ShipSettings.Save(g);
 
         // The HUD drone button: Follow ship -> Follow -> Guard -> Ship's target -> Free roam, with the label following.
         var controls = UnityEngine.Object.FindObjectsByType<DroneControls>(FindObjectsInactive.Include);
@@ -312,7 +359,7 @@ public sealed class DroneModes : Feature
         var bay = ship.droneBayModule;
         if (bay == null)
         {
-            ctx.Skip("follow", "flagship has no drone bay");
+            SkipAfter(ctx, "flagship has no drone bay", "follow", "anchor-follow", "anchor-fallback", "repair-anchor", "guard", "ship-target", "gatherer", "gatherer-guard", "gatherer-assist");
             yield break;
         }
         yield return CheckGatherer(ctx, ship, bay);
@@ -329,7 +376,7 @@ public sealed class DroneModes : Feature
             if (d != null && d.isDeployed && !d.isReturning && !d.docking && d.targetProvider != null) { drone = d; break; }
         if (drone == null)
         {
-            ctx.Skip("follow", "no deployed drone on the flagship");
+            SkipAfter(ctx, "no deployed drone on the flagship", "follow", "anchor-follow", "anchor-fallback", "repair-anchor", "guard", "ship-target");
             yield break;
         }
 
@@ -424,7 +471,7 @@ public sealed class DroneModes : Feature
             if (u != null && u.isDeployed && !u.isReturning && DroneModes.FightsEnemies(u.targetProvider) && Fleet.IsPlayerShip(u.droneCommander)) { fighter = u; break; }
         if (fighter == null)
         {
-            ctx.Skip("guard", "no deployed combat or painter drone on any of your ships");
+            SkipAfter(ctx, "no deployed combat or painter drone on any of your ships", "guard", "ship-target");
             yield break;
         }
         var commander = (SpaceShip)fighter.droneCommander;
@@ -455,7 +502,7 @@ public sealed class DroneModes : Feature
         }
         if (enemies.Count == 0)
         {
-            ctx.Skip("guard", "no enemies at this location");
+            SkipAfter(ctx, "no enemies at this location", "guard", "ship-target");
             yield break;
         }
         // Sorted by hull edge distance from the ship, the measure Guard uses.
@@ -463,7 +510,10 @@ public sealed class DroneModes : Feature
         enemies.Sort((a, b) => Edge(a).CompareTo(Edge(b)));
         var closest = enemies[0];
         float closestDist = Edge(closest);
-        var shipModule = commander.GetModule<CombatModule>() ?? commander.targetProvider;
+        AbstractTargetingModule shipModule = commander.GetModule<CombatModule>();
+        if (shipModule == null) shipModule = commander.targetProvider;
+        // A manual target on the commander outranks the auto target the check sets, so set it aside and put it back.
+        TargetableUnit heldManual = shipModule.manualTarget, heldAuto = shipModule.autoTarget;
         try
         {
             // Guard: the pick through the game's own FindClosestFilteredTarget, just inside and just outside the radius.
@@ -480,6 +530,7 @@ public sealed class DroneModes : Feature
 
             // Ship's target: the pick and the per-frame correction both follow the ship.
             var shipTarget = enemies[enemies.Count - 1];
+            shipModule.ResetCurrentTargets();
             shipModule.SetAutoTarget(shipTarget);
             ce.droneMode = DroneMode.ShipTarget;
             var pick = module.FindClosestFilteredTarget();
@@ -494,7 +545,9 @@ public sealed class DroneModes : Feature
         {
             module.filteredTargets.Clear();
             module.ResetCurrentTargets();
-            shipModule.ResetAutoTarget();
+            shipModule.ResetCurrentTargets();
+            if (heldManual != null) shipModule.SetManualTarget(heldManual);
+            if (heldAuto != null) shipModule.SetAutoTarget(heldAuto);
             (ce.droneMode, ce.droneRadius) = csaved;
             ShipSettings.Save(cg);
         }

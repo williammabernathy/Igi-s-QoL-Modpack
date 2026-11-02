@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Behaviour.Ability;
 using Behaviour.Ability.Payload;
 using Behaviour.Equipment.Module;
+using Behaviour.Gameplay;
 using Behaviour.Item;
 using Behaviour.Item.Usable;
 using Behaviour.Managers;
@@ -14,6 +15,7 @@ using Behaviour.UI.Spacestation;
 using Behaviour.Unit;
 using Behaviour.Util;
 using BepInEx.Configuration;
+using HarmonyLib;
 using IgiQoL.Core;
 using IgiQoL.Game;
 using LightJson;
@@ -48,7 +50,7 @@ public sealed class EchoKit : Feature
     public override string Description => "Lets ECHO use your flagship's abilities and the deployables in its cargo (turrets, shield pylons, decoys, mines) by rules you set on the ECHO tab, and pick its turrets back up after the fight. Every rule starts off.";
     public override string SettingsTab => "ECHO";
 
-    public override Type[] PatchClasses => Type.EmptyTypes;
+    public override Type[] PatchClasses => new[] { typeof(EchoKitPatches) };
 
     public ConfigEntry<bool> AlsoWithoutEcho;
     public ConfigEntry<bool> PickUpTurrets;
@@ -108,10 +110,11 @@ public sealed class EchoKit : Feature
             foreach (var c in SalvageContainer.all)
                 if (c != null && c.data == data) spawned = c;
             bool lootbox = salvager.payload.TryGetComponent<SalvageCargoLootboxBot>(out _);
-            var first = WreckFor(ship.transform.position, salvager);
+            // Asked from the wreck's own position, so another unlooted wreck (from an earlier check's fight) can't be nearer.
+            var first = WreckFor(data.position, salvager);
             if (lootbox) data.lootboxExtracted = 1;
             else data.creditsExtracted = 1;
-            var after = WreckFor(ship.transform.position, salvager);
+            var after = WreckFor(data.position, salvager);
             string detail = $"{Translation.Translate(salvager.displayName)} ({(lootbox ? "lootbox bot" : "credit drone")}): fresh wreck -> {(first == spawned ? "it" : first == null ? "none" : first.name)}, after extraction -> {(after == spawned ? "it" : after == null ? "none" : after.name)}; abilities with asteroid or wreck targets: {names}";
             if (spawned != null && first == spawned && after != spawned) ctx.Pass("wreck-target", detail);
             else ctx.Fail("wreck-target", detail);
@@ -175,15 +178,23 @@ public sealed class EchoKit : Feature
         }
 
         // A deployable from cargo goes out, then comes back with the pick-up.
+        // One the flagship doesn't carry already: Deploy takes the first cargo stack with a rule, so a stack of the
+        // player's own would be the one deployed.
+        bool Carried(InventoryItemType t)
+        {
+            foreach (var e in ship.spaceShipData.cargo.items)
+                if (e?.item != null && e.item.identifier == t.identifier) return true;
+            return false;
+        }
         InventoryItemType deployable = null;
         foreach (var t in InventoryItemType.all)
-            if (t.TryGetComponent<ShieldPylonItem>(out _)) { deployable = t; break; }
+            if (!Carried(t) && t.TryGetComponent<ShieldPylonItem>(out _)) { deployable = t; break; }
         if (deployable == null)
             foreach (var t in InventoryItemType.all)
-                if (t.TryGetComponent<DefensiveTurretItem>(out _)) { deployable = t; break; }
+                if (!Carried(t) && t.TryGetComponent<DefensiveTurretItem>(out _)) { deployable = t; break; }
         if (deployable == null)
         {
-            ctx.Skip("deploy", "no deployable item type");
+            ctx.Skip("deploy", "no deployable item type the flagship isn't already carrying");
             yield break;
         }
         var cargo = ship.spaceShipData.cargo;
@@ -195,7 +206,7 @@ public sealed class EchoKit : Feature
         yield return new WaitForSeconds(1.5f);
         DefensiveTurret placed = null;
         foreach (var turret in Object.FindObjectsByType<DefensiveTurret>(FindObjectsInactive.Exclude))
-            if (turret.defensiveTurretData?.turretItem == deployable) placed = turret;
+            if (turret.defensiveTurretData?.turretItem?.identifier == deployable.identifier) placed = turret;
         string dd = $"{deployable.identifier}: deployed={(used2 != null)} cargo {before + 1}->{cargo.GetCount(deployable)} turret in space={(placed != null)}";
         if (used2 == deployable && cargo.GetCount(deployable) == before && placed != null) ctx.Pass("deploy", dd);
         else ctx.Fail("deploy", dd);
@@ -363,7 +374,11 @@ public sealed class EchoKit : Feature
             if (ability.toggledAbility)
             {
                 if (want && !ability.toggleActive && ability.isReady && Fire(ship, s.combat, ability)) { ourToggles.Add(ability.identifier); used++; }
-                else if (!want && ability.toggleActive && ourToggles.Remove(ability.identifier)) ability.TriggerPayload();
+                else if (!want && ability.toggleActive && ability.isReady && ourToggles.Contains(ability.identifier))
+                {
+                    ability.TriggerPayload();   // toggles off, and starts no cooldown
+                    if (!ability.toggleActive) ourToggles.Remove(ability.identifier);
+                }
                 continue;
             }
             if (want && ability.isReady && Fire(ship, s.combat, ability)) used++;
@@ -398,7 +413,8 @@ public sealed class EchoKit : Feature
 
     internal static Asteroid MinedAsteroid(SpaceShip ship)
     {
-        var a = ship.GetModule<MiningModule>()?.priorityTarget as Asteroid;
+        var mining = ship.GetModule<MiningModule>();
+        var a = mining != null ? mining.priorityTarget as Asteroid : null;
         return a != null && (a.hasSurfaceOre || a.hasInnerCore && !a.innerCoreDepleted) ? a : null;
     }
 
@@ -479,5 +495,39 @@ public sealed class EchoKit : Feature
             started++;
         }
         return started;
+    }
+
+    // Turrets the rules dropped are collected before ECHO leaves, as the game does with its own loot: start one, or
+    // name the one still in the beam. Null when nothing is left to collect.
+    internal static InventoryItemType PickUpBeforeLeaving(SpaceShip ship)
+    {
+        PickUp(ship);
+        foreach (var t in deployed)
+            if (t != null && t.TryGetComponent<TractorableItem>(out var item) && item.isTractored && item.data != null) return item.data.itemType;
+        return null;
+    }
+}
+
+[HarmonyPatch]
+internal static class EchoKitPatches
+{
+    // ECHO waits a decision while a manual tractor target is set; this makes it wait for the turrets the rules dropped.
+    // A postfix, because EchoGates' prefix on the same method returns false (skipping later prefixes) when "Pick up
+    // loot before leaving" is off, which would leave the turrets behind.
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryLootBeforeLeaving))]
+    private static void TryLootBeforeLeavingPostfix(ref bool __result)
+    {
+        var f = EchoKit.Instance;
+        if (!f.Active || __result) return;
+        try
+        {
+            if (!f.PickUpTurrets.Value || !EchoKit.Allowed(out var ship)) return;
+            var item = EchoKit.PickUpBeforeLeaving(ship);
+            if (item == null) return;
+            IdleManager.UpdateActivity("@IdleLooting", item.displayName);
+            __result = true;
+        }
+        catch (Exception e) { f.Fail(e, nameof(TryLootBeforeLeavingPostfix)); }
     }
 }

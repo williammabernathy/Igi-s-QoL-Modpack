@@ -17,6 +17,7 @@ public abstract class Feature
 
     public ConfigEntry<bool> Enabled;
     public bool Active { get; internal set; }
+    private bool failed;
     public Harmony Harmony;
 
     public virtual bool HasEnabledEntry => true;
@@ -33,8 +34,14 @@ public abstract class Feature
     public void Fail(Exception e, string where)
     {
         Active = false;
+        if (failed)
+        {
+            Plugin.Log.LogWarning($"[{Id}] failed again at {where}: {e.GetType().Name}: {e.Message}");
+            return;
+        }
+        failed = true;
         FeatureRegistry.Failures.Add(new FeatureFailure(Id, where, e));
-        Plugin.Log.LogError($"[{Id}] switched off at {where}: {e.GetType().Name}: {e.Message}\n{e.StackTrace}");
+        Plugin.Log.LogError($"[{Id}] switched off at {where}: {e}");
         if (Harmony != null && Plugin.Instance != null)
             Plugin.Instance.StartCoroutine(UnpatchNextFrame());
     }

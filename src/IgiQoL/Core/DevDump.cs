@@ -315,7 +315,12 @@ internal static class DevDump
     {
         var t = uo.GetType();
         string label = path;
-        GameObject go = uo as GameObject ?? (uo as Component)?.gameObject;
+        GameObject go = uo as GameObject;
+        if (go == null)
+        {
+            var component = uo as Component;
+            go = component != null ? component.gameObject : null;
+        }
         bool expandable = uo is GameObject || t.Assembly == GameAssembly;
         if (!expandable || (depth <= 0 && !root))
         {

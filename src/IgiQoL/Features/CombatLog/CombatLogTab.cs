@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Behaviour.UI.Shared;
 using IgiQoL.UI;
@@ -29,7 +30,27 @@ public static class CombatLogTab
         var views = new List<string>();
         foreach (View v in System.Enum.GetValues(typeof(View))) views.Add(CombatLog.ViewName(v));
         Kit.Dropdown(row, views, (int)view, i => { view = (View)i; ModWindow.Show("combat"); }, 220f);
-        Kit.TextButton(row, "Clear", () => { CombatLog.Reset(); scope = 0; ModWindow.Show("combat"); }, 70f);
+        Kit.TextButton(row, "Clear", () => { CombatLog.Reset(); scope = -1; ModWindow.Show("combat"); }, 70f);
+        var overview = CombatOverview.CombatOverview.Instance;
+        if (overview != null && overview.Active)
+            Kit.TextButton(row, Popouts.IsOpen(CombatOverview.CombatOverview.PopoutId) ? "Close combat overview" : "Combat overview", () =>
+            {
+                Popouts.Toggle(CombatOverview.CombatOverview.PopoutId);
+                ModWindow.Show("combat");
+            }, 170f);
+
+        var meters = Kit.Row(content);
+        PopoutTabButton.Add(meters, "Pop out meters", "Dock back all", () => Popouts.AnyOpen(DpsMeter.KindId), DpsMeter.PopOutAll,
+            () => Popouts.CloseAll(DpsMeter.KindId), 150f,
+            "Bar meters that float over the game, as many as you like, each with its own view, scope and look. Their Options button changes them.");
+        var presets = new List<string> { "Add a meter..." };
+        presets.AddRange(DpsMeter.PresetNames);
+        Kit.Choice add = null;
+        add = Kit.Dropdown(meters, presets, 0, i =>
+        {
+            if (i > 0) DpsMeter.AddPreset(i - 1);
+            add.SetIndex(0);
+        }, 220f);
 
         Kit.Column(content, 2f).gameObject.AddComponent<CombatTable>();
     }
@@ -67,10 +88,11 @@ public static class CombatLogTab
 
         private void Update()
         {
-            if (Time.unscaledTime < next || version == CombatLog.Version) return;
+            if (!CombatLog.Instance.Active || Time.unscaledTime < next || version == CombatLog.Version) return;
             next = Time.unscaledTime + 1f;
             version = CombatLog.Version;
-            Refresh();
+            try { Refresh(); }
+            catch (Exception e) { CombatLog.Instance.Fail(e, nameof(CombatTable)); }
         }
 
         private void Refresh()

@@ -112,6 +112,12 @@ public sealed class EchoRetreat : Feature
         var travel = Singleton<TravelManager>.Instance;
         if (!travel.CanWeTravel()) return;
         travel.TravelToClosestSpacestation();
+        // No safe, dockable station leaves no route; targetPoi would still be the last trip's destination.
+        if (!travel.TravelActive())
+        {
+            IdleManager.UpdateActivity($"{low}; no friendly station to retreat to, so ECHO stays");
+            return;
+        }
         idle.idleTravelTarget = travel.targetPoi;
         string where = travel.targetPoi != null ? travel.targetPoi.name : "the nearest station";
         IdleManager.UpdateActivity($"Retreating to {where} for repairs: {low}");
@@ -128,7 +134,7 @@ internal static class EchoRetreatPatches
 
     // Runs every frame; the feature itself only looks every half second.
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(IdleManager), "Update")]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.Update))]
     private static void UpdatePostfix(IdleManager __instance)
     {
         if (!F.Active) return;

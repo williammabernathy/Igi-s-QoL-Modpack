@@ -43,23 +43,12 @@ public sealed class FleetHolds : Feature
     {
         base.BindConfig(cfg);
         Overflow = cfg.Bind(Id, "Overflow", false, SettingInfo.Describe("Pass cargo to ships with room",
-            "When a ship's hold can't take the loot its tractor beam is about to pick up, it moves cargo to other ships of your fleet at the same location, the flagship first, freeing the stack's volume plus a quarter of its hold. Favourites, ammo the ship uses, usable items and items your missions need stay where they are. ECHO then only heads home once every ship is full."));
+            "When a ship's hold can't take the loot its tractor beam is about to pick up, it moves cargo to other ships of your fleet at the same location, the flagship first, freeing the stack's volume plus a quarter of its hold. Favourites, ammo the ship fires, the usables the game keeps aboard, warp fuel, items your missions need and pinned stacks stay where they are. ECHO then only heads home once every ship is full."));
     }
 
     public override void OnActivated()
     {
         GameEvents.SaveLoaded += nextTry.Clear;
-    }
-
-    // Vanilla IdleManager.ShouldKeepInCargo for any ship, plus warp fuel and mission items.
-    public static bool Keep(SpaceShipData ship, SpaceShip unit, Inventory.InventoryItem stack)
-    {
-        if (stack.favourite) return true;
-        var item = stack.item;
-        if (item.itemCategory == ItemCategory.Ammo) return unit != null && unit.DoWeUseAmmo(item);
-        if (item.itemCategory == ItemCategory.Usable) return true;
-        if (item.TryGetState<Behaviour.Item.Usable.WarpFuelState>(out _)) return true;
-        return GamePlayer.current.RequiredItemCountForMissions(item) > 0;
     }
 
     // Your other ships at this location whose hold takes cargo: the flagship first, then the most free space.
@@ -89,8 +78,9 @@ public sealed class FleetHolds : Feature
         float want = Mathf.Min(need + data.cargoCapacity * Headroom, data.cargoCapacity) - data.GetCargoAvailable();
         if (want <= 0f) return 0f;
         var stacks = new List<Inventory.InventoryItem>();
+        bool pins = CargoPins.CargoPins.Instance != null && CargoPins.CargoPins.Instance.Active;
         foreach (var s in data.cargo.items)
-            if (s != null && s.item.m3 > 0f && !Keep(data, from, s)) stacks.Add(s);
+            if (s != null && s.item.m3 > 0f && !Items.KeepAboard(data, s) && !(pins && CargoPins.CargoPins.Pinned(data, s.item))) stacks.Add(s);
         stacks.Sort((a, b) => b.spaceRequired.CompareTo(a.spaceRequired));
         float freed = 0f;
         var receivers = Receivers(from);

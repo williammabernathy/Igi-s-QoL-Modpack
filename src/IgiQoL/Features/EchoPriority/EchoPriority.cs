@@ -63,13 +63,13 @@ public sealed class EchoPriority : Feature
 
     private static bool tabAdded;
 
-    // Every feature whose settings live on the ECHO tab calls this from OnActivated; the tab is added once. Features
-    // registered before Window find it inactive and leave the tab to the ones after it (or to the Settings tab fallback).
+    // Every feature whose settings live on the ECHO tab calls this from OnActivated; the tab is added once. It has no
+    // owner: several features share it, and BuildEcho guards each section by its own feature.
     public static void EnsureTab()
     {
-        if (tabAdded || Window.WindowFeature.Instance == null || !Window.WindowFeature.Instance.Active) return;
+        if (tabAdded) return;
         tabAdded = true;
-        ModWindow.AddTab("echo", "ECHO", 10, BuildEcho);
+        ModWindow.AddTab(null, "echo", "ECHO", 10, BuildEcho);
     }
 
     public override void OnActivated()
@@ -139,7 +139,11 @@ public sealed class EchoPriority : Feature
         }
         int index = List.Count == 0 ? 0 : (int)List[0] + 1;
         foreach (var a in Resources.FindObjectsOfTypeAll<Autopilot>())
-            if (a.gameObject.scene.IsValid() && a.loadoutDropdown != null) a.loadoutDropdown.SetValueWithoutNotify(index);
+        {
+            if (!a.gameObject.scene.IsValid()) continue;
+            if (a.loadoutDropdown != null) a.loadoutDropdown.SetValueWithoutNotify(index);
+            if (a.runMissionsToggle != null) a.runMissionsToggle.SetIsOnWithoutNotify(ap.runMissions);
+        }
         if (Singleton<IdleManager>.HasInstance) IdleManager.ForceImmediateActivityCheck();
     }
 
@@ -328,7 +332,7 @@ internal static class EchoPriorityPatches
     }
 
     [HarmonyPrefix]
-    [HarmonyPatch(typeof(IdleManager), "TryPreferredActivity")]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryPreferredActivity))]
     private static bool TryPreferredActivityPrefix(IdleManager __instance, ref bool __result)
     {
         if (!F.Active) return true;

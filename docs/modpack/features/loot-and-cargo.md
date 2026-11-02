@@ -9,11 +9,15 @@ What your ships pick up, where it goes, and finding what's left at a location. S
 The Item rules tab holds one table of rules, saved with the game. Each rule has two parts:
 
 - Pickup limit: your ships stop auto-tractoring the item once they carry this many. 0 means no limit, -1 means never.
-- At dock: what ECHO (and, if you want, [Station services](stations.md#station-services)) does with the item at a station. Game default, Keep aboard, Sell, or Sell above N: deposit until the station storage holds N, sell the rest.
+- At dock: what ECHO (and, if you want, [Station services](stations.md#station-services)) does with the item at a station. Game default, Keep aboard, Sell, or Sell above N: deposit until the station storage holds N, sell the rest. The part above N sells even when the storage is full.
 
-The most specific rule wins: a specific item (optionally at one item level), then category + rarity, then category, then the default. A "Turret / Standard" rule with a pickup limit of -1, for example, makes your ships and ECHO's loot-before-leaving skip common turrets.
+The most specific rule wins: an item at one item level, then that item at any level, then category + rarity, then category + rarity and below, then category, then any category + rarity and below, then the default. A "Turret / Standard" rule with a pickup limit of -1, for example, makes your ships and ECHO's loot-before-leaving skip common turrets.
+
+A "rarity and below" rule covers the chosen rarity and every rarity under it, so "Turret / High Grade and below: Sell" replaces three rows (Standard, Enhanced, High Grade). Pick "Any category" to cover every item up to that rarity. When several of these rules cover an item, the one with the lowest rarity wins: with "Standard and below: Sell" and "Exotic and below: Keep aboard", Standard items are sold and Enhanced to Exotic items stay aboard. A category's own rules win over an "Any category" rule.
 
 The pickup limit is applied by [Loot pickup limits](#loot-pickup-limits) and the dock action by [ECHO cargo rules](echo.md#echo-cargo-rules) and Station services. The same tab carries both features' settings.
+
+The tab lists the rules in five sections: Default, Categories, Category and rarity, Rarity and below, and Items. Each section but Default ends with an add row (Categories says "Every category has a rule." once none is left). For items, type at least two letters of the name and press Add next to the match. The list shows 20 matches at most and leaves out items that already have a rule. Each level of an item is its own entry, shown as "Name L3". The x at the end of a row removes the rule; the Default row stays. The pickup limit takes -1 or more, and the N box only takes input while the action is Sell above N. Under the table sit the settings of [Loot pickup limits](#loot-pickup-limits) and of ECHO cargo rules; while either is off, its rules do nothing and the tab says so.
 
 ### Starting rules for new saves
 
@@ -28,6 +32,12 @@ A save without rules is seeded once from `BepInEx/config/IgiQoL/item-rules.json`
   "categoryRarity": {
     "Turret/Standard": { "tractorCap": -1 }
   },
+  "categoryUpTo": {
+    "Module/Enhanced": { "dockAction": "Sell" }
+  },
+  "rarityUpTo": {
+    "Standard": { "tractorCap": -1 }
+  },
   "items": {
     "CanisterOxide": { "dockAction": "Keep" },
     "ArtifactAnalysis@3": { "tractorCap": 2 }
@@ -39,22 +49,39 @@ A save without rules is seeded once from `BepInEx/config/IgiQoL/item-rules.json`
 - `dockAction`: `Default`, `Keep`, `Sell` or `SellAbove`.
 - `keepAmount`: N for `SellAbove`.
 - Categories: `Ore`, `Ammo`, `Turret`, `Module`, `Booster`, `Junk`, `Drone`, `RefinedProduct`, `Torpedo`, `JumpgatePass`, `TradeGoods`, `Usable`, `DefensiveTurret`, `Salvage`, `Currency`, `Crystal`, `Data`, `Blueprint`, `BossSignal`, `SignalFragment`.
-- Rarities: `Standard`, `Enhanced`, `HighGrade`, `Exotic`, `Legendary`.
-- Item keys are the game's item identifier (`CanisterOxide`, not the display name "Oxide Canister"), with `@level` for one item level. `[Dev] DumpGameData` lists every identifier in `InventoryItemType.allItems.txt` ([dev-harness.md](../dev-harness.md#data-dumps)).
+- Rarities: `Standard`, `Enhanced`, `HighGrade`, `Exotic`, `Legendary`. A `categoryUpTo` or `rarityUpTo` key names the highest rarity the rule covers.
+- Item keys are the game's item identifier (`CanisterOxide`, not the display name "Oxide Canister"). A key without `@level` covers every level of the item. With `@level` it covers that level only and wins over the bare key. `[Dev] DumpGameData` lists every identifier in `InventoryItemType.allItems.txt` ([dev-harness.md](../dev-harness.md#data-dumps)).
 
-An entry with an unknown category or rarity is skipped with a warning in `LogOutput.log`. Fields you leave out take the vanilla value (0, `Default`, 0).
+An entry with an unknown category or rarity is skipped with a warning in `LogOutput.log`. Fields you leave out take the vanilla value (0, `Default`, 0), and an unknown `dockAction` reads as `Default`. When the file seeds a save, `LogOutput.log` says "imported N rules from item-rules.json into this save". A file that can't be read is logged as an error and the save starts without rules.
 
 ## Loot pickup limits
 
-Applies the Item rules pickup limits: your ships stop pulling in an item automatically once they carry the limit, or never pull it in with -1. `MinCreditsPerM3` (0 = off, set on the Item rules tab) also skips loot whose sell value per m3 of hold space is below that many credits, so cheap bulky items don't fill the hold. Both apply to your ships' auto-tractor and to ECHO's loot-before-leaving.
+Applies the Item rules pickup limits: your ships stop pulling in an item automatically once they carry the limit, or never pull it in with -1. `MinCreditsPerM3` ("Skip loot worth less per m3 than", 0 to 1000000, default 0 = off; set on the Item rules tab) also skips loot whose sell value per m3 of hold space is below that many credits, so cheap bulky items don't fill the hold. Both apply to your ships' auto-tractor and to ECHO's loot-before-leaving.
 
-Items your missions need and ammo a ship uses are exempt from both, and clicking an item yourself always picks it up.
+Items your missions need and ammo a ship fires are exempt from -1 and from the value floor (a numeric limit still applies to them), and clicking an item yourself always picks it up. Items that can't be sold, such as credits drops and crew pods, are never skipped for being cheap.
+
+Loot none of your ships at the location will pick up says why: its tooltip in space gets a red "Not picked up automatically: ..." line, and its [Scanner](#scanner) row shows the reason after the amount ("Empty Cell x3 | never pick up"). The reasons are "limit 50 reached", "never pick up" and "below 12 cr/m3". When several ships with a tractor beam (hired mercenaries included) are held back for different reasons, the first one's reason is shown, starting with the ship you fly. If any one of them would pick the loot up, there is no reason. The reason only covers these filters; loot the game itself won't tractor (your own jettisoned cargo, for example) has none either.
+
+![A Scanner loot row and its tooltip saying the item is never picked up](../../images/scanner-loot-reason.jpg)
 
 ## Shared fleet holds
 
-`Overflow` (off): when a ship's tractor beam reaches for loot its hold can't take whole, the ship moves cargo to your other ships at the same location (the flagship first, then the one with the most room), biggest stacks first, until the stack plus a quarter of its hold is free. It does this at most once per 2 s per ship. Favourites, ammo the ship uses, usable items, warp fuel and items your missions need stay where they are.
+`Overflow` ("Pass cargo to ships with room", off): when a ship's tractor beam reaches for loot its hold can't take whole, the ship moves cargo to your other ships at the same location (the flagship first, then the one with the most room), biggest stacks first, until the stack plus a quarter of its hold is free. It does this at most once per 2 s per ship. Favourites, ammo the ship fires, the usables the game keeps aboard, warp fuel, items your missions need and pinned stacks stay where they are.
 
 Without it, a single full ship sets ECHO's "inventory full" and the whole fleet flies home even when the others have room. With it, ECHO heads home once every ship is full.
+
+## Pinned cargo
+
+The gold crown button of the fleet cargo window moves a fleet ship's whole hold to the flagship, including the ammo that ship fires. Pinned item types stay aboard; everything else still moves in one click. Two ways to pin:
+
+- Hover over a stack in one of your ships' cargo and press `PinKey` ("Pin key", P by default, ignored while you type in a text field), as F marks a favourite. It works on a fleet ship or one parked in the hangar (the pin applies while the ship is in your fleet), not on the ship you fly or a hired mercenary. Pinned stacks get a gold lock in the bottom left corner, and so does ammo kept by the switch below. The stack's tooltip says "Pinned: the crown button leaves it aboard. P to unpin", "The crown button leaves it aboard: ammo this ship fires", or "P: pin to this ship, so the crown button leaves it aboard".
+- In the ship's [settings popup](interface.md#ship-settings-popup): "Keep the ammo this ship fires on board" keeps whatever ammo and torpedoes its current fit uses, and "Pin an item" pins or unpins an item aboard (or a pin for an item that's no longer aboard).
+
+![A cargo slot with the gold lock of a pinned stack in its bottom left corner](../../images/cargo-pin-mark.jpg)
+
+![The pin controls at the bottom of a ship's settings popup](../../images/ship-popup-pins.jpg)
+
+A pin covers every stack and level of the item type, on that ship only. Pins are saved with the ship's other settings, so a [loadout](stations.md#ship-loadouts) carries them; after a refit to another ammo type, a pin on the old ammo stays until you remove it, while the ammo switch follows the fit. The "flagship full" notice only counts stacks the button tried to move. Shared fleet holds leave pinned stacks aboard too; ECHO's unloading, the fleet auto-deposit and the Deposit button ignore pins.
 
 ## Scanner
 
@@ -65,8 +92,24 @@ The Scanner tab lists everything at your location you can board, salvage, tracto
 - Boardable ships, wrecks and loot, each with a Board, Salvage or Tractor button.
 - Where there are asteroids, "Asteroid ores": one row per ore and layer with the asteroid count and the nearest distance. Ores on your [Preferred ores](echo.md#preferred-ores) list are marked "preferred". The Mine button sends your mining ships to the nearest asteroid of that ore, as clicking it would. Core ores appear once you have the Basic Scanning mining skill and ore amounts with Advanced Scanning, the same as the game's asteroid tooltips.
 
-`HudCounter` puts a one-line count above the Dock button (above the QoL button when that sits there too). Click it to open the Scanner tab.
+Each section is headed by its count: "Boardable ships (N)", "Wrecks (N)", "Loot (N kinds)". A boardable row gives the ship, its faction and, where it applies, "boarding in progress", the operation's phase or "depleted". A wreck row says what it still holds (items, surface, core) or "empty". Loot is grouped by item type with the amount, "(N stacks)" when it lies in more than one, what it would sell for and the distance to the nearest stack, tinted by rarity; hover for the item's tooltip. The Tractor button, shown while your flagship has a tractor beam, sends the beam after the nearest stack of that item. Distances are map units from your flagship. An ore row shows the ore amount only with Advanced Scanning.
+
+`HudCounter` ("Counter above the Dock button", on) puts a one-line count above the Dock button (above the QoL button when that sits there too), such as "1 boardable | 4 wrecks | 5 loot". A kind with none here is left out, loot counts stacks, and the counter disappears when nothing is here or the HUD is hidden, as when docked. Click it to open the Scanner tab, or, while the Scanner window below is open, to bring that window forward and flash it.
 
 ![The counter above the QoL and Dock buttons](../../images/scanner-counter.jpg)
 
-`MarkBoardable`, `MarkWrecks`, `MarkLoot` and `MarkOres` (all on, also switchable on the tab) put markers at the screen edge for the 8 nearest off-screen contacts of each kind, with the distance under the icon. Loot markers are tinted by rarity; empty wrecks and depleted ships are left out. Ore markers only point at asteroids with an ore from the Preferred ores list, tinted by that ore's rarity, so nothing shows while the list is empty. Clicking a marker boards, salvages, tractors or mines its target.
+`MarkBoardable`, `MarkWrecks`, `MarkLoot` and `MarkOres` (all on, also switchable on the tab) put markers at the screen edge for the 8 nearest off-screen contacts of each kind, with the distance under the icon. Loot markers are tinted by rarity; empty wrecks and depleted ships are left out. Ore markers only point at asteroids with an ore from the Preferred ores list, tinted by that ore's rarity, so nothing shows while the list is empty. Clicking a marker boards, salvages, tractors or mines its target; clicking a loot marker only works with a tractor beam on your flagship.
+
+![A loot marker at the top edge of the screen, with its distance underneath](../../images/contact-marker-edge.jpg)
+
+### Scanner window
+
+The Pop out button at the top of the Scanner tab opens the Scanner as a [window of its own](interface.md#pop-out-windows) that stays on screen while you play. Dock back on the tab closes it; Dock on the window's header closes it and opens the tab. By default it is always shown; its Options button can limit it to when there is something here to board, salvage or pick up, the same count the HUD counter shows.
+
+- The map draws the location to scale, with your flagship as a white dot, your fleet in blue and enemies in red. Boardable ships, wrecks, loot and asteroids with ore use the same icons as the edge markers, and loot and ore are tinted by rarity. The thin rectangle is what the game camera shows now.
+- Dots follow their targets four times a second, and the set of ships and contacts is read once a second.
+- Under the map, the "Contacts (N)" header (N is the number of contacts drawn) has a +/- button that folds the list away so the map takes the whole window; that choice is remembered. The list is the tab's list without its settings and help text.
+- Click a dot to select its row, scrolled into view and highlighted, or click a row to ring its dot. One contact is selected at a time. A loot row rings every stack of that item, and an ore row rings every asteroid listed under that ore (an asteroid with surface ore is listed under its surface ore; a core-ore row rings the asteroids whose only listed ore it is).
+- Board, Salvage, Tractor and Mine work as in the tab, but leave the window and the QoL window as they are.
+
+![The Scanner window with the minimap and the contact list](../../images/scanner-popout.jpg)

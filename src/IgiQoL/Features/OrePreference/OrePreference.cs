@@ -55,6 +55,11 @@ public sealed class OrePreference : Feature
 
     internal static void Load()
     {
+        nextElsewhereCheck = 0f;
+        nextSceneScan = 0f;
+        sceneAsteroids.Clear();
+        scannedPoi = null;
+        OrePreferencePatches.ResetLayer();
         Mode = OreMode.Off;
         Ores.Clear();
         var rec = SaveData.Feature("OrePreference", false);
@@ -117,14 +122,15 @@ public sealed class OrePreference : Feature
     }
 
     // The nearest asteroid with a preferred ore in a layer the module mines; null when none is left.
-    public static Asteroid NearestPreferred(IEnumerable<TargetableUnit> candidates, Vector2 from, bool surface, bool core, Func<Asteroid, bool> mineable)
+    // Takes the list and the module itself, not an IEnumerable and a delegate: this runs on the scanner tick and must not allocate.
+    public static Asteroid NearestPreferred(List<TargetableUnit> candidates, Vector2 from, bool surface, bool core, MiningModule mineable)
     {
         Asteroid best = null;
         float bestDist = float.MaxValue;
         foreach (var t in candidates)
         {
             if (!(t is Asteroid a) || a == null || !HasPreferred(a.asteroidData, surface, core)) continue;
-            if (mineable != null && !mineable(a)) continue;
+            if (mineable != null && !mineable.IsTargetMineable(a)) continue;
             float d = Vector2.Distance(from, a.transform.position);
             if (d < bestDist)
             {
@@ -205,6 +211,10 @@ internal static class OrePreferencePatches
     // True while FindMiningActivity runs and only locations with a preferred ore count as suitable.
     internal static bool strict;
 
+    // The layer of ECHO's latest FindMiningActivity call.
+    private static TargetLayer? echoLayer;
+    internal static void ResetLayer() => echoLayer = null;
+
     // ECHO's own asteroid pick inside a mining location.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(IdleManager), "FindClosestMineableAsteroid")]
@@ -215,14 +225,16 @@ internal static class OrePreferencePatches
         try
         {
             var pick = OrePreference.NearestPreferred(OrePreference.SceneAsteroids(), miningModule.transform.position,
-                miningModule.canMineSurface, miningModule.canMineCore, miningModule.IsTargetMineable);
+                miningModule.canMineSurface, miningModule.canMineCore, miningModule);
             if (pick != null)
             {
                 __result = pick;
                 return false;
             }
             // Nothing preferred here: Only leaves; Prefer leaves too when another location still has some.
-            if (OrePreference.Mode == OreMode.Only || OrePreference.PreferredElsewhere(OrePreference.LayerOf(miningModule)))
+            // The layer ECHO searched locations with, so this pick and the location search agree (EchoPriority searches
+            // with each list entry's own layer).
+            if (OrePreference.Mode == OreMode.Only || OrePreference.PreferredElsewhere(echoLayer ?? OrePreference.LayerOf(miningModule)))
             {
                 __result = null;
                 return false;
@@ -240,6 +252,7 @@ internal static class OrePreferencePatches
     [HarmonyPatch(typeof(IdleManager), "FindMiningActivity")]
     private static void MiningActivityPrefix(TargetLayer targetLayer)
     {
+        echoLayer = targetLayer;
         strict = false;
         if (!OrePreference.On) return;
         try { strict = OrePreference.WantsPreferredPoi(targetLayer); }
@@ -279,8 +292,9 @@ internal static class OrePreferencePatches
             var parent = m.parent;
             if (parent == null || !parent.IsPlayer()) return true;
             Vector2 from = m.transform.position;
-            var pick = OrePreference.NearestPreferred(m.filteredTargets, from, m.canMineSurface, m.canMineCore, null)
-                       ?? OrePreference.NearestPreferred(OrePreference.SceneAsteroids(), from, m.canMineSurface, m.canMineCore, m.IsTargetMineable);
+            var pick = OrePreference.NearestPreferred(m.filteredTargets, from, m.canMineSurface, m.canMineCore, null);
+            if (pick == null)
+                pick = OrePreference.NearestPreferred(OrePreference.SceneAsteroids(), from, m.canMineSurface, m.canMineCore, m);
             if (pick != null)
             {
                 __result = pick;

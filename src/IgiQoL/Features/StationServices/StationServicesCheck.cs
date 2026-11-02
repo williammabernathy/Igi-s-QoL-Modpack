@@ -50,9 +50,13 @@ internal static class StationServicesCheck
         CheckRestock(ctx);
         CheckFuel(ctx);
         CheckSell(ctx);
+        CheckSellData(ctx);
+        CheckSellStorage(ctx);
+        CheckSellArmory(ctx);
         CheckCrewTrack(ctx);
         CheckCrew(ctx);
         CheckBrig(ctx);
+        yield return CheckSellBeforeDeposit(ctx);
         yield return CheckOnDock(ctx);
         yield return CheckAirlock(ctx);
     }
@@ -132,12 +136,14 @@ internal static class StationServicesCheck
         }
         var armory = GamePlayer.current.globalInventory;
         int cargo0 = ship.cargo.GetCount(ammo), armory0 = armory.GetCount(ammo);
+        // Remove takes favourited stacks too and Add makes a plain one, so remember the flag and put it back.
+        bool cargoFav = AnyFavourite(ship.cargo, ammo), armoryFav = AnyFavourite(armory, ammo);
         ctx.Cleanup(() =>
         {
             ship.cargo.Remove(ammo, ship.cargo.GetCount(ammo));
-            if (cargo0 > 0) ship.cargo.Add(ammo, cargo0);
+            if (cargo0 > 0) { var st = ship.cargo.Add(ammo, cargo0); if (st != null && cargoFav) st.favourite = true; }
             armory.Remove(ammo, armory.GetCount(ammo));
-            if (armory0 > 0) armory.Add(ammo, armory0);
+            if (armory0 > 0) { var st = armory.Add(ammo, armory0); if (st != null && armoryFav) st.favourite = true; }
         });
         ship.cargo.Remove(ammo, cargo0);
         armory.Remove(ammo, armory0);
@@ -153,6 +159,13 @@ internal static class StationServicesCheck
         bool shortButExplained = loaded == Mathf.Min(10, need) && run.problems.Count > 0;
         if (need > 0 && armoryFirst && (full || shortButExplained)) ctx.Pass("restock", detail);
         else ctx.Fail("restock", detail);
+    }
+
+    private static bool AnyFavourite(Inventory inv, InventoryItemType item)
+    {
+        foreach (var stack in inv.items.ToArray())
+            if (stack != null && stack.item == item && stack.favourite) return true;
+        return false;
     }
 
     // Takes every warp fuel stack out of `inv` and returns a cleanup that puts them back.
@@ -320,6 +333,176 @@ internal static class StationServicesCheck
         finally { ItemRules.Load(); }
     }
 
+    // Data items live in the data inventory, never in cargo: Sell above N keeps N there and the quote matches the run;
+    // favourite stacks stay, and the setting turns it off.
+    private static void CheckSellData(SelfCheckContext ctx)
+    {
+        var ss = Services.Docked();
+        var item = EchoCargo.EchoCargo.TestDataItem();
+        if (item == null || !EchoCargo.CargoRules.CanSellHere(ss, item))
+        {
+            ctx.Skip("sell-data", item == null ? "no sellable Data item type" : "station has no shop");
+            return;
+        }
+        var player = GamePlayer.current;
+        var data = player.dataInventory;
+        var setting = EchoCargo.EchoCargo.Instance.SellFromData;
+        bool setting0 = setting.Value;
+        int count0 = data.GetCount(item);
+        string key = Items.RuleKey(item);
+        try
+        {
+            setting.Value = true;
+            data.Add(item, 6);
+            int held = data.GetCount(item);
+            int keep = Mathf.Max(held - 4, player.RequiredItemCountForMissions(item));
+            long expected = item.sellValue * (held - keep);
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}}}");
+            long before = player.credits;
+            var quote = Services.Sell(false);
+            var run = Services.Sell(true);
+            string detail = $"{key}: keep={keep} held {held}->{data.GetCount(item)} credits +{player.credits - before} (expected {expected}) quote={quote.credits} run={run.credits} lines=[{string.Join("; ", run.lines)}]";
+            if (expected > 0 && quote.credits == expected && run.credits == expected && player.credits - before == expected && data.GetCount(item) == keep
+                && run.lines.Exists(l => l.StartsWith("Data inventory: "))) ctx.Pass("sell-data", detail);
+            else ctx.Fail("sell-data", detail);
+
+            foreach (var s in data.items)
+                if (s.item == item) s.favourite = true;
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"Sell\"}}}");
+            var fav = Services.Sell(true);
+            int afterFav = data.GetCount(item);
+            foreach (var s in data.items)
+                if (s.item == item) s.favourite = false;
+            setting.Value = false;
+            var off = Services.Sell(true);
+            detail = $"favourite: sold {fav.credits} cr, held {keep}->{afterFav}; setting off: sold {off.credits} cr, held {data.GetCount(item)}";
+            if (fav.credits == 0 && afterFav == keep && off.credits == 0 && data.GetCount(item) == keep) ctx.Pass("sell-data-kept", detail);
+            else ctx.Fail("sell-data-kept", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            data.Remove(item, data.GetCount(item));
+            if (count0 > 0) data.Add(item, count0);
+        }
+    }
+
+    // Station storage with SellFromStorage on: Sell above N trims the storage to N in the same run that sells the cargo
+    // stack, the quote matches the run, and the setting turns it off.
+    private static void CheckSellStorage(SelfCheckContext ctx)
+    {
+        var ss = Services.Docked();
+        var ore = TestOre();
+        if (ore == null || !EchoCargo.CargoRules.CanSellHere(ss, ore) || Cargo.DepositTarget(ss, ore) != ss.materialStorage)
+        {
+            ctx.Skip("sell-storage", ore == null ? "no sellable ore type" : "station has no shop, or ore doesn't go to material storage");
+            return;
+        }
+        var player = GamePlayer.current;
+        var ship = player.currentSpaceShip;
+        var storage = ss.materialStorage;
+        var setting = EchoCargo.EchoCargo.Instance.SellFromStorage;
+        bool setting0 = setting.Value;
+        int cargo0 = ship.cargo.GetCount(ore), stored0 = storage.GetCount(ore);
+        string key = Items.RuleKey(ore);
+        try
+        {
+            setting.Value = true;
+            if (cargo0 > 0) ship.cargo.Remove(ore, cargo0);
+            ship.cargo.Add(ore, 5);
+            storage.Add(ore, 6);
+            int held = storage.GetCount(ore);
+            int keep = Mathf.Max(held - 3, player.RequiredItemCountForMissions(ore));
+            long expected = ore.sellValue * (ship.cargo.GetCount(ore) + held - keep);
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "}}}");
+            long before = player.credits;
+            var quote = Services.Sell(false);
+            var run = Services.Sell(true);
+            string detail = $"{key}: keep={keep} stored {held}->{storage.GetCount(ore)} cargo 5->{ship.cargo.GetCount(ore)} credits +{player.credits - before} (expected {expected}) quote={quote.credits} run={run.credits} lines=[{string.Join("; ", run.lines)}]";
+            if (held > keep && quote.credits == expected && run.credits == expected && player.credits - before == expected && storage.GetCount(ore) == keep
+                && ship.cargo.GetCount(ore) == 0 && run.lines.Exists(l => l.StartsWith("Station storage: "))) ctx.Pass("sell-storage", detail);
+            else ctx.Fail("sell-storage", detail);
+
+            setting.Value = false;
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"Sell\"}}}");
+            var off = Services.Sell(true);
+            detail = $"setting off: sold {off.credits} cr, stored {keep}->{storage.GetCount(ore)}";
+            if (off.credits == 0 && storage.GetCount(ore) == keep) ctx.Pass("sell-storage-off", detail);
+            else ctx.Fail("sell-storage-off", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            ship.cargo.Remove(ore, ship.cargo.GetCount(ore));
+            if (cargo0 > 0) ship.cargo.Add(ore, cargo0);
+            storage.Remove(ore, storage.GetCount(ore));
+            if (stored0 > 0) storage.Add(ore, stored0);
+        }
+    }
+
+    // The armory with SellFromArmory on: Sell above N keeps N there and the quote matches the run, while Sell rules on ammo
+    // the flagship fires and on a piece a saved loadout names sell none of them; the setting turns it off.
+    private static void CheckSellArmory(SelfCheckContext ctx)
+    {
+        var ss = Services.Docked();
+        var ammo = EchoCargo.EchoCargo.UnfiredAmmo();
+        var piece = EchoCargo.EchoCargo.TestPiece(ss, null);
+        if (ammo == null || piece == null || !EchoCargo.CargoRules.CanSellHere(ss, ammo))
+        {
+            ctx.Skip("sell-armory", ammo == null ? "no sellable ammo the fleet doesn't fire or carry (or a fleet ship isn't spawned)"
+                : piece == null ? "no sellable equipment type to name in a test loadout" : "station has no shop");
+            return;
+        }
+        var fired = EchoCargo.EchoCargo.FiredAmmo();
+        var player = GamePlayer.current;
+        var armory = player.globalInventory;
+        var setting = EchoCargo.EchoCargo.Instance.SellFromArmory;
+        bool setting0 = setting.Value;
+        int ammo0 = armory.GetCount(ammo), fired0 = fired != null ? armory.GetCount(fired) : 0;
+        string key = Items.RuleKey(ammo);
+        try
+        {
+            setting.Value = true;
+            EchoCargo.EchoCargo.PutTestLoadout(piece);
+            armory.Add(piece, 1);
+            if (fired != null) armory.Add(fired, 5);
+            armory.Add(ammo, 6);
+            int held = armory.GetCount(ammo), keep = held - 4, firedHeld = fired != null ? armory.GetCount(fired) : 0;
+            long expected = ammo.sellValue * 4;
+            string rules = "\"" + key + "\":{\"dockAction\":\"SellAbove\",\"keepAmount\":" + keep + "},\"" + Items.RuleKey(piece) + "\":{\"dockAction\":\"Sell\"}";
+            if (fired != null) rules += ",\"" + Items.RuleKey(fired) + "\":{\"dockAction\":\"Sell\"}";
+            ItemRules.UseForTest("{\"items\":{" + rules + "}}");
+            long before = player.credits;
+            var quote = Services.Sell(false);
+            var run = Services.Sell(true);
+            int firedAfter = fired != null ? armory.GetCount(fired) : 0;
+            string detail = $"{key}: keep={keep} held {held}->{armory.GetCount(ammo)} credits +{player.credits - before} (expected {expected}) quote={quote.credits} run={run.credits} "
+                + $"loadout piece {Items.RuleKey(piece)} 1->{armory.GetCount(piece)} " + (fired != null ? $"fired {Items.RuleKey(fired)} {firedHeld}->{firedAfter}" : "no fired ammo to test")
+                + $" lines=[{string.Join("; ", run.lines)}]";
+            if (quote.credits == expected && run.credits == expected && player.credits - before == expected && armory.GetCount(ammo) == keep
+                && armory.GetCount(piece) == 1 && firedAfter == firedHeld && run.lines.Exists(l => l.StartsWith("Armory: "))) ctx.Pass("sell-armory", detail);
+            else ctx.Fail("sell-armory", detail);
+
+            setting.Value = false;
+            ItemRules.UseForTest("{\"items\":{\"" + key + "\":{\"dockAction\":\"Sell\"}}}");
+            var off = Services.Sell(true);
+            detail = $"setting off: sold {off.credits} cr, held {keep}->{armory.GetCount(ammo)}";
+            if (off.credits == 0 && armory.GetCount(ammo) == keep) ctx.Pass("sell-armory-off", detail);
+            else ctx.Fail("sell-armory-off", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            EchoCargo.EchoCargo.DeleteTestLoadout();
+            EchoCargo.EchoCargo.RestoreCount(armory, ammo, ammo0);
+            EchoCargo.EchoCargo.RestoreCount(armory, piece, 0);
+            if (fired != null) EchoCargo.EchoCargo.RestoreCount(armory, fired, fired0);
+        }
+    }
+
     // A fleet ship (the flagship if there is none) and a crew type it has at least `min` of.
     private static SpaceShipData CrewShip(int min, out string type)
     {
@@ -388,6 +571,7 @@ internal static class StationServicesCheck
             ctx.Skip("crew-track", "no ship of yours has crew");
             return;
         }
+        CrewLosses.Clear(ship);
         int total0 = ship.crewData.totalCrew;
         string died = null;
         for (int i = 0; i < 1000 && died == null; i++) died = ship.TryKillCrewFromHullDamage();
@@ -501,6 +685,76 @@ internal static class StationServicesCheck
         else ctx.Fail("brig", detail);
     }
 
+    // Docking by hand with fleet auto-deposit on: the sell runs before the deposit, so a "Game default" stack on a fleet
+    // ship gets the storage room that a Sell stack in station storage frees. Material storage is filled with the Sell ore
+    // until nothing else fits; in the old order the deposit ran into the full storage and left the stack aboard.
+    private static IEnumerator CheckSellBeforeDeposit(SelfCheckContext ctx)
+    {
+        var f = StationServices.Instance;
+        var ss = Services.Docked();
+        var player = GamePlayer.current;
+        var storage = ss.materialStorage;
+        SpaceShipData fleetShip = null;
+        foreach (var s in Behaviour.UI.PlayerCargo.GetManagedFleetShips()) { fleetShip = s; break; }
+        var sold = TestOre();
+        var kept = sold != null ? TestOre(sold) : null;
+        if (fleetShip == null || kept == null || sold.m3 <= 0f || kept.m3 <= 0f || !EchoCargo.CargoRules.CanSellHere(ss, sold)
+            || Cargo.DepositTarget(ss, sold) != storage || Cargo.DepositTarget(ss, kept) != storage || storage.GetSpaceAvailable() < kept.m3 * 3)
+        {
+            ctx.Skip("sell-before-deposit", fleetShip == null ? "no fleet ship with cargo" : "no two ores for material storage, no shop, or storage already full");
+            yield break;
+        }
+        var fromStorage = EchoCargo.EchoCargo.Instance.SellFromStorage;
+        bool r0 = f.RepairOnDock.Value, s0 = f.RestockOnDock.Value, l0 = f.SellOnDock.Value, c0 = f.CrewOnDock.Value, b0 = f.BrigOnDock.Value;
+        bool storage0 = fromStorage.Value, deposit0 = player.autoDepositFleetCargo;
+        int soldStored0 = storage.GetCount(sold), keptStored0 = storage.GetCount(kept), shop0 = ss.shopInventory.GetCount(sold);
+        // Only the check's stack may leave the fleet ship: favourites stay aboard on deposit and are never sold.
+        var marked = new System.Collections.Generic.List<Inventory.InventoryItem>();
+        foreach (var stack in fleetShip.cargo.items)
+            if (!stack.favourite) { stack.favourite = true; marked.Add(stack); }
+        try
+        {
+            f.RepairOnDock.Value = f.RestockOnDock.Value = f.CrewOnDock.Value = f.BrigOnDock.Value = false;
+            f.SellOnDock.Value = true;
+            fromStorage.Value = true;
+            player.autoDepositFleetCargo = true;
+            fleetShip.cargo.Add(kept, 3);
+            storage.Add(sold, Mathf.CeilToInt(storage.GetSpaceAvailable() / sold.m3));
+            int filled = storage.GetCount(sold);
+            ItemRules.UseForTest("{\"items\":{\"" + Items.RuleKey(sold) + "\":{\"dockAction\":\"Sell\"}}}");
+            StationServices.lastDockSummary = null;
+            Behaviour.UI.PlayerCargo.AutoDepositOnDock();
+            int aboardAtDock = fleetShip.cargo.GetCount(kept);
+            float until = Time.realtimeSinceStartup + 20f;
+            while (StationServices.lastDockSummary == null && Time.realtimeSinceStartup < until) yield return null;
+            int reserved = player.RequiredItemCountForMissions(sold);
+            string detail = $"{fleetShip.GetShipName()}: {Items.RuleKey(kept)} aboard 3->{aboardAtDock} at dock->{fleetShip.cargo.GetCount(kept)} after, stored {keptStored0}->{storage.GetCount(kept)}; "
+                + $"{Items.RuleKey(sold)} stored {filled}->{storage.GetCount(sold)}; summary='{StationServices.lastDockSummary}'";
+            if (aboardAtDock == 3 && fleetShip.cargo.GetCount(kept) == 0 && storage.GetCount(kept) == keptStored0 + 3 && storage.GetCount(sold) == reserved)
+                ctx.Pass("sell-before-deposit", detail);
+            else ctx.Fail("sell-before-deposit", detail);
+        }
+        finally
+        {
+            f.RepairOnDock.Value = r0;
+            f.RestockOnDock.Value = s0;
+            f.SellOnDock.Value = l0;
+            f.CrewOnDock.Value = c0;
+            f.BrigOnDock.Value = b0;
+            fromStorage.Value = storage0;
+            player.autoDepositFleetCargo = deposit0;
+            ItemRules.Load();
+            foreach (var stack in marked) stack.favourite = false;
+            fleetShip.cargo.Remove(kept, fleetShip.cargo.GetCount(kept));
+            storage.Remove(kept, storage.GetCount(kept));
+            if (keptStored0 > 0) storage.Add(kept, keptStored0);
+            storage.Remove(sold, storage.GetCount(sold));
+            if (soldStored0 > 0) storage.Add(sold, soldStored0);
+            int shopAdded = ss.shopInventory.GetCount(sold) - shop0;
+            if (shopAdded > 0) ss.shopInventory.Remove(sold, shopAdded);
+        }
+    }
+
     // The dock hook: AutoDepositOnDock runs our postfix, which waits for the interior and runs the enabled services.
     private static IEnumerator CheckOnDock(SelfCheckContext ctx)
     {
@@ -511,19 +765,27 @@ internal static class StationServicesCheck
         foreach (var job in StationHangar.current?.jobs.ToArray() ?? new Source.Spacestation.RepairJob[0])
             if (job.spaceshipGuid == ship.guid) StationHangar.current.CancelJob(job);
         ship.currentHullHP = ship.maxHullHP * 0.7f;
-        f.RepairOnDock.Value = true;
-        f.RestockOnDock.Value = false;
-        f.SellOnDock.Value = false;
-        f.CrewOnDock.Value = true;
-        var lost = SimulateLoss(out string lostType);
-        StationServices.lastDockSummary = null;
-        Behaviour.UI.PlayerCargo.AutoDepositOnDock();
-        float until = Time.realtimeSinceStartup + 5f;
-        while (StationServices.lastDockSummary == null && Time.realtimeSinceStartup < until) yield return null;
-        f.RepairOnDock.Value = r0;
-        f.RestockOnDock.Value = s0;
-        f.SellOnDock.Value = l0;
-        f.CrewOnDock.Value = c0;
+        SpaceShipData lost;
+        string lostType;
+        try
+        {
+            f.RepairOnDock.Value = true;
+            f.RestockOnDock.Value = false;
+            f.SellOnDock.Value = false;
+            f.CrewOnDock.Value = true;
+            lost = SimulateLoss(out lostType);
+            StationServices.lastDockSummary = null;
+            Behaviour.UI.PlayerCargo.AutoDepositOnDock();
+            float until = Time.realtimeSinceStartup + 5f;
+            while (StationServices.lastDockSummary == null && Time.realtimeSinceStartup < until) yield return null;
+        }
+        finally
+        {
+            f.RepairOnDock.Value = r0;
+            f.RestockOnDock.Value = s0;
+            f.SellOnDock.Value = l0;
+            f.CrewOnDock.Value = c0;
+        }
         if (lost != null)
         {
             string crewDetail = $"{lost.GetShipName()} lost 1 {lostType}: pending now {CrewLosses.Pending(lost, lostType)}, summary='{StationServices.lastDockSummary}'";
@@ -649,12 +911,12 @@ internal static class StationServicesCheck
     }
 
     // A sellable ore type none of your fleet carries, so a Sell rule on it touches only what the check adds.
-    private static InventoryItemType TestOre()
+    private static InventoryItemType TestOre(InventoryItemType except = null)
     {
         var ships = Services.FleetShips();
         foreach (var t in InventoryItemType.all)
         {
-            if (t.itemCategory != ItemCategory.Ore || !t.canSell || t.sellValue <= 0 || GamePlayer.current.RequiredItemCountForMissions(t) > 0) continue;
+            if (t == except || t.itemCategory != ItemCategory.Ore || !t.canSell || t.sellValue <= 0 || GamePlayer.current.RequiredItemCountForMissions(t) > 0) continue;
             bool carried = false;
             foreach (var s in ships) carried |= s.cargo.GetCount(t) > 0;
             if (!carried) return t;

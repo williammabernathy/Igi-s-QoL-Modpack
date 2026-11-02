@@ -17,7 +17,7 @@ public sealed class CoreFeature : Feature
     public override string Id => "Core";
     public override string Description => "Core services (always on)";
     public override bool HasEnabledEntry => false;
-    public override Type[] PatchClasses => new[] { typeof(MainMenuPatch), typeof(SaveDataPatches), typeof(GameEventPatches) };
+    public override Type[] PatchClasses => new[] { typeof(SaveDataPatches), typeof(GameEventPatches) };
 
     public override void OnActivated()
     {
@@ -64,21 +64,5 @@ public sealed class CoreFeature : Feature
             ctx.Pass(name, $"igiQol.selfCheck={foundTicks}, ships[{flagship}].selfCheckMarker=true");
         else
             ctx.Fail(name, $"selfCheck={foundTicks ?? "null"} (expected {ticks}), marker={(marker.IsNull ? "missing" : marker.ToString())}");
-    }
-}
-
-[HarmonyPatch(typeof(MainMenuUI), "Start")]
-internal static class MainMenuPatch
-{
-    private static void Postfix()
-    {
-        if (!CoreFeature.Instance.Active) return;
-        try
-        {
-            SaveData.Discard();
-            StartupReport.ShowOnce();
-            GameEvents.RaiseMainMenuShown();
-        }
-        catch (Exception e) { Plugin.Log.LogError($"[Core] {nameof(MainMenuPatch)}: {e}"); }
     }
 }

@@ -27,7 +27,7 @@ public sealed class SelfCheckContext
         yield return new WaitForEndOfFrame();
         string path = Application.persistentDataPath + "/igiqol-" + name + ".png";
         ScreenCapture.CaptureScreenshot(path);
-        yield return new WaitForSeconds(2f);
+        yield return new WaitForSecondsRealtime(2f); // realtime: a check may capture while an AlertPopup pauses the game
         Plugin.Log.LogInfo($"[Dev] screenshot -> {path}");
     }
 
@@ -53,7 +53,7 @@ public sealed class SelfCheckContext
         Behaviour.UI.Spacestation.SpaceStationInterior.instance.ExitSpacestation();
         float wait = Time.realtimeSinceStartup + 30f;
         while ((Behaviour.UI.HUD.HudManager.Instance == null || !Behaviour.UI.HUD.HudManager.Instance.showHud) && Time.realtimeSinceStartup < wait) yield return null;
-        yield return new WaitForSeconds(2f);
+        yield return new WaitForSecondsRealtime(2f);
     }
 
     // An asteroid with the given surface ore and no core, built from the first asteroid field in this system and added

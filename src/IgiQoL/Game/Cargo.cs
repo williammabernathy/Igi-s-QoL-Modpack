@@ -13,7 +13,7 @@ public static class Cargo
     public static int Count(SpaceShipData ship, InventoryItemType item)
     {
         int count = ship.cargo.GetCount(item);
-        if (Items.GoesToDataInventory(item)) count += GamePlayer.current.dataInventory.GetCount(item);
+        if (item.CanGoInDataInventory()) count += GamePlayer.current.dataInventory.GetCount(item);
         return count;
     }
 
