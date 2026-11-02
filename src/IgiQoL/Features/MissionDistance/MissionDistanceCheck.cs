@@ -39,10 +39,16 @@ internal static class MissionDistanceCheck
             ctx.Skip("jumps", "no system two jumps from " + player.currentSystem.name);
             return;
         }
+        if (local == null)
+        {
+            ctx.Skip("jumps", "the current system has no second location to read as 'this system'");
+            return;
+        }
         string a = f.Short(here), b = f.Short(local), c = f.Long(farPoi);
         int n = f.Jumps(farPoi);
         string detail = $"current '{here?.name}' -> '{a}', '{local?.name}' -> '{b}', '{farPoi.name}' in {far.name} -> '{c}' (route {n}, galaxy 2)";
-        if (a == "here" && b == "this\u00A0system" && n == 2 && c == far.name + ", " + MissionDistance.JumpsText(2)) ctx.Pass("jumps", detail);
+        // The route may use a wormhole the gate-only galaxy distance doesn't, so it can be shorter but never longer.
+        if (a == "here" && b == "this\u00A0system" && n >= 1 && n <= 2 && c == far.name + ", " + MissionDistance.JumpsText(n)) ctx.Pass("jumps", detail);
         else ctx.Fail("jumps", detail);
     }
 
@@ -125,10 +131,10 @@ internal static class MissionDistanceCheck
         }
         // Board missions sit in the station's own system, so the rows above rarely carry a tag. A real mission from a
         // station board in another system, built as a row at the top of this board's list, must.
-        var far = FarMission(ctx, out var farPoi);
+        var far = FarMission(out var farPoi);
         if (far == null)
         {
-            ctx.Skip("board-far", "no station board within 3 jumps has or can generate a mission outside this system");
+            ctx.Skip("board-far", "no station board within 3 jumps holds a mission outside this system");
             yield return ctx.Screenshot("mission-board-distance");
             yield break;
         }
@@ -149,33 +155,48 @@ internal static class MissionDistanceCheck
     {
         var panel = SidePanel.instance;
         if (panel == null) { ctx.Skip("window-rows", "no side panel"); yield break; }
-        panel.SwitchToTab(SidePanel.SideTabType.Missions);
-        ctx.Cleanup(() => { if (SidePanel.instance != null) SidePanel.instance.SwitchToTab(SidePanel.SideTabType.Inventory); });
-        float until = Time.realtimeSinceStartup + 10f;
-        MissionUI ui = null;
-        while ((ui = Object.FindObjectsByType<MissionUI>(FindObjectsInactive.Exclude).FirstOrDefault()) == null && Time.realtimeSinceStartup < until) yield return null;
-        yield return new WaitForSeconds(1.5f);
-        if (ui == null) { ctx.Fail("window-rows", "missions window did not open"); yield break; }
-        var rows = ui.GetComponentsInChildren<MissionListRow>();
-        int good = 0, bad = 0, tagged = 0;
-        float taggedBar = float.MaxValue, plainBar = float.MaxValue;
-        string sample = "";
-        foreach (var row in rows)
+        // The window's sort setting removes the distance chip in some orders, so the check reads rows in game order.
+        var sort = MissionSort.MissionSort.Instance;
+        bool swapSort = sort != null && sort.Active;
+        var savedSort = swapSort ? sort.Window.Value : default;
+        // Switching tabs unloads the panel's content, so a MissionUI that is already open is destroyed at the end of
+        // the frame; wait for a new one.
+        var old = Object.FindObjectsByType<MissionUI>(FindObjectsInactive.Exclude).FirstOrDefault();
+        try
         {
-            string want = Want(row.mission);
-            string got = Tag(row);
-            if (got == want) good++; else bad++;
-            float bar = row.barFill == null ? 0f : ((RectTransform)row.barFill.parent).rect.width;
-            if (got != null) { tagged++; taggedBar = Mathf.Min(taggedBar, bar); }
-            else plainBar = Mathf.Min(plainBar, bar);
-            if (sample.Length < 300) sample += $" '{row.mission.name}'={got ?? "-"};";
+            if (swapSort) sort.Window.Value = MissionSort.WindowSort.GameOrder;
+            panel.SwitchToTab(SidePanel.SideTabType.Missions);
+            ctx.Cleanup(() => { if (SidePanel.instance != null) SidePanel.instance.SwitchToTab(SidePanel.SideTabType.Inventory); });
+            float until = Time.realtimeSinceStartup + 10f;
+            MissionUI ui = null;
+            while ((ui = Object.FindObjectsByType<MissionUI>(FindObjectsInactive.Exclude).FirstOrDefault(u => u != old)) == null && Time.realtimeSinceStartup < until) yield return null;
+            yield return new WaitForSeconds(1.5f);
+            if (ui == null) { ctx.Fail("window-rows", "missions window did not open"); yield break; }
+            var rows = ui.GetComponentsInChildren<MissionListRow>();
+            int good = 0, bad = 0, tagged = 0;
+            float taggedBar = float.MaxValue, plainBar = float.MaxValue;
+            string sample = "";
+            foreach (var row in rows)
+            {
+                string want = Want(row.mission);
+                string got = Tag(row);
+                if (got == want) good++; else bad++;
+                float bar = row.barFill == null ? 0f : ((RectTransform)row.barFill.parent).rect.width;
+                if (got != null) { tagged++; taggedBar = Mathf.Min(taggedBar, bar); }
+                else plainBar = Mathf.Min(plainBar, bar);
+                if (sample.Length < 300) sample += $" '{row.mission.name}'={got ?? "-"};";
+            }
+            // The 190 px list leaves a progress bar of about 100 px; a tag must not squeeze it below 40.
+            string detail = $"{rows.Length} rows, {tagged} tagged, {good} right, {bad} wrong, narrowest bar {taggedBar:0} px tagged / {plainBar:0} px untagged:{sample}";
+            if (rows.Length > 0 && bad == 0 && (tagged == 0 || taggedBar >= 40f)) ctx.Pass("window-rows", detail);
+            else if (rows.Length == 0) ctx.Skip("window-rows", "no accepted missions");
+            else ctx.Fail("window-rows", detail);
+            yield return ctx.Screenshot("missions-window-distance");
         }
-        // The 190 px list leaves a progress bar of about 100 px; a tag must not squeeze it below 40.
-        string detail = $"{rows.Length} rows, {tagged} tagged, {good} right, {bad} wrong, narrowest bar {taggedBar:0} px tagged / {plainBar:0} px untagged:{sample}";
-        if (rows.Length > 0 && bad == 0 && (tagged == 0 || taggedBar >= 40f)) ctx.Pass("window-rows", detail);
-        else if (rows.Length == 0) ctx.Skip("window-rows", "no accepted missions");
-        else ctx.Fail("window-rows", detail);
-        yield return ctx.Screenshot("missions-window-distance");
+        finally
+        {
+            if (swapSort) sort.Window.Value = savedSort;
+        }
     }
 
     // A row's tag as "number | tooltip"; null without one.
@@ -193,29 +214,19 @@ internal static class MissionDistanceCheck
         return n <= 0 ? null : n + " | " + MissionDistance.Instance.Long(mission.GetActivePoi());
     }
 
-    // Stations you haven't visited have empty boards; the first such one within 3 jumps gets its board generated
-    // (the same call the game makes when you dock) and emptied again in the cleanup.
-    private static Source.MissionSystem.Mission FarMission(SelfCheckContext ctx, out MapPointOfInterest poi)
+    // Only a board that already holds an offer outside this system is used. Generating one on a station you've never
+    // visited would add map points to its system, and no cleanup can remove those.
+    private static Source.MissionSystem.Mission FarMission(out MapPointOfInterest poi)
     {
         var here = GamePlayer.current.currentSystem;
         var stations = GalaxyMapData.current.GetJumpDistances(here, 3).Where(kv => kv.Value > 0).OrderBy(kv => kv.Value)
             .SelectMany(kv => kv.Key.pointsOfInterest.OfType<SpaceStation>()).Where(ss => ss.missionBoard != null).ToList();
-        foreach (var pass in new[] { false, true })
+        foreach (var ss in stations)
         {
-            foreach (var ss in stations)
+            foreach (var m in ss.missionBoard.availableMissions)
             {
-                var board = ss.missionBoard;
-                if (pass)
-                {
-                    if (board.availableMissions.Count > 0) continue;
-                    board.RegenerateMissions();
-                    ctx.Cleanup(board.InvalidateMissions);
-                }
-                foreach (var m in board.availableMissions)
-                {
-                    poi = m.GetActivePoi();
-                    if (poi?.system != null && poi.system != here) return m;
-                }
+                poi = m.GetActivePoi();
+                if (poi?.system != null && poi.system != here) return m;
             }
         }
         poi = null;

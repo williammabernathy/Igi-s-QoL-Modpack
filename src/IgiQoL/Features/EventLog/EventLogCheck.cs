@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Behaviour.Gameplay;
 using Behaviour.Item;
 using Behaviour.Managers;
@@ -75,7 +76,7 @@ internal static class EventLogCheck
         opLog.Record(op);
         opLog.entries.Remove(op);
         var opLine = EventLog.Last(LogKind.Operation);
-        string opExpected = $"ECHO: {Translation.Translate("@DungeonMiningOutpostName")} at Check Field: succeeded; 4 defenders killed, 1 captured; 2 crew killed, 3 wounded; 6 items from 1 loot kinds, {Source.Util.GameMath.FormatNumber(315800)} credits";
+        string opExpected = $"ECHO: {Translation.Translate("@DungeonMiningOutpostName")} at Check Field: succeeded; 4 defenders killed, 1 captured; 2 crew killed, 3 wounded; 6 items from 1 loot kind, {Source.Util.GameMath.FormatNumber(315800)} credits";
         if (opLine != null && opLine.text == opExpected) ctx.Pass("operation", opLine.text);
         else ctx.Fail("operation", $"got '{opLine?.text}', expected '{opExpected}'");
 
@@ -131,11 +132,21 @@ internal static class EventLogCheck
             yield break;
         }
         yield return null;
-        yield return null;
         var list = p.GetComponentInChildren<EventLogTab.LogList>();
-        string first = FirstLine(list, 2);
-        string d = $"rows={(list != null ? list.RowCount : -1)} first='{first}'";
-        if (list != null && list.RowCount == 10 && first == "IgiQoL check pop-out line 11") ctx.Pass("popout", d);
+        // Redraw now and read the log in the same frame: game notices and event lines keep arriving, so the rows are
+        // compared with the log's own newest entries, not with the lines pushed above.
+        if (list != null) list.Invalidate();
+        yield return null;
+        var shown = LineTexts(list, 2);
+        var entries = EventLog.Entries;
+        bool same = list != null && list.RowCount == 10 && shown.Count == 10 && entries.Count >= 10;
+        for (int i = 0; same && i < 10; i++)
+        {
+            var e = entries[entries.Count - 1 - i];
+            same = shown[i] == (e.repeats > 1 ? e.text + " (x" + e.repeats + ")" : e.text);
+        }
+        string d = $"rows={(list != null ? list.RowCount : -1)} first='{(shown.Count > 0 ? shown[0] : null)}' newest='{(entries.Count > 0 ? entries[entries.Count - 1].text : null)}'";
+        if (same) ctx.Pass("popout", d);
         else ctx.Fail("popout", d);
         yield return ctx.Screenshot("log-popout");
 
@@ -168,17 +179,18 @@ internal static class EventLogCheck
         ModWindow.Close();
     }
 
-    // The text of the first log line (not the loot summary) in a LogList; cell 2 is the line's text.
-    private static string FirstLine(EventLogTab.LogList list, int cell)
+    // The texts of the log lines (not the loot summary) in a LogList, in the order shown; cell 2 is the line's text.
+    private static List<string> LineTexts(EventLogTab.LogList list, int cell)
     {
-        if (list == null) return null;
+        var texts = new List<string>();
+        if (list == null) return texts;
         var column = list.transform;
         for (int i = 0; i < column.childCount; i++)
         {
             var row = column.GetChild(i);
-            if (row.gameObject.activeSelf && row.childCount > cell) return row.GetChild(cell).GetComponent<TMP_Text>().text;
+            if (row.gameObject.activeSelf && row.childCount > cell) texts.Add(row.GetChild(cell).GetComponent<TMP_Text>().text);
         }
-        return null;
+        return texts;
     }
 
     // Two stacks of the same ore pulled into the flagship's hold through the game's own pickup add up on one line.
@@ -195,6 +207,12 @@ internal static class EventLogCheck
         foreach (var t in InventoryItemType.all)
             if (t.itemCategory == ItemCategory.Ore) { ore = t; break; }
         var cargo = ship.spaceShipData.cargo;
+        // The game's pickup clamps to free space, so a full hold would pick up less than the 7 the check expects.
+        if (ore == null || cargo.GetSpaceAvailable() < 7f * ore.m3)
+        {
+            ctx.Skip("loot", ore == null ? "no ore item type" : "flagship hold can't take the ore");
+            yield break;
+        }
         int cargo0 = cargo.GetCount(ore);
         EventLog.Loot.TryGetValue(ore, out int total0);
         int picked = 0;

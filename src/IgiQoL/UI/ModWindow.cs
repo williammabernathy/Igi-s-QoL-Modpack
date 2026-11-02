@@ -37,7 +37,8 @@ public static class ModWindow
         {
             if (measureFrame < 0 || Time.frameCount < measureFrame || root != (RectTransform)transform) return;
             measureFrame = -1;
-            FitTab();
+            try { FitTab(); }
+            catch (Exception e) { WindowFeature.Instance.Fail(e, "WindowRoot.LateUpdate"); }
         }
 
         private void OnDestroy()

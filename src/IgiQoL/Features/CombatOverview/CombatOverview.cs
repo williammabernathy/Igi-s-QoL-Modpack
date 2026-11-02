@@ -36,6 +36,7 @@ public sealed class CombatOverview : Feature
 
     public const string PopoutId = "combat-overview";
     internal const string ShipsOption = "ships";
+    internal const float DefaultWidth = 760f, DefaultHeight = 400f;
 
     public override string Id => "CombatOverview";
     public override string Title => "Combat overview";
@@ -60,7 +61,7 @@ public sealed class CombatOverview : Feature
             Id = PopoutId,
             Title = Title,
             Owner = this,
-            DefaultSize = new Vector2(760f, 400f),
+            DefaultSize = new Vector2(DefaultWidth, DefaultHeight),
             MinSize = new Vector2(660f, 120f),
             DefaultShow = PopoutShow.WhenRelevant,
             RelevantLabel = "in combat",
@@ -169,6 +170,7 @@ internal sealed class OverviewList : MonoBehaviour
     // Level, shield, armour, hull, buffs, debuffs, target: fixed columns after the ship's name.
     private static readonly string[] Columns = { "Lv", "Shield", "Armour", "Hull", "Buffs", "Debuffs", "Targeting" };
     private static readonly float[] Widths = { 30f, 56f, 62f, 50f, 50f, 64f, 150f };
+    private const float TargetGap = 8f;
 
     internal static void Build(Popout p, RectTransform body)
     {
@@ -178,6 +180,8 @@ internal sealed class OverviewList : MonoBehaviour
         self.column = list;
         self.grow = Mathf.Max(1f, TextScale.TextScale.Factor);
         self.summary = Kit.Muted(body, "");
+        // One short line fits the narrowest window; the longer explanation is on hover.
+        Kit.Tooltip(self.summary, "Resistances", "A ship's resistances are the share of a hit it resists now. After the | comes the total on armour.");
         Instance = self;
     }
 
@@ -188,6 +192,9 @@ internal sealed class OverviewList : MonoBehaviour
         Kit.Label(header, "Ship (click for details)", 11f).color = ColorHelper.poiTooltipMuted;
         for (int i = 0; i < Columns.Length; i++)
             Kit.Fixed(header, Columns[i], Widths[i] * grow, i == Columns.Length - 1 ? TextAlignmentOptions.MidlineLeft : TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
+        // The last column is left-aligned right after a right-aligned one, so it needs a gap.
+        var target = header.GetChild(header.childCount - 1).GetComponent<TMP_Text>();
+        if (target != null) target.margin = new Vector4(TargetGap, 0f, 0f, 0f);
     }
 
     private void Awake()
@@ -236,10 +243,11 @@ internal sealed class OverviewList : MonoBehaviour
         var shown = CombatOverview.Shown(popout.State);
         var flagship = Fleet.Flagship;
         Vector2 from = flagship != null ? (Vector2)flagship.transform.position : Vector2.zero;
-        // Every ship at the location; carrier fighters and drones aren't listed, stations and turrets aren't ships.
+        // Every ship at the location; carrier fighters and drones aren't listed, stations and turrets aren't ships, and
+        // the copy the hangar and shipyard show of a ship (inShipYard) isn't in space.
         foreach (var s in Object.FindObjectsByType<SpaceShip>(FindObjectsInactive.Exclude))
         {
-            if (s == null || s.isDestroyed || s.isCarrierFighter || !s.gameObject.activeInHierarchy) continue;
+            if (s == null || s.isDestroyed || s.isCarrierFighter || s.inShipYard || !s.gameObject.activeInHierarchy) continue;
             bool enemy = s.IsPlayerEnemy();
             if (shown == ShipsShown.Enemies && !enemy) continue;
             if (shown == ShipsShown.EnemiesAndFleet && !enemy && !Fleet.IsPlayerShip(s)) continue;
@@ -288,6 +296,7 @@ internal sealed class OverviewList : MonoBehaviour
             r.debuffs = Value(line, 5);
             r.target = Value(line, 6);
             r.target.alignment = TextAlignmentOptions.MidlineLeft;
+            r.target.margin = new Vector4(TargetGap, 0f, 0f, 0f);
             r.target.overflowMode = TextOverflowModes.Ellipsis;
 
             var details = Kit.Column(column, 2f);
@@ -334,7 +343,7 @@ internal sealed class OverviewList : MonoBehaviour
             if (r.ship.IsPlayerEnemy()) enemies++;
             Refresh(r);
         }
-        Set(summary, rows.Count + (rows.Count == 1 ? " ship" : " ships") + ", " + enemies + (enemies == 1 ? " enemy" : " enemies") + ". Resistances are the share of a hit the ship resists now; after the | the total on armour.");
+        Set(summary, rows.Count + (rows.Count == 1 ? " ship" : " ships") + ", " + enemies + (enemies == 1 ? " enemy" : " enemies") + ". Click a ship for its resistances, effects, weapons and attackers.");
     }
 
     private void Refresh(Row r)

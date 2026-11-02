@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using Behaviour.Equipment.Module;
+using Behaviour.Unit;
 using Behaviour.Equipment.Turret;
 using HarmonyLib;
 using IgiQoL.Core;
@@ -48,18 +49,90 @@ public sealed class EngagementDistance : Feature
         if (r.engagement == EngagementMode.Fixed && r.engagementDistance == 12f && saved == "Fixed") ctx.Pass("settings-roundtrip", detail);
         else ctx.Fail("settings-roundtrip", detail);
 
+        // Needs the flagship in space and an enemy to target: undock first, and fetch an enemy if none is about.
+        yield return SelfCheckContext.EnsureInSpace();
         var ship = Fleet.Flagship;
-        var module = ship != null ? ship.targetProvider : null;
-        if (module == null || module.priorityTarget == null)
+        var module = ship != null ? ship.GetModule<CombatModule>() : null;
+        if (module == null)
         {
-            ctx.Skip("live", "flagship has no target at a station; behaviour is confirmed in combat");
+            const string noModule = "the flagship is not in space or has no combat module";
+            ctx.Skip("live", noModule);
+            ctx.Skip("live-maxrange", noModule);
             yield break;
         }
-        module.UpdateApproachDistance();
-        float expected = Mathf.Clamp(12f, module.GetMinDistanceToTarget(), 30f);
-        string live = $"approachDistance={module.approachDistance} expected={expected}";
-        if (module.approachDistance == expected) ctx.Pass("live", live);
-        else ctx.Fail("live", live);
+        var enemy = NearestEnemy(module);
+        if (enemy == null && SelfCheckContext.SpawnEnemies(1))
+        {
+            float until = Time.realtimeSinceStartup + 30f;
+            while ((enemy = NearestEnemy(module)) == null && Time.realtimeSinceStartup < until) yield return new WaitForSecondsRealtime(1f);
+        }
+        if (enemy == null)
+        {
+            ctx.Skip("live", "no enemy at this location to target");
+            ctx.Skip("live-maxrange", "no enemy at this location to target");
+            yield break;
+        }
+
+        // The check picks the target itself (a manual one), then puts the flagship's own targets back.
+        var heldManual = module.manualTarget;
+        var heldAuto = module.autoTarget;
+        try
+        {
+            module.ResetCurrentTargets();
+            module.SetManualTarget(enemy);
+            int eligible = 0;
+            float reach = float.MaxValue;
+            Vector2 unitPos = ship.transform.position;
+            foreach (var t in module.turrets)
+            {
+                if (t == null || !t.CanTarget(enemy)) continue;
+                if (!(t.HasAmmo() || t.ammoType == null || t.AmmoAmountAvailable() > 0)) continue;
+                eligible++;
+                float own = t.customApproachDistance > 0f
+                    ? t.customApproachDistance
+                    : Mathf.Max(t.range - Vector2.Distance((Vector2)t.transform.position, unitPos) - 0.5f, 1f);
+                if (own < reach) reach = own;
+            }
+            if (eligible == 0)
+            {
+                const string noWeapon = "no weapon of the flagship can hit the enemy with the ammo it has";
+                ctx.Skip("live", noWeapon);
+                ctx.Skip("live-maxrange", noWeapon);
+                yield break;
+            }
+
+            module.UpdateApproachDistance();
+            float expected = Mathf.Clamp(12f, module.GetMinDistanceToTarget(), 30f);
+            string live = $"fixed 12: approachDistance={module.approachDistance} expected={expected}";
+            if (module.approachDistance == expected) ctx.Pass("live", live);
+            else ctx.Fail("live", live);
+
+            ShipSettings.Edit(g).engagement = EngagementMode.MaxRange;
+            module.UpdateApproachDistance();
+            float expectedMax = Mathf.Clamp(reach, module.GetMinDistanceToTarget(), 30f);
+            string liveMax = $"weapons' max range ({eligible} weapons, shortest reach {reach:0.0}): approachDistance={module.approachDistance} expected={expectedMax}";
+            if (Mathf.Abs(module.approachDistance - expectedMax) < 0.01f) ctx.Pass("live-maxrange", liveMax);
+            else ctx.Fail("live-maxrange", liveMax);
+        }
+        finally
+        {
+            module.ResetCurrentTargets();
+            if (heldManual != null) module.SetManualTarget(heldManual);
+            if (heldAuto != null) module.SetAutoTarget(heldAuto);
+        }
+    }
+
+    private static AbstractUnit NearestEnemy(CombatModule module)
+    {
+        AbstractUnit best = null;
+        float bestDist = float.MaxValue;
+        foreach (var u in UnityEngine.Object.FindObjectsByType<AbstractUnit>(FindObjectsInactive.Exclude))
+        {
+            if (u == null || !module.IsValidTarget(u)) continue;
+            float d = Vector2.Distance(u.transform.position, module.transform.position);
+            if (d < bestDist) { best = u; bestDist = d; }
+        }
+        return best;
     }
 }
 

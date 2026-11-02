@@ -67,6 +67,7 @@ internal static class CargoPinsCheck
         }
         string detail = $"{ships} spawned ships, {fired} ammo types fired, {mismatches} mismatches{(first != null ? " (" + first + ")" : "")}";
         if (ships == 0) ctx.Skip("ammo-data", "no spawned ship");
+        else if (fired == 0 && mismatches == 0) ctx.Skip("ammo-data", $"no ship in the fleet fires ammo ({ships} spawned ships), nothing to compare");
         else if (mismatches == 0 && fired > 0) ctx.Pass("ammo-data", detail);
         else ctx.Fail("ammo-data", detail);
     }

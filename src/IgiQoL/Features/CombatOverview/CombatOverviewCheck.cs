@@ -99,7 +99,7 @@ internal static class CombatOverviewCheck
         SpaceShip enemy = null;
         foreach (var s in Object.FindObjectsByType<SpaceShip>(FindObjectsInactive.Exclude))
         {
-            if (s == null || s.isDestroyed || s.isCarrierFighter || !s.gameObject.activeInHierarchy) continue;
+            if (s == null || s.isDestroyed || s.isCarrierFighter || s.inShipYard || !s.gameObject.activeInHierarchy) continue;
             ships++;
             if (enemy == null && s.IsPlayerEnemy()) enemy = s;
         }

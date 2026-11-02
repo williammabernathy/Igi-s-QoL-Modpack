@@ -72,11 +72,12 @@ internal static class DpsMeterCheck
             ctx.Pass("meters-saved", savedDetail);
         else ctx.Fail("meters-saved", savedDetail);
 
-        // Side by side.
+        // Side by side in the top right corner, clear of the combat overview and the mod window (top left) and the
+        // game's fleet panel (bottom left), so the later checks' screenshots stay readable.
         var canvas = ((RectTransform)a.transform.parent).rect.size;
         var ra = (RectTransform)a.transform;
         var rb = (RectTransform)b.transform;
-        ra.anchoredPosition = new Vector2(-canvas.x / 2f + 20f, canvas.y / 2f - 140f);
+        ra.anchoredPosition = new Vector2(canvas.x / 2f - ra.sizeDelta.x - rb.sizeDelta.x - 32f, canvas.y / 2f - 20f);
         rb.anchoredPosition = new Vector2(ra.anchoredPosition.x + ra.sizeDelta.x + 12f, ra.anchoredPosition.y);
         a.Persist();
         b.Persist();
@@ -90,9 +91,10 @@ internal static class DpsMeterCheck
             ctx.Skip("meters-rows", "no damage recorded in the newest fight");
         else
         {
-            string rowsDetail = $"dealt rows={(listA != null ? listA.RowCount : 0)} top={(listA != null ? listA.TopFraction : 0f):0.00} '{(listA != null ? listA.TopNumber : "")}'; taken rows={(listB != null ? listB.RowCount : 0)} top={(listB != null ? listB.TopFraction : 0f):0.00} '{(listB != null ? listB.TopNumber : "")}'";
-            bool dealt = CombatLog.Fights[0].dealt <= 0 || (listA != null && listA.RowCount > 0 && Mathf.Approximately(listA.TopFraction, 1f));
-            bool taken = CombatLog.Fights[0].taken <= 0 || (listB != null && listB.RowCount > 0 && Mathf.Approximately(listB.TopFraction, 1f));
+            // The drawn bar, not the stored fraction: the top row fills the width and the second is in proportion to the first.
+            string rowsDetail = $"dealt rows={(listA != null ? listA.RowCount : 0)} fill={(listA != null ? listA.FillAt(0) : 0f):0.00}/{(listA != null ? listA.FillAt(1) : 0f):0.00} '{(listA != null ? listA.TopNumber : "")}'; taken rows={(listB != null ? listB.RowCount : 0)} fill={(listB != null ? listB.FillAt(0) : 0f):0.00}/{(listB != null ? listB.FillAt(1) : 0f):0.00} '{(listB != null ? listB.TopNumber : "")}'";
+            bool dealt = CombatLog.Fights[0].dealt <= 0 || BarsDrawn(listA);
+            bool taken = CombatLog.Fights[0].taken <= 0 || BarsDrawn(listB);
             if (dealt && taken) ctx.Pass("meters-rows", rowsDetail);
             else ctx.Fail("meters-rows", rowsDetail);
         }
@@ -126,6 +128,10 @@ internal static class DpsMeterCheck
         if (gone) ctx.Pass("meters-remove", $"{second} dropped, {first} kept");
         else ctx.Fail("meters-remove", $"{second} still listed or open; windows={string.Join(",", Popouts.Windows(Kind))}");
     }
+
+    private static bool BarsDrawn(MeterList list) =>
+        list != null && list.RowCount > 0 && Mathf.Abs(list.FillAt(0) - 1f) < 0.01f
+        && (list.RowCount < 2 || Mathf.Abs(list.FillAt(1) - (float)(list.TotalAt(1) / list.TotalAt(0))) < 0.01f);
 
     // The first text in the header is the window's title.
     private static string TitleText(Popout p)

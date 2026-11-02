@@ -136,12 +136,14 @@ internal static class StationServicesCheck
         }
         var armory = GamePlayer.current.globalInventory;
         int cargo0 = ship.cargo.GetCount(ammo), armory0 = armory.GetCount(ammo);
+        // Remove takes favourited stacks too and Add makes a plain one, so remember the flag and put it back.
+        bool cargoFav = AnyFavourite(ship.cargo, ammo), armoryFav = AnyFavourite(armory, ammo);
         ctx.Cleanup(() =>
         {
             ship.cargo.Remove(ammo, ship.cargo.GetCount(ammo));
-            if (cargo0 > 0) ship.cargo.Add(ammo, cargo0);
+            if (cargo0 > 0) { var st = ship.cargo.Add(ammo, cargo0); if (st != null && cargoFav) st.favourite = true; }
             armory.Remove(ammo, armory.GetCount(ammo));
-            if (armory0 > 0) armory.Add(ammo, armory0);
+            if (armory0 > 0) { var st = armory.Add(ammo, armory0); if (st != null && armoryFav) st.favourite = true; }
         });
         ship.cargo.Remove(ammo, cargo0);
         armory.Remove(ammo, armory0);
@@ -157,6 +159,13 @@ internal static class StationServicesCheck
         bool shortButExplained = loaded == Mathf.Min(10, need) && run.problems.Count > 0;
         if (need > 0 && armoryFirst && (full || shortButExplained)) ctx.Pass("restock", detail);
         else ctx.Fail("restock", detail);
+    }
+
+    private static bool AnyFavourite(Inventory inv, InventoryItemType item)
+    {
+        foreach (var stack in inv.items.ToArray())
+            if (stack != null && stack.item == item && stack.favourite) return true;
+        return false;
     }
 
     // Takes every warp fuel stack out of `inv` and returns a cleanup that puts them back.
@@ -562,6 +571,7 @@ internal static class StationServicesCheck
             ctx.Skip("crew-track", "no ship of yours has crew");
             return;
         }
+        CrewLosses.Clear(ship);
         int total0 = ship.crewData.totalCrew;
         string died = null;
         for (int i = 0; i < 1000 && died == null; i++) died = ship.TryKillCrewFromHullDamage();

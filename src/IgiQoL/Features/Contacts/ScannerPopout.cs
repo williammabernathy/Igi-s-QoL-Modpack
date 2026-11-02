@@ -389,7 +389,7 @@ internal sealed class ScannerMap : MonoBehaviour
         var flagship = Fleet.Flagship;
         foreach (var s in Object.FindObjectsByType<SpaceShip>(FindObjectsInactive.Exclude))
         {
-            if (s == null || s == flagship || s.isDestroyed || s.isCarrierFighter || !s.gameObject.activeInHierarchy) continue;
+            if (s == null || s == flagship || s.isDestroyed || s.isCarrierFighter || s.inShipYard || !s.gameObject.activeInHierarchy) continue;
             if (s.IsPlayerEnemy()) Give(enemyPool, s, scanLevel);
             else if (Fleet.IsPlayerShip(s)) Give(fleetPool, s, scanLevel);
         }

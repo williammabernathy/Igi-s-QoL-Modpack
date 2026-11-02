@@ -111,7 +111,11 @@ public sealed class Notes : Feature
         d = $"text='{(view != null ? view.label.text : null)}'";
         if (view != null && view.label.text == NotesMarkdown.Render(note.text)) ctx.Pass("popout-follows", d);
         else ctx.Fail("popout-follows", d);
+        // Pop-outs draw under the mod window, so close it for the picture and bring the Notes tab back after.
+        ModWindow.Close();
+        yield return null;
         yield return ctx.Screenshot("note-popout");
+        ModWindow.Open("notes");
 
         Popouts.DockBack(first);
         yield return null;
@@ -343,70 +347,102 @@ public sealed class NotesTab : MonoBehaviour
 
     private void Select(int index)
     {
-        Commit();
-        if (index != Current) editingOverride = null;
-        Current = index;
-        Rebuild();
+        try
+        {
+            Commit();
+            if (index != Current) editingOverride = null;
+            Current = index;
+            Rebuild();
+        }
+        catch (Exception e) { Notes.Instance.Fail(e, nameof(Select)); }
     }
 
     private void SetEditing(bool value)
     {
-        Commit();
-        editingOverride = value;
-        Rebuild();
+        try
+        {
+            Commit();
+            editingOverride = value;
+            Rebuild();
+        }
+        catch (Exception e) { Notes.Instance.Fail(e, nameof(SetEditing)); }
     }
 
     private void AddNote()
     {
-        Commit();
-        NotesStore.Tabs.Add(new NoteTab { name = "Note " + (NotesStore.Tabs.Count + 1), text = "" });
-        Current = NotesStore.Tabs.Count - 1;
-        editingOverride = null;
-        NotesStore.Save();
-        Rebuild();
+        try
+        {
+            Commit();
+            NotesStore.Tabs.Add(new NoteTab { name = "Note " + (NotesStore.Tabs.Count + 1), text = "" });
+            Current = NotesStore.Tabs.Count - 1;
+            editingOverride = null;
+            NotesStore.Save();
+            Rebuild();
+        }
+        catch (Exception e) { Notes.Instance.Fail(e, nameof(AddNote)); }
     }
 
     private void Move(int delta)
     {
-        Commit();
-        int from = Current, to = from + delta;
-        if (to < 0 || to >= NotesStore.Tabs.Count) return;
-        (NotesStore.Tabs[from], NotesStore.Tabs[to]) = (NotesStore.Tabs[to], NotesStore.Tabs[from]);
-        Current = to;
-        NotesStore.Save();
-        Rebuild();
+        try
+        {
+            Commit();
+            int from = Current, to = from + delta;
+            if (to < 0 || to >= NotesStore.Tabs.Count) return;
+            (NotesStore.Tabs[from], NotesStore.Tabs[to]) = (NotesStore.Tabs[to], NotesStore.Tabs[from]);
+            Current = to;
+            NotesStore.Save();
+            Rebuild();
+        }
+        catch (Exception e) { Notes.Instance.Fail(e, nameof(Move)); }
     }
 
     private void Rename()
     {
-        Commit();
-        var target = note;
-        AlertPopup.ShowInput("Tab name", name =>
+        try
         {
-            name = (name ?? "").Trim();
-            if (name.Length == 0) return;
-            target.name = name;
-            NotesStore.Save();
-            NotesPopout.Retitle(target);
-            if (ModWindow.IsOpen && ModWindow.CurrentTab == "notes") ModWindow.Show("notes");
-        }, "Rename", target.name);
+            Commit();
+            var target = note;
+            AlertPopup.ShowInput("Tab name", name =>
+            {
+                try
+                {
+                    name = (name ?? "").Trim();
+                    if (name.Length == 0) return;
+                    target.name = name;
+                    NotesStore.Save();
+                    NotesPopout.Retitle(target);
+                    if (ModWindow.IsOpen && ModWindow.CurrentTab == "notes") ModWindow.Show("notes");
+                }
+                catch (Exception e) { Notes.Instance.Fail(e, nameof(Rename)); }
+            }, "Rename", target.name);
+        }
+        catch (Exception e) { Notes.Instance.Fail(e, nameof(Rename)); }
     }
 
     private void Delete()
     {
-        Commit();
-        if (NotesStore.Tabs.Count <= 1) return;
-        var target = note;
-        AlertPopup.ShowQuery("Delete '" + target.name + "'?", "Delete", "Keep", onYes: () =>
+        try
         {
-            int at = NotesStore.Tabs.IndexOf(target);
-            if (at < 0) return;
-            NotesStore.Tabs.RemoveAt(at);
-            NotesPopout.Forget(target);
-            Current = Mathf.Min(Current, NotesStore.Tabs.Count - 1);
-            editingOverride = null;
-            NotesStore.Save();
-            if (ModWindow.IsOpen && ModWindow.CurrentTab == "notes") ModWindow.Show("notes");
-        });
+            Commit();
+            if (NotesStore.Tabs.Count <= 1) return;
+            var target = note;
+            AlertPopup.ShowQuery("Delete '" + target.name + "'?", "Delete", "Keep", onYes: () =>
+            {
+                try
+                {
+                    int at = NotesStore.Tabs.IndexOf(target);
+                    if (at < 0) return;
+                    NotesStore.Tabs.RemoveAt(at);
+                    NotesPopout.Forget(target);
+                    Current = Mathf.Min(Current, NotesStore.Tabs.Count - 1);
+                    editingOverride = null;
+                    NotesStore.Save();
+                    if (ModWindow.IsOpen && ModWindow.CurrentTab == "notes") ModWindow.Show("notes");
+                }
+                catch (Exception e) { Notes.Instance.Fail(e, nameof(Delete)); }
+            });
+        }
+        catch (Exception e) { Notes.Instance.Fail(e, nameof(Delete)); }
     }
 }

@@ -105,12 +105,16 @@ public sealed class TextScale : Feature
             else ctx.Fail("layout", detail);
         }
         finally { Object.DestroyImmediate(go); }
+        // The layout block moved the factor on its own; put it back to the saved setting, and pick a test value that
+        // differs from it, since a ConfigEntry raises SettingChanged only when its value changes.
+        SetFactor(percent / 100f);
+        int test = percent == 130 ? 120 : 130;
 
         // Same path as the Settings tab: the value changes while the window is open on it, and the window rebuilds.
         ModWindow.Open("settings");
-        Percent.Value = 130;
+        Percent.Value = test;
         string setDetail = $"factor={Factor:0.##} open={ModWindow.IsOpen} tab={ModWindow.CurrentTab}";
-        if (Mathf.Approximately(Factor, 1.3f) && ModWindow.IsOpen && ModWindow.CurrentTab == "settings") ctx.Pass("setting", setDetail);
+        if (Mathf.Approximately(Factor, test / 100f) && ModWindow.IsOpen && ModWindow.CurrentTab == "settings") ctx.Pass("setting", setDetail);
         else ctx.Fail("setting", setDetail);
         yield return ctx.Screenshot("text-130");
         Percent.Value = percent;

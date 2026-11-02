@@ -74,6 +74,13 @@ public sealed class ContactsBadge : MonoBehaviour
         catch (Exception e) { Contacts.Instance.Fail(e, nameof(ContactsBadge)); }
     }
 
+    // The check's way to read what the counter shows now, not up to a second ago.
+    internal void RefreshNow()
+    {
+        hudShown = HudManager.Instance != null && HudManager.Instance.showHud;
+        Refresh();
+    }
+
     private void Refresh()
     {
         int total = Contacts.CountHere(out int b, out int w, out int l);

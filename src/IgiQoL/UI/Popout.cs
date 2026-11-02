@@ -718,6 +718,12 @@ internal sealed class PopoutStrip : MonoBehaviour
     {
         if (version == Popouts.Version) return;
         version = Popouts.Version;
+        try { Rebuild(); }
+        catch (Exception e) { IgiQoL.Features.Window.WindowFeature.Instance.Fail(e, "PopoutStrip.Update"); }
+    }
+
+    private void Rebuild()
+    {
         for (int i = row.childCount - 1; i >= 0; i--)
         {
             var child = row.GetChild(i).gameObject;
@@ -788,7 +794,9 @@ public sealed class PopoutTabButton : MonoBehaviour
 
     private void Update()
     {
-        if (version != Popouts.Version) Sync();
+        if (version == Popouts.Version) return;
+        try { Sync(); }
+        catch (Exception e) { IgiQoL.Features.Window.WindowFeature.Instance.Fail(e, "PopoutTabButton.Update"); }
     }
 
     private void Sync()

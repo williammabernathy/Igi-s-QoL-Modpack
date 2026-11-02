@@ -63,7 +63,7 @@ internal static class DpsMeter
     private static readonly string[] NumberNames = { "Total", "Per second", "Share" };
     private static readonly string[] BarNames = { "Plain", "Split in 3" };
     private static readonly string[] ColourNames = { "By role", "By hull class", "By damage type", "Picked per ship" };
-    internal static readonly string[] PresetNames = { "My fleet, dealt by ship", "My fleet, taken from ship", "Dealt by damage type" };
+    internal static readonly string[] PresetNames = { "My fleet, dealt by ship", "My fleet, taken by ship", "Dealt by damage type" };
 
     private static readonly Color[] RoleColours =
     {
@@ -107,9 +107,23 @@ internal static class DpsMeter
             Multiple = true,
             DockTab = "combat",
             TitleOf = TitleOf,
-            Build = MeterList.Build,
+            Build = BuildPlaced,
             BuildOptions = BuildOptions,
         });
+    }
+
+    // Before it has ever been placed a pop-out opens in the middle of the screen, which is where the combat overview
+    // opens too. A meter starts beside the overview instead (each further meter a little lower), so neither hides the other.
+    private static void BuildPlaced(Popout p, RectTransform body)
+    {
+        if (!p.State.placed)
+        {
+            int index = Mathf.Max(0, new List<string>(Popouts.Windows(KindId)).IndexOf(p.Id));
+            p.State.x = CombatOverview.CombatOverview.DefaultWidth / 2f + 8f;
+            p.State.y = CombatOverview.CombatOverview.DefaultHeight / 2f - 28f * index;
+            p.State.placed = true;
+        }
+        MeterList.Build(p, body);
     }
 
     // Short, because it sits on the header and on the strip chip.
@@ -281,10 +295,12 @@ internal sealed class MeterList : MonoBehaviour
 
     internal int RowCount { get; private set; }
 
-    // The top row's bar as a share of the full width; 1 when the scaling works.
-    internal float TopFraction => RowCount > 0 ? pool[0].fillFraction : 0f;
-
     internal string TopNumber => RowCount > 0 ? pool[0].number.text : "";
+
+    // The drawn width of row i's bar (the fill's right anchor), and the total behind it; -1 and 0 past the last row.
+    internal float FillAt(int i) => i >= 0 && i < RowCount ? pool[i].fill.anchorMax.x : -1f;
+
+    internal double TotalAt(int i) => i >= 0 && i < RowCount ? scratch[i].total : 0;
 
     internal static void Build(Popout p, RectTransform body)
     {

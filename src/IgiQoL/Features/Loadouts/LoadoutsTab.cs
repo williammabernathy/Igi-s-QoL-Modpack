@@ -111,14 +111,14 @@ public static class LoadoutsTab
         if (owner == null)
         {
             Kit.TextButton(row, "Update", () => AlertPopup.ShowQuery($"Replace \"{l.name}\" with {ship.GetShipName()}'s current fit?", "Replace", "Cancel",
-                () => { LoadoutStore.Put(ship.guid, Loadout.Capture(ship, l.name, l.echo != null)); Rebuild(); }), 70f);
+                () => Guard(() => { LoadoutStore.Put(ship.guid, Loadout.Capture(ship, l.name, l.echo != null)); Rebuild(); }, "Update")), 70f);
             Kit.TextButton(row, "Rename", () => AlertPopup.ShowInput("New name", v => Rename(ship, l.name, v), "Rename", l.name), 70f);
             Kit.TextButton(row, "Delete", () => AlertPopup.ShowQuery($"Delete loadout \"{l.name}\"?", "Delete", "Cancel",
-                () => { LoadoutStore.Delete(ship.guid, l.name); Rebuild(); }), 70f);
+                () => Guard(() => { LoadoutStore.Delete(ship.guid, l.name); Rebuild(); }, "Delete")), 70f);
         }
         else
         {
-            Kit.TextButton(row, "Copy here", () => { LoadoutStore.Put(ship.guid, Copy(l, Unique(ship, l.name))); Rebuild(); }, 90f);
+            Kit.TextButton(row, "Copy here", () => Guard(() => { LoadoutStore.Put(ship.guid, Copy(l, Unique(ship, l.name))); Rebuild(); }, "Copy"), 90f);
         }
         Kit.Muted(content, l.Summary());
     }
@@ -139,14 +139,25 @@ public static class LoadoutsTab
         return name + " " + n;
     }
 
+    // Button callbacks run from Unity's event system, which swallows exceptions; they follow the patch guard shape.
+    private static void Guard(System.Action action, string where)
+    {
+        if (!Loadouts.Instance.Active) return;
+        try { action(); }
+        catch (System.Exception e) { Loadouts.Instance.Fail(e, where); }
+    }
+
     private static void SaveCurrent(SpaceShipData ship, string name)
     {
         if (name.Length == 0) name = DefaultName(ship);
         void Save()
         {
-            LoadoutStore.Put(ship.guid, Loadout.Capture(ship, name, includeEcho));
-            pendingName = "";
-            Rebuild();
+            Guard(() =>
+            {
+                LoadoutStore.Put(ship.guid, Loadout.Capture(ship, name, includeEcho));
+                pendingName = "";
+                Rebuild();
+            }, nameof(SaveCurrent));
         }
         if (LoadoutStore.Find(ship.guid, name) != null) AlertPopup.ShowQuery($"\"{name}\" exists. Replace it with the current fit?", "Replace", "Cancel", Save);
         else Save();
@@ -154,17 +165,23 @@ public static class LoadoutsTab
 
     private static void Rename(SpaceShipData ship, string from, string to)
     {
-        to = to?.Trim();
-        if (string.IsNullOrEmpty(to) || to == from) return;
-        LoadoutStore.Rename(ship.guid, from, Unique(ship, to));
-        Rebuild();
+        Guard(() =>
+        {
+            to = to?.Trim();
+            if (string.IsNullOrEmpty(to) || to == from) return;
+            LoadoutStore.Rename(ship.guid, from, Unique(ship, to));
+            Rebuild();
+        }, nameof(Rename));
     }
 
     private static void ApplyNow(SpaceShipData ship, Loadout l)
     {
-        lastReport = LoadoutApply.Apply(ship, l);
-        lastReportFor = ship.guid;
-        Plugin.Log.LogInfo($"[Loadouts] applied \"{l.name}\" to {ship.GetShipName()}: done [{string.Join("; ", lastReport.done)}] problems [{string.Join("; ", lastReport.problems)}]");
-        Rebuild();
+        Guard(() =>
+        {
+            lastReport = LoadoutApply.Apply(ship, l);
+            lastReportFor = ship.guid;
+            Plugin.Log.LogInfo($"[Loadouts] applied \"{l.name}\" to {ship.GetShipName()}: done [{string.Join("; ", lastReport.done)}] problems [{string.Join("; ", lastReport.problems)}]");
+            Rebuild();
+        }, nameof(ApplyNow));
     }
 }

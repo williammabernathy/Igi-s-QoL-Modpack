@@ -163,11 +163,13 @@ public static class Services
                 int bought = 0;
                 long spent = 0;
                 string shortReason = null;
+                bool seenOnSale = false;
                 // A shop may split one item over several stacks; a handful of passes covers that.
                 for (int pass = 0; want > 0 && pass < 8; pass++)
                 {
                     var stack = ShopStack(ss, type);
-                    if (stack == null) { shortReason = "not sold here"; break; }
+                    if (stack == null) { shortReason = seenOnSale ? "the shop has no more" : "not sold here"; break; }
+                    seenOnSale = true;
                     if (faction != null && !stack.item.EnoughRepWithFaction(faction)) { shortReason = "reputation too low to buy it"; break; }
                     if (player.level < stack.item.shopItemData.levelRequirement) { shortReason = "your level is too low to buy it"; break; }
                     int n = Math.Min(want, stack.count);
@@ -347,6 +349,8 @@ public static class Services
                     if (deposit < step.deposit)
                         r.problems.Add($"{Name(item)}: storage is full, kept {count - deposit - step.sell} aboard {s.GetShipName()}.");
                 }
+                else if (step.deposit > 0)
+                    r.problems.Add($"{Name(item)}: no storage here takes it, kept {count - step.sell} aboard {s.GetShipName()}.");
                 // Sell above N's part above N sells whether or not the deposit fit.
                 if (step.sell <= 0) continue;
                 int n = step.sell;
@@ -433,6 +437,7 @@ public static class Services
                 int usedR = 0;
                 if (!run) reserveUsed.TryGetValue(type, out usedR);
                 int take = Math.Min(want, Math.Max(0, player.unassignedCrew.GetCrewCount(type) - usedR));
+                long creditEach = 0;   // set when the credits, not the supply, held a hire back
                 if (take > 0)
                 {
                     if (run)
@@ -455,7 +460,12 @@ public static class Services
                     {
                         long budget = run ? player.credits : player.credits - r.credits - spent;
                         int n = Math.Min(want - added, own ? shipWilling : stationWilling);
-                        if (cost > 0) n = (int)Math.Min(n, Math.Max(0L, budget / cost));
+                        if (cost > 0)
+                        {
+                            int affordable = (int)Math.Min(n, Math.Max(0L, budget / cost));
+                            if (affordable < n) creditEach = cost;
+                            n = affordable;
+                        }
                         if (n <= 0) continue;
                         if (run)
                         {
@@ -477,7 +487,12 @@ public static class Services
                     int price = PersonnelCenter.GetBuyPrice(crewType, ss.level);
                     int buy = Math.Min(want - added, stock - usedS);
                     long budget = run ? player.credits : player.credits - r.credits - spent;
-                    if (price > 0) buy = (int)Math.Min(buy, Math.Max(0L, budget / price));
+                    if (price > 0)
+                    {
+                        int affordable = (int)Math.Min(buy, Math.Max(0L, budget / price));
+                        if (affordable < buy) creditEach = price;
+                        buy = affordable;
+                    }
                     if (buy > 0 && (!run || center.TryPurchaseCrew(type, buy)))
                     {
                         long cost = (long)buy * price;
@@ -496,7 +511,8 @@ public static class Services
                 if (added > 0) parts.Add(CrewCount(added, type));
                 if (added < want)
                     r.problems.Add($"{s.GetShipName()}: {CrewCount(want - added, type)} short, "
-                                   + (center == null ? "none in your reserve or brigs and no personnel center here." : "not in your reserve or brigs or for hire here."));
+                                   + (creditEach > 0 ? $"not enough credits ({Money(creditEach)} each)."
+                                      : center == null ? "none in your reserve or brigs and no personnel center here." : "not in your reserve or brigs or for hire here."));
             }
             // A full ship has nothing left to replace, whatever the count says (crew of another type took the places).
             if (run && s.GetFreeCrewSpace() == 0) CrewLosses.Clear(s);

@@ -13,6 +13,7 @@ using IgiQoL.Game;
 using Source.Combat;
 using Source.Galaxy;
 using Source.Item;
+using Source.Player;
 using Source.SpaceShip.Auto;
 using Source.UI.Tooltip;
 using Source.Util;
@@ -133,8 +134,9 @@ internal static class ShipStatsCheck
             foreach (var a in flagship.GetComponentsInChildren<ActivatedAbility>())
                 if (ability == null && !a.toggledAbility && a.isReady && !a.IsPayloadActive()) ability = a;
             var abilityBefore = Rows(EffectsSection(flagship));
+            GameObject fired = ability == null ? null : ability.TriggerPayload();
             if (ability == null) ctx.Skip("ability", "no ready, untoggled ability on the flagship");
-            else if (ability.TriggerPayload() == null) ctx.Fail("ability", ability.displayName + ": the game didn't trigger it");
+            else if (fired == null) ctx.Fail("ability", ability.displayName + ": the game didn't trigger it");
             else
             {
                 yield return null;
@@ -148,6 +150,13 @@ internal static class ShipStatsCheck
                 string abilityDetail = $"{flagship.displayName} fired {Translation.Translate(ability.displayName)}: {Describe(EffectsSection(flagship))}";
                 if (clean) ctx.Pass("ability", abilityDetail);
                 else ctx.Fail("ability", abilityDetail + $"; {fresh.Count} new rows");
+                // Take back what the ability did: its payload (and the effects under it) and its cooldown, so later
+                // checks and the player's save don't carry the buff.
+                Object.Destroy(fired);
+                ability.cooldownRemaining = 0f;
+                GamePlayer.current.abilityCooldowns.Remove(ability.identifier);
+                flagship.MarkStatsDirty();
+                yield return null;
             }
 
             // The tooltip the game shows on hover carries both sections and rebuilds itself while it shows.

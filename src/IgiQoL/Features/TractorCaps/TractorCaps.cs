@@ -58,7 +58,8 @@ public sealed class TractorCaps : Feature
     public static bool TooCheap(SpaceShipData ship, InventoryItemType item)
     {
         int min = Instance.MinCreditsPerM3.Value;
-        if (min <= 0 || item.m3 <= 0f || item.sellValue >= min * item.m3) return false;
+        // Unsellable items (credits drops, crew pods) report a sell value of 1 whatever they are worth, so they are never "cheap".
+        if (min <= 0 || !item.canSell || item.m3 <= 0f || item.sellValue >= min * item.m3) return false;
         return !Exempt(ship, item);
     }
 
@@ -100,7 +101,18 @@ public sealed class TractorCaps : Feature
         foreach (var t in InventoryItemType.all)
             if (t.itemCategory == ItemCategory.Ammo) { ammo = t; break; }
         if (ammo == null) ctx.Skip("resolve-ammo", "no ammo item type");
-        else ctx.Pass("resolve-ammo", $"{Items.RuleKey(ammo)} tractorCap={ItemRules.Resolve(ammo).tractorCap}");
+        else
+        {
+            int ammoCap;
+            try
+            {
+                ItemRules.UseForTest("{\"categories\":{\"Ammo\":{\"tractorCap\":3}}}");
+                ammoCap = ItemRules.Resolve(ammo).tractorCap;
+            }
+            finally { ItemRules.Load(); }
+            if (ammoCap == 3) ctx.Pass("resolve-ammo", $"{Items.RuleKey(ammo)} picks up the Ammo category cap");
+            else ctx.Fail("resolve-ammo", $"{Items.RuleKey(ammo)} tractorCap={ammoCap}, expected 3 from the Ammo category rule");
+        }
 
         var ship = GamePlayer.current.currentSpaceShip;
         Inventory.InventoryItem stack = null;
@@ -112,15 +124,17 @@ public sealed class TractorCaps : Feature
         }
         bool capped, uncapped;
         string cappedWhy;
+        int floor0 = Instance.MinCreditsPerM3.Value;
         try
         {
+            Instance.MinCreditsPerM3.Value = 0;
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":1}}");
             capped = Allows(ship, stack.item);
             cappedWhy = Describe(Check(ship, stack.item), stack.item);
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":0}}");
             uncapped = Allows(ship, stack.item);
         }
-        finally { ItemRules.Load(); }
+        finally { Instance.MinCreditsPerM3.Value = floor0; ItemRules.Load(); }
         string detail = $"{Items.RuleKey(stack.item)} count={Cargo.Count(ship, stack.item)} cap1 allows={capped} ('{cappedWhy}') cap0 allows={uncapped}";
         if (!capped && cappedWhy == "limit 1 reached" && uncapped) ctx.Pass("gate", detail);
         else ctx.Fail("gate", detail);
@@ -128,7 +142,7 @@ public sealed class TractorCaps : Feature
         // Value per m3: a stack type below the line is skipped, the same type with the line at 0 or under its value isn't.
         InventoryItemType bulky = null;
         foreach (var t in InventoryItemType.all)
-            if (t.m3 > 0f && t.sellValue > 0 && t.itemCategory == ItemCategory.Ore && GamePlayer.current.RequiredItemCountForMissions(t) == 0) { bulky = t; break; }
+            if (t.m3 > 0f && t.sellValue > 0 && t.canSell && t.itemCategory == ItemCategory.Ore && GamePlayer.current.RequiredItemCountForMissions(t) == 0) { bulky = t; break; }
         if (bulky == null)
         {
             ctx.Skip("value", "no ore item type with a value");
@@ -138,6 +152,7 @@ public sealed class TractorCaps : Feature
         float perM3 = bulky.sellValue / bulky.m3;
         try
         {
+            ItemRules.UseForTest("{}");
             int line = Mathf.CeilToInt(perM3) + 1;
             Instance.MinCreditsPerM3.Value = line;
             bool above = Allows(ship, bulky);
@@ -146,11 +161,17 @@ public sealed class TractorCaps : Feature
             bool below = Allows(ship, bulky);
             Instance.MinCreditsPerM3.Value = 0;
             bool off = Allows(ship, bulky);
-            string vd = $"{bulky.identifier}: {bulky.sellValue} cr per {bulky.m3} m3 = {perM3:0.##}/m3; line above it allows={above} ('{aboveWhy}'), at or under it allows={below}, off allows={off}";
-            if (!above && aboveWhy == "below " + line + " cr/m3" && below && off) ctx.Pass("value", vd);
+            // An unsellable item (credits drop, crew pod) is never cheap, however high the line.
+            InventoryItemType unsellable = null;
+            foreach (var t in InventoryItemType.all)
+                if (!t.canSell && t.m3 > 0f && GamePlayer.current.RequiredItemCountForMissions(t) == 0) { unsellable = t; break; }
+            Instance.MinCreditsPerM3.Value = 1000000;
+            bool unsellableAllowed = unsellable == null || Allows(ship, unsellable);
+            string vd = $"{bulky.identifier}: {bulky.sellValue} cr per {bulky.m3} m3 = {perM3:0.##}/m3; line above it allows={above} ('{aboveWhy}'), at or under it allows={below}, off allows={off}; unsellable {unsellable?.identifier ?? "(none)"} allows={unsellableAllowed}";
+            if (!above && aboveWhy == "below " + line + " cr/m3" && below && off && unsellableAllowed) ctx.Pass("value", vd);
             else ctx.Fail("value", vd);
         }
-        finally { Instance.MinCreditsPerM3.Value = min0; }
+        finally { Instance.MinCreditsPerM3.Value = min0; ItemRules.Load(); }
 
         // Never (-1): the ore is left alone; ammo the flagship fires is still picked up.
         InventoryItemType usedAmmo = null;

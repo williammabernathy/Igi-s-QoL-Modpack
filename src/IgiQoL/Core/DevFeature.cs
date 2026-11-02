@@ -129,7 +129,7 @@ public sealed class DevFeature : Feature
         }
         else
         {
-            yield return new WaitForSeconds(3f);
+            yield return new WaitForSecondsRealtime(3f);
             var config = Plugin.Instance.Config;
             bool saveOnSet = config.SaveOnConfigSet;
             config.SaveOnConfigSet = false;
@@ -195,7 +195,7 @@ public sealed class DevFeature : Feature
                 yield return new WaitForEndOfFrame();
                 string path = Application.persistentDataPath + "/igiqol-screenshot.png";
                 ScreenCapture.CaptureScreenshot(path);
-                yield return new WaitForSeconds(2f);
+                yield return new WaitForSecondsRealtime(2f);
                 Plugin.Log.LogInfo($"[Dev] screenshot -> {path}");
             }
 
@@ -215,7 +215,7 @@ public sealed class DevFeature : Feature
         Plugin.Log.LogInfo($"Self-check complete: {pass} pass, {fail} fail, {skip} skip");
         if (QuitAfterSeconds.Value > 0)
         {
-            yield return new WaitForSeconds(QuitAfterSeconds.Value);
+            yield return new WaitForSecondsRealtime(QuitAfterSeconds.Value);
             Application.Quit();
         }
     }

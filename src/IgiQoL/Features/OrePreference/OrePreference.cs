@@ -57,6 +57,8 @@ public sealed class OrePreference : Feature
     {
         nextElsewhereCheck = 0f;
         nextSceneScan = 0f;
+        sceneAsteroids.Clear();
+        scannedPoi = null;
         OrePreferencePatches.ResetLayer();
         Mode = OreMode.Off;
         Ores.Clear();
@@ -120,14 +122,15 @@ public sealed class OrePreference : Feature
     }
 
     // The nearest asteroid with a preferred ore in a layer the module mines; null when none is left.
-    public static Asteroid NearestPreferred(IEnumerable<TargetableUnit> candidates, Vector2 from, bool surface, bool core, Func<Asteroid, bool> mineable)
+    // Takes the list and the module itself, not an IEnumerable and a delegate: this runs on the scanner tick and must not allocate.
+    public static Asteroid NearestPreferred(List<TargetableUnit> candidates, Vector2 from, bool surface, bool core, MiningModule mineable)
     {
         Asteroid best = null;
         float bestDist = float.MaxValue;
         foreach (var t in candidates)
         {
             if (!(t is Asteroid a) || a == null || !HasPreferred(a.asteroidData, surface, core)) continue;
-            if (mineable != null && !mineable(a)) continue;
+            if (mineable != null && !mineable.IsTargetMineable(a)) continue;
             float d = Vector2.Distance(from, a.transform.position);
             if (d < bestDist)
             {
@@ -222,7 +225,7 @@ internal static class OrePreferencePatches
         try
         {
             var pick = OrePreference.NearestPreferred(OrePreference.SceneAsteroids(), miningModule.transform.position,
-                miningModule.canMineSurface, miningModule.canMineCore, miningModule.IsTargetMineable);
+                miningModule.canMineSurface, miningModule.canMineCore, miningModule);
             if (pick != null)
             {
                 __result = pick;
@@ -291,7 +294,7 @@ internal static class OrePreferencePatches
             Vector2 from = m.transform.position;
             var pick = OrePreference.NearestPreferred(m.filteredTargets, from, m.canMineSurface, m.canMineCore, null);
             if (pick == null)
-                pick = OrePreference.NearestPreferred(OrePreference.SceneAsteroids(), from, m.canMineSurface, m.canMineCore, m.IsTargetMineable);
+                pick = OrePreference.NearestPreferred(OrePreference.SceneAsteroids(), from, m.canMineSurface, m.canMineCore, m);
             if (pick != null)
             {
                 __result = pick;

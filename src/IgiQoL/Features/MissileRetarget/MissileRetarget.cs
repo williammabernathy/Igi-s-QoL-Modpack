@@ -47,7 +47,38 @@ public sealed class MissileRetarget : Feature
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
         var flagship = GamePlayer.current.currentSpaceShip;
-        ctx.Pass("mode", $"flagship {flagship.GetShipName()}: {Resolve(flagship)} (config {Mode.Value})");
+        var g = flagship.guid;
+
+        // The per-ship choice is saved, wins over the config value, and null falls back to it.
+        var kept = ShipSettings.Get(g).missileRetarget;
+        var configKept = Mode.Value;
+        string modeDetail;
+        bool modeOk;
+        try
+        {
+            Mode.Value = RetargetMode.Off;
+            ShipSettings.Edit(g).missileRetarget = RetargetMode.Nearest;
+            ShipSettings.Save(g);
+            ShipSettings.Invalidate();
+            var record = SaveData.Ship(g, false);
+            string saved = record != null && record["missileRetarget"].IsString ? record["missileRetarget"].AsString : "none";
+            var withOverride = Resolve(flagship);
+            ShipSettings.Edit(g).missileRetarget = null;
+            ShipSettings.Save(g);
+            ShipSettings.Invalidate();
+            var withoutOverride = Resolve(flagship);
+            modeDetail = $"{flagship.GetShipName()}: override Nearest over config Off -> {withOverride} (saved {saved}), no override -> {withoutOverride}";
+            modeOk = withOverride == RetargetMode.Nearest && saved == "Nearest" && withoutOverride == RetargetMode.Off;
+        }
+        finally
+        {
+            Mode.Value = configKept;
+            ShipSettings.Edit(g).missileRetarget = kept;
+            ShipSettings.Save(g);
+            ShipSettings.Invalidate();
+        }
+        if (modeOk) ctx.Pass("mode", modeDetail);
+        else ctx.Fail("mode", modeDetail);
         yield break;
     }
 }

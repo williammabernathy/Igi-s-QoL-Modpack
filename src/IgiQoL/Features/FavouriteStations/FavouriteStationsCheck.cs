@@ -215,6 +215,7 @@ internal static class FavouriteStationsCheck
         fav.button.GetComponent<Button>().onClick.Invoke();
         bool added = FavouriteStations.IsFavourite(station);
         string second = label.text;
+        yield return new WaitForSeconds(1.5f);   // the services row measures itself on its own refresh
         yield return ctx.Screenshot("airlock-favourite");
         fav.button.GetComponent<Button>().onClick.Invoke();
         bool removed = !FavouriteStations.IsFavourite(station);

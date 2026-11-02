@@ -112,10 +112,13 @@ public static class ShipPopup
                 names.Add(other.GetShipName());
                 guids.Add(other.guid);
             }
-            int at = guids.IndexOf(s.droneAnchor);
+            // The ship's own guid means the same as none (DroneModes.TryGet treats it as this ship).
+            int at = s.droneAnchor == null || s.droneAnchor == guid ? 0 : guids.IndexOf(s.droneAnchor);
             if (at < 0)
             {
-                names.Add("(a ship not in your fleet)");
+                // One of your ships outside the active fleet (parked, lent out) still has a name.
+                var owned = GamePlayer.current.GetSpaceShipData(s.droneAnchor);
+                names.Add(owned != null ? owned.GetShipName() + " (not in your fleet)" : "(a ship not in your fleet)");
                 guids.Add(s.droneAnchor);
                 at = guids.Count - 1;
             }

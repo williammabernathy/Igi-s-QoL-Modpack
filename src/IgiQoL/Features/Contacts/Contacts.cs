@@ -194,8 +194,26 @@ public sealed class Contacts : Feature
         else ctx.Fail("tab", detail + $" tab={ModWindow.CurrentTab} headings={boardHeading}/{wreckHeading}/{lootHeading}");
         yield return ctx.Screenshot("window-contacts");
 
-        if (ContactsBadge.Instance != null) ctx.Pass("counter", $"text='{ContactsBadge.Instance.Text}' shown={ContactsBadge.Instance.Shown}");
-        else ctx.Skip("counter", "no QoL button");
+        var badge = ContactsBadge.Instance;
+        if (badge == null) ctx.Skip("counter", "no QoL button");
+        else
+        {
+            // The badge against the same count it is drawn from: shown exactly when there is something here, saying each kind's number.
+            badge.RefreshNow();
+            int total = CountHere(out int b, out int w, out int l);
+            bool hud = HudManager.Instance != null && HudManager.Instance.showHud && Fleet.Flagship != null;
+            bool wantShown = Instance.HudCounter.Value && hud && total > 0;
+            string text = badge.Text;
+            // Each non-zero kind once, with its exact count, and nothing for a kind that isn't here.
+            var parts = new List<string>();
+            if (b > 0) parts.Add(b + " boardable");
+            if (w > 0) parts.Add(w + (w == 1 ? " wreck" : " wrecks"));
+            if (l > 0) parts.Add(l + " loot");
+            bool textOk = !wantShown || text == string.Join(" | ", parts);
+            string counterDetail = $"text='{text}' shown={badge.Shown} want={wantShown} counts={b}/{w}/{l}";
+            if (badge.Shown == wantShown && textOk) ctx.Pass("counter", counterDetail);
+            else ctx.Fail("counter", counterDetail);
+        }
         ModWindow.Close();
 
         yield return CheckMarkers(ctx);
@@ -710,7 +728,7 @@ public sealed class ContactsList : MonoBehaviour
         }
         if (wrecks.Count == 0) Kit.Muted(column, "None");
 
-        Kit.Heading(column, "Loot (" + groupList.Count + " kinds)");
+        Kit.Heading(column, "Loot (" + groupList.Count + (groupList.Count == 1 ? " kind)" : " kinds)"));
         foreach (var g in groupList)
         {
             var type = g.type;

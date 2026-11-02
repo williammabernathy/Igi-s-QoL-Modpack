@@ -33,7 +33,7 @@ public sealed class EchoCargo : Feature
 
     public override string Id => "EchoCargo";
     public override string Title => "ECHO cargo rules";
-    public override string Description => "When ECHO unloads at a station, the dock action from the Item rules tab decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks, ammo a ship fires and the usable items the game keeps aboard are never touched.";
+    public override string Description => "When ECHO unloads at a station, the dock action from the Item rules tab decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks are never touched, and neither are the ammo a ship fires and the usable items the game keeps aboard while ECHO unloads (the fleet auto-deposit at docking deposits those as the game does).";
     public override string SettingsTab => "Item rules";
     public override Type[] PatchClasses => new[] { typeof(EchoCargoPatches) };
 
@@ -92,6 +92,8 @@ public sealed class EchoCargo : Feature
         var i = CargoRules.Plan(sellAbove, 8, 7, 2, true);
         var j = CargoRules.Plan(sellAbove, 2, 7, 0, true);
         var k = CargoRules.Plan(sellAbove, 8, 7, 0, false);
+        var l = CargoRules.Plan(sellAbove, 8, 0, 2, true);
+        var m = CargoRules.Plan(sellAbove, 2, 0, 2, true);
         bool ok = a.action == DockAction.SellAbove && a.deposit == 3 && a.sell == 5
             && b.action == DockAction.SellAbove && b.sell == 5 && b.deposit == 0
             && c.action == DockAction.Default
@@ -102,8 +104,10 @@ public sealed class EchoCargo : Feature
             && h.action == DockAction.Default
             && i.deposit == 3 && i.sell == 3
             && j.deposit == 2 && j.sell == 0
-            && k.deposit == 3 && k.sell == 0;
-        string detail = $"above(8,7)={Show(a)} above(5,10)={Show(b)} above-unsellable={Show(c)} sell(5,res2)={Show(d)} sell(2,res2)={Show(e)} sell-unsellable={Show(f)} keep={Show(g)} default={Show(h)} above(8,7,res2)={Show(i)} above(2,7)={Show(j)} above(8,7)-unsellable={Show(k)}";
+            && k.deposit == 3 && k.sell == 0
+            && l.action == DockAction.SellAbove && l.deposit == 6 && l.sell == 0
+            && m.action == DockAction.Keep;
+        string detail = $"above(8,7)={Show(a)} above(5,10)={Show(b)} above-unsellable={Show(c)} sell(5,res2)={Show(d)} sell(2,res2)={Show(e)} sell-unsellable={Show(f)} keep={Show(g)} default={Show(h)} above(8,7,res2)={Show(i)} above(2,7)={Show(j)} above(8,7)-unsellable={Show(k)} above(8,0,res2)={Show(l)} above(2,0,res2)={Show(m)}";
         if (ok) ctx.Pass("plan", detail);
         else ctx.Fail("plan", detail);
     }
@@ -135,8 +139,10 @@ public sealed class EchoCargo : Feature
         }
         var flagship = GamePlayer.current.currentSpaceShip;
         Inventory.InventoryItem stack = null;
+        // Not what the game keeps aboard anyway (fired ammo, usables): with those the vanilla unload leaves the stack
+        // alone whether or not the Keep rule is applied, so the check would prove nothing.
         foreach (var s in flagship.cargo.items)
-            if (!s.favourite && (s.item.CanGoInMaterials() || s.item.CanGoInArmory())) { stack = s; break; }
+            if (!Items.KeepAboard(flagship, s) && (s.item.CanGoInMaterials() || s.item.CanGoInArmory())) { stack = s; break; }
         if (stack == null)
         {
             ctx.Skip("live-keep", "no droppable cargo");
@@ -277,8 +283,11 @@ public sealed class EchoCargo : Feature
         var data = player.dataInventory;
         int count0 = data.GetCount(item);
         long credits0 = player.credits;
+        var setting = Instance.SellFromData;
+        bool setting0 = setting.Value;
         try
         {
+            setting.Value = true;
             data.Add(item, 5);
             int held = data.GetCount(item);
             int keep = Math.Max(held - 3, player.RequiredItemCountForMissions(item));
@@ -302,6 +311,7 @@ public sealed class EchoCargo : Feature
         }
         finally
         {
+            setting.Value = setting0;
             ItemRules.Load();
             data.Remove(item, data.GetCount(item));
             if (count0 > 0) data.Add(item, count0);
@@ -569,7 +579,13 @@ public static class CargoRules
                 // storage only ever holds up the deposit.
                 int room = Math.Max(0, rule.keepAmount - stored);
                 int sell = sellable ? count - room - reserved : 0;
-                if (room > 0) return new Step { action = DockAction.SellAbove, deposit = Math.Min(room, count), sell = Math.Max(0, sell) };
+                if (room > 0)
+                {
+                    // What the missions still need stays aboard, deposit included.
+                    int deposit = Math.Min(room, Math.Max(0, count - reserved));
+                    sell = Math.Max(0, sell);
+                    return deposit > 0 || sell > 0 ? new Step { action = DockAction.SellAbove, deposit = deposit, sell = sell } : new Step { action = DockAction.Keep };
+                }
                 if (!sellable) return default;
                 return sell > 0 ? new Step { action = DockAction.SellAbove, sell = sell } : new Step { action = DockAction.Keep };
             }

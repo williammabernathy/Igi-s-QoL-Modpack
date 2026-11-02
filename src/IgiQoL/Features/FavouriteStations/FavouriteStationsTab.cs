@@ -104,7 +104,8 @@ internal static class FavouriteStationsTab
         var row = Kit.Row(content);
         var name = Kit.Label(row, s.name, 13f);
         name.color = ColorHelper.stationCardTitle;
-        Kit.Fixed(row, (s.system != null ? s.system.name + " | " : "") + JumpText(s), 280f, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
+        // Next to "You're here" (plain text, not a button) the jump text needs its own separator or the two run together.
+        Kit.Fixed(row, (s.system != null ? s.system.name + " | " : "") + JumpText(s) + (MapPointOfInterest.current == s ? " | " : ""), 280f, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
         TravelOrHere(row, s);
         var remove = Kit.TextTile(row, "x", 22f, () => FavouriteStations.Toggle(s, notify: false));
         remove.name = RemoveName;

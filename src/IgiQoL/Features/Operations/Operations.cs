@@ -192,9 +192,19 @@ public sealed class Operations : Feature
         if (ModWindow.IsOpen && ModWindow.CurrentTab == "operations" && ModWindow.Content.GetComponentInChildren<OperationsList>() != null)
             ctx.Pass("tab", detail);
         else ctx.Fail("tab", detail + $" open={ModWindow.IsOpen}");
+        ScrollToRunning();
         yield return ctx.Screenshot("window-operations");
 
         yield return CheckExitButton(ctx);
+    }
+
+    // The running list is the tab's last section; scroll to the end so a screenshot shows it, not just its heading.
+    private static void ScrollToRunning()
+    {
+        var scroll = ModWindow.IsOpen ? ModWindow.Content.GetComponentInParent<ScrollRect>() : null;
+        if (scroll == null) return;
+        Canvas.ForceUpdateCanvases();
+        scroll.verticalNormalizedPosition = 0f;
     }
 
     // The boarding postfix on the game's own boarding setup: None leaves no priority, Bridge picks the first bridge, and
@@ -323,6 +333,7 @@ public sealed class Operations : Feature
                 if (label != null && label.text == "Abandon") { button = b; break; }
             }
             if (button == null) { ctx.Fail("exit-button", $"no Abandon button for {type}"); yield break; }
+            ScrollToRunning();
             yield return ctx.Screenshot("window-operations-abandon");
 
             button.onClick.Invoke();

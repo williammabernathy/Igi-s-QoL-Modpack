@@ -127,43 +127,108 @@ public sealed class EchoGates : Feature
         finally { RaidReputationThreshold.Value = saved; }
     }
 
-    private static void CheckFastUnload(SelfCheckContext ctx)
+    // The patched DropFoundItem, called as ECHO's unload does: one call moves the whole stack (as much as the station's
+    // material storage takes) from the flagship, not one chunk.
+    private void CheckFastUnload(SelfCheckContext ctx)
     {
-        InventoryItemType ore = null;
-        foreach (var t in InventoryItemType.all)
-            if (t.itemCategory == ItemCategory.Ore) { ore = t; break; }
-        if (ore == null)
+        var ss = SpaceStation.current;
+        var player = GamePlayer.current;
+        var ship = player?.currentSpaceShip;
+        if (ss == null || SpaceStationInterior.instance == null || !Singleton<IdleManager>.HasInstance || ship == null)
         {
-            ctx.Skip("fast-unload", "no ore item type");
+            ctx.Skip("fast-unload", "not docked");
             return;
         }
-        var from = new Inventory(false, false, () => 1000f);
-        var to = new Inventory(false, false, () => 20f);
-        from.Add(ore, 50);
-        int moved = Cargo.Move(from, to, ore, int.MaxValue);
-        int expected = ore.m3 > 0f ? Mathf.FloorToInt(20f / ore.m3) : 50;
-        if (expected > 50) expected = 50;
-        string detail = $"{ore.identifier} m3={ore.m3} moved={moved} left={from.GetCount(ore)} in dest={to.GetCount(ore)}";
-        if (moved == expected && from.GetCount(ore) == 50 - moved && to.GetCount(ore) == moved) ctx.Pass("fast-unload", detail);
-        else ctx.Fail("fast-unload", detail + $" expected moved={expected}");
+        InventoryItemType ore = null;
+        foreach (var t in InventoryItemType.all)
+            if (t.itemCategory == ItemCategory.Ore && Cargo.DepositTarget(ss, t) == ss.materialStorage && ship.cargo.GetCount(t) == 0) { ore = t; break; }
+        if (ore == null)
+        {
+            ctx.Skip("fast-unload", "no ore type that goes to material storage and isn't aboard already");
+            return;
+        }
+        var idle = Singleton<IdleManager>.Instance;
+        var storage = ss.materialStorage;
+        int normalChunk = 1 + Mathf.FloorToInt(ship.cargoCapacity / 200f);   // the game's own step for ore
+        bool saved = FastUnloading.Value, savedFull = idle.inventoryFull;
+        float timer = idle.updateTimer;
+        int storage0 = storage.GetCount(ore);
+        try
+        {
+            FastUnloading.Value = true;
+            ship.cargo.Add(ore, 40);
+            int aboard = ship.cargo.GetCount(ore);
+            int room = ore.m3 > 0f ? Mathf.FloorToInt(storage.GetSpaceAvailable() / ore.m3) : aboard;
+            int expected = Math.Min(aboard, room);
+            if (expected <= normalChunk)
+            {
+                ctx.Skip("fast-unload", $"{ore.identifier}: {aboard} aboard, room for {room} in storage, the game's chunk is {normalChunk}; too little to tell a stack from a chunk");
+                return;
+            }
+            idle.DropFoundItem(ss, ship, ore);
+            int moved = aboard - ship.cargo.GetCount(ore);
+            string detail = $"{ore.identifier} m3={ore.m3}: {aboard} aboard, storage room {room}, one call moved {moved} (the game's chunk is {normalChunk})";
+            if (moved == expected) ctx.Pass("fast-unload", detail);
+            else ctx.Fail("fast-unload", detail + $" expected {expected}");
+        }
+        finally
+        {
+            FastUnloading.Value = saved;
+            idle.inventoryFull = savedFull;
+            idle.updateTimer = timer;
+            int left = ship.cargo.GetCount(ore);
+            if (left > 0) ship.cargo.Remove(ore, left);
+            int extra = storage.GetCount(ore) - storage0;
+            if (extra > 0) storage.Remove(ore, extra);
+        }
     }
 
+    // Vanilla already answers "not below" for a flagship with half its crew, so the check sets up a flagship at 40% crew
+    // whose reserve covers the shortfall (vanilla answers yes) and asks with the fraction at 0, 0.25 and 0.5.
     private void CheckHireThreshold(SelfCheckContext ctx)
     {
-        if (!Singleton<IdleManager>.HasInstance)
+        var player = GamePlayer.current;
+        var ship = player?.currentSpaceShip;
+        int max = ship != null ? ship.GetMaxGrunts() : 0;
+        if (!Singleton<IdleManager>.HasInstance || max < 10)
         {
-            ctx.Skip("hire-threshold", "no IdleManager instance");
+            ctx.Skip("hire-threshold", "no IdleManager instance, or no flagship with 10 or more crew places");
             return;
         }
         float saved = HireCrewBelowFraction.Value;
+        var savedCrew = new Dictionary<string, int>(ship.crewData.crew);
+        var savedReserve = new Dictionary<string, int>(player.unassignedCrew.crew);
+        var savedSettings = ship.crewAutopilotSettings;
         try
         {
+            var settings = new CrewAutopilotSettings { allowPurchase = false };
+            settings.SetMinimumRatio("Deckhand", 1f);
+            ship.crewAutopilotSettings = settings;
+            ship.crewData.crew.Clear();
+            player.unassignedCrew.crew.Clear();
+            ship.crewData.crew["Deckhand"] = Mathf.RoundToInt(max * 0.4f);
+            player.unassignedCrew.crew["Deckhand"] = max;
+            var idle = Singleton<IdleManager>.Instance;
+            HireCrewBelowFraction.Value = VanillaHireCrewBelowFraction;
+            bool vanilla = idle.IsCrewBelowThreshold();
             HireCrewBelowFraction.Value = 0f;
-            bool below = Singleton<IdleManager>.Instance.IsCrewBelowThreshold();
-            if (!below) ctx.Pass("hire-threshold", "fraction 0 -> not below threshold");
-            else ctx.Fail("hire-threshold", "fraction 0 still reported crew below threshold");
+            bool atZero = idle.IsCrewBelowThreshold();
+            HireCrewBelowFraction.Value = 0.25f;
+            bool atQuarter = idle.IsCrewBelowThreshold();
+            string detail = $"{ship.crewData.totalCrew}/{max} crew: fraction 0.5 -> {vanilla}, 0.25 -> {atQuarter}, 0 -> {atZero}";
+            if (!vanilla) ctx.Skip("hire-threshold", "the game doesn't see the test crew as short (" + detail + ")");
+            else if (!atZero && !atQuarter) ctx.Pass("hire-threshold", detail);
+            else ctx.Fail("hire-threshold", detail);
         }
-        finally { HireCrewBelowFraction.Value = saved; }
+        finally
+        {
+            HireCrewBelowFraction.Value = saved;
+            ship.crewAutopilotSettings = savedSettings;
+            ship.crewData.crew.Clear();
+            foreach (var kv in savedCrew) ship.crewData.crew[kv.Key] = kv.Value;
+            player.unassignedCrew.crew.Clear();
+            foreach (var kv in savedReserve) player.unassignedCrew.crew[kv.Key] = kv.Value;
+        }
     }
 
     // A docked decision that changes something (here: one crew member added and taken back) shortens ECHO's next wait

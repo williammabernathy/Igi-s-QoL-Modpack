@@ -29,7 +29,7 @@ public sealed class ShipStats : Feature
     public override IEnumerator SelfCheck(SelfCheckContext ctx) => ShipStatsCheck.Run(ctx);
 
     internal const string SectionTitle = "Resistances";
-    internal const string EffectsTitle = "Buffs and debuffs";
+    internal const string EffectsTitle = "Effects";
     internal const string TargetingLabel = "Targeting";
     internal const string ThreatTitle = "Threat";
     internal const string AttackersTitle = "Attacked by";

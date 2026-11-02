@@ -257,18 +257,29 @@ internal static class LoadoutsCheck
         }
 
         // Flying a ship restores the ECHO settings of the loadout last applied to it.
-        var original = player.autopilotSettings.ToJson();
+        string originalText = player.autopilotSettings.ToJson().ToString();
         var echo = Loadout.FromJson(Json(aj));
         echo.name = NameEcho;
+        // Two fields differ from the live settings, so a switch that copies only one of them can't pass.
         int minutes = player.autopilotSettings.ammoMinutes + 7;
-        echo.echo["autopilot"].AsJsonObject["ammoMinutes"] = minutes;
+        var wanted = Json(originalText).AsJsonObject;
+        wanted["ammoMinutes"] = minutes;
+        wanted["noTravel"] = !player.autopilotSettings.noTravel;
+        string expected = AutopilotSettings.FromJson(wanted).ToJson().ToString();
+        echo.echo["autopilot"] = wanted;
+        echo.echo.Remove("priority");   // the check is about the autopilot settings; don't leave the priority list changed
         LoadoutStore.Put(ship.guid, echo);
         LoadoutStore.SetLastApplied(ship.guid, NameEcho);
-        Loadouts.OnFlownShipChanged(ship);
-        int got = player.autopilotSettings.ammoMinutes;
-        player.autopilotSettings = AutopilotSettings.FromJson(original);
-        if (got == minutes) ctx.Pass("echo-on-switch", $"ammoMinutes -> {got}");
-        else ctx.Fail("echo-on-switch", $"ammoMinutes {got}, expected {minutes}");
+        string got;
+        try
+        {
+            Loadouts.OnFlownShipChanged(ship);
+            got = player.autopilotSettings.ToJson().ToString();
+        }
+        // Same path the feature restores through: it copies into the live object the Autopilot tab holds.
+        finally { LoadoutApply.RestoreEcho(new JsonObject { { "autopilot", Json(originalText) } }); }
+        if (got == expected) ctx.Pass("echo-on-switch", $"ammoMinutes -> {minutes}, noTravel flipped, whole settings match");
+        else ctx.Fail("echo-on-switch", $"settings {got}, expected {expected}");
 
         LoadoutStore.Put(ship.guid, a);
         LoadoutStore.SetLastApplied(ship.guid, NameA);

@@ -85,5 +85,13 @@ internal sealed class AirlockFavourite : MonoBehaviour
             : "Adds this station to the favourites on the QoL window's Stations tab, which shows what it has, your storage here, the jumps to it and a Travel to button.");
         var tip = button.GetComponent<TooltipSource>();
         if (tip != null) tip.Title = "Favourite station (QoL)";
+        // The label's width moved every button after it; let the services row re-check that it still fits.
+        var services = airlock.GetComponent<StationServices.AirlockServices>();
+        var ss = StationServices.StationServices.Instance;
+        if (services != null && ss.Active && ss.AirlockButtons.Value)
+        {
+            try { services.Refresh(); }
+            catch (System.Exception e) { ss.Fail(e, nameof(StationServices.AirlockServices)); }
+        }
     }
 }

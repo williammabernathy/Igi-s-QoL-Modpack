@@ -524,6 +524,8 @@ public static class Rollups
     public static void Load()
     {
         Active.Clear();
+        var taken = new HashSet<ForgeJob>();
+        var takenRefine = new HashSet<RefineryJob>();
         var record = SaveData.Feature(FeatureKey, false);
         if (record == null || !record["plans"].IsJsonArray) return;
         foreach (var v in record["plans"].AsJsonArray)
@@ -560,16 +562,16 @@ public static class Rollups
                     plan.refines.Add(new RollupRefine { ore = ore, amount = rv["amount"].AsInteger, started = rv["started"].AsBoolean });
                 }
             }
-            Relink(plan);
+            Relink(plan, taken, takenRefine);
             Active.Add(plan);
         }
         if (Active.Count > 0) Plugin.Log.LogInfo($"[{FeatureKey}] resumed {Active.Count} roll-up(s)");
     }
 
     // Saved jobs come back as new objects; pair started parts with queued jobs of the same recipe.
-    private static void Relink(RollupPlan plan)
+    private static void Relink(RollupPlan plan, HashSet<ForgeJob> taken, HashSet<RefineryJob> takenRefine)
     {
-        var taken = new HashSet<ForgeJob>();
+        // taken is shared across the plans of one Load so two plans never claim the same queued job.
         foreach (var s in plan.steps)
         {
             if (!s.started) continue;
@@ -583,7 +585,6 @@ public static class Rollups
         }
         var refinery = plan.station.refinery;
         if (refinery == null) return;
-        var takenRefine = new HashSet<RefineryJob>();
         foreach (var r in plan.refines)
         {
             if (!r.started) continue;

@@ -187,10 +187,14 @@ public sealed class CombatLog : Feature
         // One hit each way, compared with what the target's shield, armour and hull actually lost.
         var dealtRow = Find(View.DealtByWeapon, ourTurret.item);
         double before = dealtRow?.total ?? 0;
+        double sessionBefore = Session.dealt;
         float lost = Hit(new DamageData(ourTurret) { power = 2000f, type = DamageType.Kinetic }, enemy);
+        double recorded = Session.dealt - sessionBefore;
         dealtRow = Find(View.DealtByWeapon, ourTurret.item);
-        string d = $"{dealtRow?.label}: +{(dealtRow?.total ?? 0) - before:0.0}, target lost {lost:0.0}";
-        if (dealtRow != null && Math.Abs(dealtRow.total - before - lost) < 0.5 && lost > 0) ctx.Pass("dealt", d);
+        string d = $"recorded {recorded:0.0} ({dealtRow?.label}: +{(dealtRow?.total ?? 0) - before:0.0}), target lost {lost:0.0}";
+        // Everything the hit did is in the pool loss, including a weapon rider's own hit, so compare the whole session
+        // delta; the weapon's row only has to have moved.
+        if (dealtRow != null && dealtRow.total > before && Math.Abs(recorded - lost) < 0.5 && lost > 0) ctx.Pass("dealt", d);
         else ctx.Fail("dealt", d);
 
         var theirTurret = enemy.GetComponentInChildren<AbstractTurret>();
@@ -198,10 +202,12 @@ public sealed class CombatLog : Feature
         object weaponKey = theirBuilder != null ? (object)theirBuilder : theirTurret.GetType();
         var takenRow = Find(View.TakenByWeapon, weaponKey);
         before = takenRow?.total ?? 0;
+        sessionBefore = Session.taken;
         lost = Hit(new DamageData(theirTurret) { power = 2000f, type = DamageType.Energy }, flagship);
+        recorded = Session.taken - sessionBefore;
         takenRow = Find(View.TakenByWeapon, weaponKey);
-        d = $"{takenRow?.label}: +{(takenRow?.total ?? 0) - before:0.0}, flagship lost {lost:0.0}";
-        if (takenRow != null && Math.Abs(takenRow.total - before - lost) < 0.5 && lost > 0) ctx.Pass("taken", d);
+        d = $"recorded {recorded:0.0} ({takenRow?.label}: +{(takenRow?.total ?? 0) - before:0.0}), flagship lost {lost:0.0}";
+        if (takenRow != null && takenRow.total > before && Math.Abs(recorded - lost) < 0.5 && lost > 0) ctx.Pass("taken", d);
         else ctx.Fail("taken", d);
 
         CombatLogTab.scope = -1;
@@ -487,7 +493,10 @@ internal static class CombatLogPatches
             if (dealt == taken) return;
             float shield = damageData.absorbedByShield - __state.shield;
             float armor = damageData.absorbedByArmor - __state.armor;
-            float hull = Mathf.Max(0f, __state.hull - __instance.currentHullHP);
+            // What this call took off the hull: the damage left after shields and armour, capped by the hull it had.
+            // Measured off the DamageData, not the unit, so a payload re-hitting the same target inside this call
+            // (PayloadTurretExtraDamage) isn't counted twice.
+            float hull = Mathf.Clamp(damageData.damageAmount, 0f, __state.hull);
             if (shield + armor + hull <= 0f) return;
             bool killed = __instance.isDestroyed || __instance.isBoardable || __instance.currentHullHP <= 0f;
             CombatLog.Record(source, damageData.sourceTurret, __instance, damageData.type, shield, armor, hull, damageData.IsCriticalHit(), killed, dealt);

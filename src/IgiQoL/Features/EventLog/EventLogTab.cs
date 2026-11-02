@@ -219,8 +219,11 @@ public static class EventLogTab
             var time = Kit.Fixed(r, "", 70f, TextAlignmentOptions.MidlineLeft, ColorHelper.poiTooltipMuted);
             Kit.Fixed(r, KindName(e.kind), 56f, TextAlignmentOptions.MidlineLeft, ColorHelper.poiTooltipMuted);
             var text = Kit.Label(r, "");
+            // A long line wraps onto a second one: the row's height follows its text, 20 at least.
+            text.textWrappingMode = TextWrappingModes.Normal;
+            text.overflowMode = TextOverflowModes.Overflow;
+            r.GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = -1f;
             text.color = e.color;
-            text.overflowMode = TextOverflowModes.Ellipsis;
             if (e.item != null) Kit.ItemTooltip(text, e.item);
             return new Line { row = r, time = time, text = text, repeats = -1 };
         }

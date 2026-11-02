@@ -31,6 +31,7 @@ public sealed class ItemRulesTab : Feature
     private static string search = "";
     private static RectTransform results;
     private static Dictionary<string, InventoryItemType> byKey;
+    private static Dictionary<string, InventoryItemType> byId;
 
     public override void OnActivated() => ModWindow.AddTab(this, "itemrules", "Item rules", 15, Build);
 
@@ -49,6 +50,19 @@ public sealed class ItemRulesTab : Feature
         foreach (var t in InventoryItemType.all) byKey[Items.RuleKey(t)] = t;
         return byKey;
     }
+
+    // A bare identifier key ("CanisterOxide") covers every level of that item at runtime (ItemRules.Explicit falls back to it),
+    // so look it up by identifier alone; the lowest level stands for the item.
+    private static Dictionary<string, InventoryItemType> ById()
+    {
+        if (byId != null) return byId;
+        byId = new Dictionary<string, InventoryItemType>();
+        foreach (var t in InventoryItemType.all)
+            if (t.identifier != null && (!byId.TryGetValue(t.identifier, out var have) || t.itemLevel < have.itemLevel)) byId[t.identifier] = t;
+        return byId;
+    }
+
+    private static string BaseName(InventoryItemType t) => Translation.Translate(t.displayName);
 
     private static string CategoryName(ItemCategory c)
     {
@@ -208,8 +222,10 @@ public sealed class ItemRulesTab : Feature
             Action remove = () => { ItemRules.Remove(k); ItemRules.Write(); Rebuild(); };
             if (known.TryGetValue(key, out var type))
                 RuleRow(content, ItemName(type), type.rarity.GetColor(), ItemRules.ByItem[key], remove, type);
-            else if (SplitLevel(key, out var baseId, out int level) && known.TryGetValue(baseId, out var baseType))
-                RuleRow(content, ItemName(baseType) + " L" + level, baseType.rarity.GetColor(), ItemRules.ByItem[key], remove, baseType);
+            else if (SplitLevel(key, out var baseId, out int level) && ById().TryGetValue(baseId, out var baseType))
+                RuleRow(content, BaseName(baseType) + " L" + level, baseType.rarity.GetColor(), ItemRules.ByItem[key], remove, baseType);
+            else if (ById().TryGetValue(key, out var bareType))
+                RuleRow(content, BaseName(bareType), bareType.rarity.GetColor(), ItemRules.ByItem[key], remove, bareType);
             else
                 RuleRow(content, key + " (not in this game version)", null, ItemRules.ByItem[key], remove);
         }
@@ -251,7 +267,7 @@ public sealed class ItemRulesTab : Feature
         {
             string name = ItemName(t);
             if (name.IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0) continue;
-            if (ItemRules.ByItem.ContainsKey(Items.RuleKey(t))) continue;
+            if (ItemRules.ByItem.ContainsKey(Items.RuleKey(t)) || ItemRules.ByItem.ContainsKey(t.identifier)) continue;
             hits.Add((name, t));
         }
         hits.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
@@ -331,26 +347,37 @@ public sealed class ItemRulesTab : Feature
             ItemRules.Write();
         });
 
-        var r = ItemRules.Edit(ItemCategory.Ore);
-        r.tractorCap = 5;
-        r.dockAction = DockAction.SellAbove;
-        r.keepAmount = 10;
-        ItemRules.Write();
-        ItemRules.Load();
-
-        InventoryItemType ore = null;
-        foreach (var t in InventoryItemType.all)
-            if (t.itemCategory == ItemCategory.Ore) { ore = t; break; }
-        if (ore == null) ctx.Skip("roundtrip", "no ore item type");
-        else
+        // The live record goes back in a finally right here: Cleanup only runs after every feature's checks, and a leftover
+        // Ore rule with a dock action would switch the later features' dock paths from vanilla to rule-driven.
+        string rulesSnapshot = SaveData.Feature(ItemRules.FeatureKey, false)?.ToString() ?? "{}";
+        try
         {
-            var got = ItemRules.Resolve(ore);
-            var record = SaveData.Feature(ItemRules.FeatureKey, false);
-            int stored = record != null ? record["categories"]["Ore"]["keepAmount"].AsInteger : -1;
-            string detail = $"{Items.RuleKey(ore)} -> {got.tractorCap}/{got.dockAction}/{got.keepAmount} hasDockRules={ItemRules.HasDockRules} record keepAmount={stored}";
-            if (got.tractorCap == 5 && got.dockAction == DockAction.SellAbove && got.keepAmount == 10 && ItemRules.HasDockRules && stored == 10)
-                ctx.Pass("roundtrip", detail);
-            else ctx.Fail("roundtrip", detail);
+            var r = ItemRules.Edit(ItemCategory.Ore);
+            r.tractorCap = 5;
+            r.dockAction = DockAction.SellAbove;
+            r.keepAmount = 10;
+            ItemRules.Write();
+            ItemRules.Load();
+
+            InventoryItemType ore = null;
+            foreach (var t in InventoryItemType.all)
+                if (t.itemCategory == ItemCategory.Ore) { ore = t; break; }
+            if (ore == null) ctx.Skip("roundtrip", "no ore item type");
+            else
+            {
+                var got = ItemRules.Resolve(ore);
+                var record = SaveData.Feature(ItemRules.FeatureKey, false);
+                int stored = record != null ? record["categories"]["Ore"]["keepAmount"].AsInteger : -1;
+                string detail = $"{Items.RuleKey(ore)} -> {got.tractorCap}/{got.dockAction}/{got.keepAmount} hasDockRules={ItemRules.HasDockRules} record keepAmount={stored}";
+                if (got.tractorCap == 5 && got.dockAction == DockAction.SellAbove && got.keepAmount == 10 && ItemRules.HasDockRules && stored == 10)
+                    ctx.Pass("roundtrip", detail);
+                else ctx.Fail("roundtrip", detail);
+            }
+        }
+        finally
+        {
+            ItemRules.UseForTest(rulesSnapshot);
+            ItemRules.Write();
         }
 
         // Per-level rules resolve by (identifier, level) and follow Edit/Remove; the unlevelled type's rule is the fallback.

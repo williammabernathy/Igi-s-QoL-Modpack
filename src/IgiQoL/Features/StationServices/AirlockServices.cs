@@ -87,10 +87,19 @@ internal sealed class AirlockServices : MonoBehaviour
     internal void Refresh()
     {
         KeepLast();
+        Apply();
         // Ours plus the game's own buttons can reach past the panel into the Undock button; then every label of ours gets
-        // its short form for the rest of this visit (the airlock lays the row out each frame, so the overlap shows on the
-        // next refresh).
-        if (!compact && RowOverflows()) compact = true;
+        // its short form until you leave the airlock screen. The row is measured after laying it out, and the labels are
+        // redone at once, so the first frame the airlock shows is already right.
+        if (!compact && RowOverflows())
+        {
+            compact = true;
+            Apply();
+        }
+    }
+
+    private void Apply()
+    {
         bool c = compact;
         var r = Services.Repair(false);
         Show(repair, r, (c ? "Repair " : "Repair fleet ") + Services.Money(r.credits), c ? "Repair" : "Repair fleet", "Repair fleet",
@@ -138,6 +147,8 @@ internal sealed class AirlockServices : MonoBehaviour
                     break;
                 }
         }
+        // The airlock lays the row out once a frame; do it now so buttons shown or resized a moment ago are where they will be.
+        airlock.LayoutButtonRow();
         float limit;
         if (undock != null && undock.gameObject.activeInHierarchy)
         {
@@ -149,10 +160,11 @@ internal sealed class AirlockServices : MonoBehaviour
             ((RectTransform)airlock.transform).GetWorldCorners(corners);
             limit = corners[2].x;
         }
-        foreach (var go in buttons)
+        // Every button of the row counts, the Favourite button and the game's own included, not only ours.
+        foreach (var rt in airlock.buttonRow)
         {
-            if (!go.activeSelf) continue;
-            ((RectTransform)go.transform).GetWorldCorners(corners);
+            if (rt == null || !rt.gameObject.activeSelf) continue;
+            rt.GetWorldCorners(corners);
             if (corners[2].x > limit) return true;
         }
         return false;

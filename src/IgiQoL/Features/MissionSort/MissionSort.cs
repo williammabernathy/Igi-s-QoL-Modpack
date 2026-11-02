@@ -228,6 +228,22 @@ internal static class MissionSortPatches
         catch (Exception e) { F.Fail(e, nameof(AddSectionPrefix)); }
     }
 
+    // When no mission is ready or available, the game selects the first in-progress mission in its own order, not the
+    // first row shown. Under a sort, select the first row, as everywhere else.
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(MissionBoard), "SelectFirst")]
+    private static void SelectFirstPostfix(MissionBoard __instance, List<Mission> turnIns, List<Mission> ready, List<Mission> available, List<MissionListRow> ___rows)
+    {
+        if (!F.Active || F.Board.Value == BoardSort.GameOrder) return;
+        try
+        {
+            if (ready.Count + available.Count > 0 || turnIns.Count == 0 || ___rows.Count == 0) return;
+            if (MissionBoard.preselectMission != null && turnIns.Contains(MissionBoard.preselectMission)) return;
+            __instance.ShowMission(___rows[0].mission);
+        }
+        catch (Exception e) { F.Fail(e, nameof(SelectFirstPostfix)); }
+    }
+
     // MissionUI builds its layout in Start and fills the list right after.
     [HarmonyPostfix]
     [HarmonyPatch(typeof(MissionUI), "Start")]

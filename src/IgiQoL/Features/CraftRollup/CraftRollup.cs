@@ -8,6 +8,7 @@ using Behaviour.UI.Forge;
 using HarmonyLib;
 using IgiQoL.Core;
 using IgiQoL.UI;
+using LightJson;
 using Source.Galaxy.POI;
 using Source.Item;
 using Source.Mining;
@@ -159,6 +160,11 @@ public sealed class CraftRollup : Feature
             ctx.Skip("run", $"can't afford {plan.credits} cr");
             yield break;
         }
+        if (Rollups.Find(forge, target) != null)
+        {
+            ctx.Skip("run", $"a roll-up for {target.identifier} is already running at {station.name}");
+            yield break;
+        }
 
         // Snapshot what the run touches, so it can be put back.
         var storage = station.materialStorage;
@@ -169,6 +175,7 @@ public sealed class CraftRollup : Feature
         var jobsBefore = snap.ForgeJobs;
 
         foreach (var kv in plan.missing) storage.Add(kv.Key, kv.Value);
+        int plansBefore = Rollups.Active.Count;
         var live = Rollups.Build(forge, target, 1);
         Rollups.Start(live);
         int startedAtOnce = live.StartedCount;
@@ -177,8 +184,8 @@ public sealed class CraftRollup : Feature
         var record = SaveData.Feature(Rollups.FeatureKey, false)?["plans"];
         int savedCount = record.HasValue && record.Value.IsJsonArray ? record.Value.AsJsonArray.Count : -1;
         Rollups.Load();
-        var loaded = Rollups.Active.Count == 1 ? Rollups.Active[0] : null;
-        bool saveOk = savedCount == 1 && loaded != null && loaded.steps.Count == live.steps.Count && loaded.StartedCount == startedAtOnce;
+        var loaded = Rollups.Find(forge, target);
+        bool saveOk = savedCount == plansBefore + 1 && Rollups.Active.Count == plansBefore + 1 && loaded != null && loaded.steps.Count == live.steps.Count && loaded.StartedCount == startedAtOnce;
         if (loaded != null)
         {
             for (int i = 0; i < live.steps.Count; i++)
@@ -200,14 +207,34 @@ public sealed class CraftRollup : Feature
             if (s.started && s != live.steps[live.steps.Count - 1]) { partJob = s.job; break; }
         bool partRouted = partJob != null && Rollups.IsPartJob(partJob);
 
+        // With "deposit in cargo" on and the player docked here, vanilla would drop the parts into the flagship's hold;
+        // only then does the routing prefix change anything. Otherwise vanilla uses the storage anyway and nothing is proven.
+        var player = GamePlayer.current;
+        bool depositWas = player.forgeDepositInCargo;
+        bool othersQueued = snap.OtherJobsQueued;
+        if (!othersQueued) player.forgeDepositInCargo = true;
+        bool routable = !othersQueued && station.CanDepositInDockedCargo(1f);
+        var partProducts = new List<InventoryItemType>();
+        for (int i = 0; i < live.steps.Count - 1; i++)
+            if (live.steps[i].product != null && live.steps[i].product.CanGoInMaterials()) partProducts.Add(live.steps[i].product);
+        var cargoBefore = CargoCounts(partProducts);
+        int leaked;
         int ticks = 0;
-        while (Rollups.Active.Contains(live) && ticks < 600)
+        try
         {
-            live.nextCheck = 0f;
-            station.refinery?.ProgressJobs(30f);
-            forge.ProgressJobs(30f);
-            ticks++;
-            if (ticks % 25 == 0) yield return null;
+            while (Rollups.Active.Contains(live) && ticks < 600)
+            {
+                live.nextCheck = 0f;
+                station.refinery?.ProgressJobs(30f);
+                forge.ProgressJobs(30f);
+                ticks++;
+                if (ticks % 25 == 0) yield return null;
+            }
+        }
+        finally
+        {
+            player.forgeDepositInCargo = depositWas;
+            leaked = othersQueued ? 0 : TakeBackFromCargo(cargoBefore);
         }
         ForgeJob finalJob = null;
         foreach (var job in forge.jobs)
@@ -216,9 +243,11 @@ public sealed class CraftRollup : Feature
         if (!Rollups.Active.Contains(live) && finalJob != null) ctx.Pass("run", rd);
         else ctx.Fail("run", rd);
 
-        string pd = $"part job marked={partRouted}, target job marked={(finalJob != null && Rollups.IsPartJob(finalJob))}";
-        if (partRouted && finalJob != null && !Rollups.IsPartJob(finalJob)) ctx.Pass("parts-to-storage", pd);
-        else ctx.Fail("parts-to-storage", pd);
+        string pd = $"part job marked={partRouted}, target job marked={(finalJob != null && Rollups.IsPartJob(finalJob))}, parts in flagship hold={leaked}";
+        if (!(partRouted && finalJob != null && !Rollups.IsPartJob(finalJob))) ctx.Fail("parts-to-storage", pd);
+        else if (!routable) ctx.Skip("parts-to-storage", othersQueued ? $"jobs of your own are queued here, so the check doesn't force \"deposit in cargo\" ({pd})" : $"vanilla would use the station storage anyway: not docked at {station.name} or the flagship hold is full ({pd})");
+        else if (leaked > 0) ctx.Fail("parts-to-storage", pd);
+        else ctx.Pass("parts-to-storage", pd);
 
         snap.Restore();
 
@@ -270,6 +299,11 @@ public sealed class CraftRollup : Feature
         if (target == null)
         {
             ctx.Skip("refine-plan", $"no uncraftable turret/module recipe at {station.name} whose item ingredients the forge can make");
+            yield break;
+        }
+        if (Rollups.Find(forge, target) != null)
+        {
+            ctx.Skip("refine-plan", $"a roll-up for {target.identifier} is already running at {station.name}");
             yield break;
         }
         var storage = station.materialStorage;
@@ -342,7 +376,7 @@ public sealed class CraftRollup : Feature
             var started = live.refines.Count == 1 ? live.refines[0] : null;
 
             Rollups.Load();
-            var loaded = Rollups.Active.Count == 1 ? Rollups.Active[0] : null;
+            var loaded = Rollups.Find(forge, target);
             var lr = loaded != null && loaded.refines.Count == 1 ? loaded.refines[0] : null;
             string sd = $"refine started={started?.started}, job={(started?.job != null ? "linked" : "none")}; loaded refines={loaded?.refines.Count}, started={lr?.started}, same job={lr?.job != null && lr.job == started?.job}";
             if (started != null && started.started && started.job != null && lr != null && lr.started && lr.job == started.job) ctx.Pass("refine-save", sd);
@@ -350,15 +384,33 @@ public sealed class CraftRollup : Feature
             if (loaded != null) live = loaded;
             yield return CheckPanel(ctx, "panel-refine-running", station, target, RollupPanel.StopLabel, "1 of 1 refinery jobs started");
 
+            // With "deposit in cargo" on and the player docked here, vanilla would drop the canisters into the flagship's hold;
+            // only then does the routing prefix change anything. Otherwise vanilla uses the storage anyway and nothing is proven.
+            var player = GamePlayer.current;
+            bool depositWas = player.forgeDepositInCargo;
+            bool othersQueued = snap.OtherJobsQueued;
+            if (!othersQueued) player.forgeDepositInCargo = true;
+            bool routable = !othersQueued && station.CanDepositInDockedCargo(1f);
+            var canisters = AllCanisters();
+            var cargoBefore = CargoCounts(canisters);
+            int leaked;
             int ticks = 0;
             string firstWait = live.waiting;
-            while (Rollups.Active.Contains(live) && ticks < 3000)
+            try
             {
-                live.nextCheck = 0f;
-                refinery.ProgressJobs(120f);
-                forge.ProgressJobs(120f);
-                ticks++;
-                if (ticks % 50 == 0) yield return null;
+                while (Rollups.Active.Contains(live) && ticks < 3000)
+                {
+                    live.nextCheck = 0f;
+                    refinery.ProgressJobs(120f);
+                    forge.ProgressJobs(120f);
+                    ticks++;
+                    if (ticks % 50 == 0) yield return null;
+                }
+            }
+            finally
+            {
+                player.forgeDepositInCargo = depositWas;
+                leaked = othersQueued ? 0 : TakeBackFromCargo(cargoBefore);
             }
             ForgeJob finalJob = null;
             foreach (var job in forge.jobs)
@@ -366,23 +418,67 @@ public sealed class CraftRollup : Feature
             string rd = $"waiting at start={firstWait ?? "-"}; done after {ticks} x 120 s; target job {(finalJob != null ? "queued" : "missing")}; waiting={live.waiting ?? "-"}; refinery jobs {refinery.jobs.Count}";
             if (!Rollups.Active.Contains(live) && finalJob != null) ctx.Pass("refine-run", rd);
             else ctx.Fail("refine-run", rd);
+
+            if (!routable) ctx.Skip("refine-to-storage", othersQueued ? "jobs of your own are queued here, so the check doesn't force \"deposit in cargo\"" : $"vanilla would use the station storage anyway: not docked at {station.name} or the flagship hold is full");
+            else if (leaked == 0) ctx.Pass("refine-to-storage", $"deposit in cargo on, docked here: no canister reached the flagship hold");
+            else ctx.Fail("refine-to-storage", $"{leaked} canister(s) went to the flagship hold instead of the station storage");
         }
         finally { snap.Restore(); }
     }
 
-    // Station storage counts (canisters, every ore, the given items), credits, queued jobs, the refinery's
-    // carried-over yield and auto-refine, so a check can put the station back as it found it.
+    // Flagship cargo counts of the given items, to prove output went to the station and not the hold.
+    private static Dictionary<InventoryItemType, int> CargoCounts(IEnumerable<InventoryItemType> items)
+    {
+        var cargo = GamePlayer.current.currentSpaceShip.cargo;
+        var counts = new Dictionary<InventoryItemType, int>();
+        foreach (var t in items) counts[t] = cargo.GetCount(t);
+        return counts;
+    }
+
+    // How many units of those items arrived in the flagship's hold since CargoCounts; takes them back out so a failing run leaves no strays.
+    private static int TakeBackFromCargo(Dictionary<InventoryItemType, int> before)
+    {
+        var cargo = GamePlayer.current.currentSpaceShip.cargo;
+        int extra = 0;
+        foreach (var kv in before)
+        {
+            int now = cargo.GetCount(kv.Key);
+            if (now <= kv.Value) continue;
+            cargo.Remove(kv.Key, now - kv.Value);
+            extra += now - kv.Value;
+        }
+        return extra;
+    }
+
+    private static List<InventoryItemType> AllCanisters()
+    {
+        var list = new List<InventoryItemType>();
+        foreach (RefinedMaterial m in Enum.GetValues(typeof(RefinedMaterial)))
+        {
+            var c = m.GetCanisterItem();
+            if (c != null) list.Add(c);
+        }
+        return list;
+    }
+
+    // Station storage (canisters, every ore, the given items, with each stack's favourite flag), credits, queued jobs,
+    // the player's roll-ups, the refinery's carried-over yield and auto-refine, so a check can put the station back as it found it.
     private sealed class Snapshot
     {
         private readonly SpaceStation station;
-        private readonly Dictionary<InventoryItemType, int> counts = new();
+        private readonly Dictionary<InventoryItemType, List<(int count, bool favourite)>> stacks = new();
         private readonly long credits;
         public readonly HashSet<ForgeJob> ForgeJobs;
         private readonly HashSet<RefineryJob> refineJobs = new();
         private readonly float[] pending;
         private readonly bool autoRefine;
+        private readonly string plansJson;
 
-        public IEnumerable<InventoryItemType> Tracked => counts.Keys;
+        public IEnumerable<InventoryItemType> Tracked => stacks.Keys;
+
+        // Jobs of the player's own that were queued before the check. The routing checks progress every job, so with
+        // "deposit in cargo" forced on their output would land in the hold, where the check can't tell it from a leak.
+        public bool OtherJobsQueued => ForgeJobs.Count > 0 || refineJobs.Count > 0;
 
         public Snapshot(SpaceStation station, List<InventoryItemType> extra)
         {
@@ -391,12 +487,12 @@ public sealed class CraftRollup : Feature
             foreach (RefinedMaterial m in Enum.GetValues(typeof(RefinedMaterial)))
             {
                 var c = m.GetCanisterItem();
-                if (c != null) counts[c] = storage.GetCount(c);
+                if (c != null) Track(storage, c);
             }
-            foreach (var o in OreItemData.regularOres) counts[o.item] = storage.GetCount(o.item);
-            foreach (var it in storage.items)
-                if (it.item.itemCategory == ItemCategory.Ore) counts[it.item] = storage.GetCount(it.item);
-            foreach (var t in extra) counts[t] = storage.GetCount(t);
+            foreach (var o in OreItemData.regularOres) Track(storage, o.item);
+            foreach (var it in new List<Inventory.InventoryItem>(storage.items))
+                if (it.item.itemCategory == ItemCategory.Ore) Track(storage, it.item);
+            foreach (var t in extra) Track(storage, t);
             credits = GamePlayer.current.credits;
             ForgeJobs = new HashSet<ForgeJob>(station.forge.jobs);
             if (station.refinery != null)
@@ -405,12 +501,22 @@ public sealed class CraftRollup : Feature
                 pending = (float[])station.refinery.pendingYield.Clone();
                 autoRefine = station.refinery.autoRefine;
             }
+            var plans = SaveData.Feature(Rollups.FeatureKey, false)?["plans"];
+            plansJson = plans.HasValue && plans.Value.IsJsonArray ? plans.Value.ToString() : null;
+        }
+
+        private void Track(Inventory storage, InventoryItemType t)
+        {
+            if (stacks.ContainsKey(t)) return;
+            var list = new List<(int, bool)>();
+            foreach (var s in storage.items)
+                if (s.item == t) list.Add((s.count, s.favourite));
+            stacks[t] = list;
         }
 
         public void Restore()
         {
             Rollups.Active.Clear();
-            Rollups.Save();
             var forge = station.forge;
             foreach (var job in new List<ForgeJob>(forge.jobs))
                 if (!ForgeJobs.Contains(job)) forge.CancelJob(job);
@@ -422,12 +528,26 @@ public sealed class CraftRollup : Feature
                 Array.Copy(pending, refinery.pendingYield, pending.Length);
                 refinery.autoRefine = autoRefine;
             }
-            var storage = station.materialStorage;
-            foreach (var kv in counts)
+            // Put the player's own roll-ups back (after the test jobs are gone, so they relink to their own jobs), not an empty list.
+            if (plansJson == null) Rollups.Save();
+            else
             {
-                int diff = storage.GetCount(kv.Key) - kv.Value;
-                if (diff > 0) storage.Remove(kv.Key, diff);
-                else if (diff < 0) storage.Add(kv.Key, -diff);
+                SaveData.Feature(Rollups.FeatureKey, true)["plans"] = JsonValue.Parse(plansJson);
+                Rollups.Load();
+            }
+            var storage = station.materialStorage;
+            foreach (var kv in stacks)
+            {
+                int want = 0;
+                foreach (var (count, _) in kv.Value) want += count;
+                if (storage.GetCount(kv.Key) == want) continue;
+                // Rebuilt stack by stack so the favourite flags survive.
+                storage.Remove(kv.Key, storage.GetCount(kv.Key));
+                foreach (var (count, favourite) in kv.Value)
+                {
+                    var stack = storage.Add(kv.Key, count, stack: true);
+                    if (stack != null) stack.favourite = favourite;
+                }
             }
             GamePlayer.current.credits = credits;
         }

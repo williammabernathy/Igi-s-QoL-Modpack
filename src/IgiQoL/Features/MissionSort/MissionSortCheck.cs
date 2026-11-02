@@ -112,6 +112,8 @@ internal static class MissionSortCheck
         foreach (var row in board.GetComponentsInChildren<MissionListRow>())
         {
             var chip = Find(row, MissionSort.LevelChipName);
+            // A mission with no known level deliberately gets no chip.
+            if (MissionSort.Level(row.mission) < 0) { if (chip == null) good++; else bad++; continue; }
             if (chip != null && chip.GetComponentInChildren<TMP_Text>().text == "L" + MissionSort.Level(row.mission)) good++;
             else bad++;
         }

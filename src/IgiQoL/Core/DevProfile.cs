@@ -95,8 +95,8 @@ internal static class DevProfile
         Instrument();
         if (enemies > 0 && !SelfCheckContext.SpawnEnemies(enemies)) Plugin.Log.LogInfo("[Dev] profile: no enemies spawned");
         float until = Time.realtimeSinceStartup + 20f;
-        while (Time.realtimeSinceStartup < until && Hostiles() < Mathf.Min(enemies, 1)) yield return new WaitForSeconds(1f);
-        yield return new WaitForSeconds(5f);
+        while (Time.realtimeSinceStartup < until && Hostiles() < Mathf.Min(enemies, 1)) yield return new WaitForSecondsRealtime(1f);
+        yield return new WaitForSecondsRealtime(5f);
 
         var frames = new List<float>();
         var hostiles = new List<int>();

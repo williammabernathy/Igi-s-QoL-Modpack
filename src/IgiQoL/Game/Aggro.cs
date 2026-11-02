@@ -51,8 +51,17 @@ public static class Aggro
     {
         if (t == null) return "?";
         if (t is SpaceShip ship && ship.spaceShipData != null && ship.spaceShipData.faction == Faction.player) return ship.spaceShipData.GetShipName();
-        if (t is Drone drone) return Translation.Translate(drone.displayName) + " (drone)";
+        if (t is Drone drone) return DroneName(drone) + " (drone)";
         return Translation.Translate(t.targetName);
+    }
+
+    // The game builds a drone's display key from its object name, "(Clone)" included, so the key never matches and the
+    // raw "@Drone..." text shows. Look the key up without the suffix, and fall back to the bare object name.
+    private static string DroneName(Drone drone)
+    {
+        string bare = drone.name.Replace("(Clone)", "").Trim();
+        string key = "@Drone" + bare.Replace(" ", "");
+        return Translation.Exists(key) ? Translation.Translate(key) : bare;
     }
 
     // The same test the threat table uses to drop an entry (ThreatTable.CleanupDeadEntries).

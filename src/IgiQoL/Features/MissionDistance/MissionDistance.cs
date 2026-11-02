@@ -119,7 +119,7 @@ internal static class MissionDistancePatches
             var background = chip.GetComponent<Image>();
             background.raycastTarget = true;
             var poi = __instance.mission.GetActivePoi();
-            FleetBarParts.SetTooltip(background, poi.name, F.Long(poi));
+            FleetBarParts.SetTooltip(background, Translation.Translate(poi.name), F.Long(poi));
         }
         catch (Exception e) { F.Fail(e, nameof(RowInitPostfix)); }
     }

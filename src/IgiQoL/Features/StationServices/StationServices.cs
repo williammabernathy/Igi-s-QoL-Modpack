@@ -91,7 +91,7 @@ public sealed class StationServices : Feature
         GameEvents.SaveLoaded += () =>
         {
             if (!Active) return;
-            try { CrewLosses.Prune(); CrewLossPatches.ResetReturning(); problemsShownFor = null; problemsShown.Clear(); }
+            try { CrewLosses.Prune(); CrewLossPatches.ResetReturning(); problemsShownFor = null; problemsShown.Clear(); dockRunPending = depositPending = depositing = false; }
             catch (Exception e) { Fail(e, nameof(CrewLosses)); }
         };
     }

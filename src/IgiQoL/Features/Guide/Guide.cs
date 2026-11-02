@@ -182,8 +182,8 @@ public sealed class Guide : Feature
         float top = ship.GetReachableTopSpeed();
         float side = rb.mass > 0f ? ship.engine.sideThrust / rb.mass : 0f;
         Kit.Text(lines, $"Tonnage {ship.unitData.unitDefinition.tonnage}: the hull's mass is tonnage x 10 ({rb.mass:0}). Engines push against it, so a heavier hull with the same engine is slower to speed up, turn and sidestep.");
-        Kit.Text(lines, $"Acceleration {accel:0.00} units/s² (thrust / mass), top speed {top:0.0} units/s, about {(accel > 0f ? top / accel : 0f):0} s from standstill.");
-        Kit.Text(lines, $"Sidestep {side:0.00} units/s² (side thrust / mass): {0.5f * side * 9f:0.0} units in 3 s from standing, too little to dodge missiles, which turn on a 4-11 unit circle. Turning speed is rotational thrust against the hull's inertia, so it also falls with tonnage.");
+        Kit.Text(lines, $"Acceleration {accel:0.00} units per second squared (thrust / mass), top speed {top:0.0} units/s, about {(accel > 0f ? top / accel : 0f):0} s from standstill.");
+        Kit.Text(lines, $"Sidestep {side:0.00} units per second squared (side thrust / mass): {0.5f * side * 9f:0.0} units in 3 s from standing, too little to dodge missiles, which turn on a 4-11 unit circle. Turning speed is rotational thrust against the hull's inertia, so it also falls with tonnage.");
         float precision = ship.GetPrecisionCrit();
         Kit.Text(lines, $"Base crit chance 3% + {precision * 100f:0.0}% from Precision ({ship.GetStat(EquipStat.Precision):0}), before weapon crit bonuses. Each crit multiplies damage by 2 plus the critical damage bonus (x{2f + ship.GetStat(EquipStat.CriticalDamage):0.00} for this ship).");
         var resists = new StringBuilder();

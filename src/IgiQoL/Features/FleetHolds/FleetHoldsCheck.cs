@@ -56,6 +56,7 @@ internal static class FleetHoldsCheck
         {
             // The wing's hold: a favourite stack, some of its own ammo, then ore until less than one unit of room is left.
             float flagUsed0 = flagship.spaceShipData.cargoUsed;
+            float flagFree0 = flagship.spaceShipData.GetCargoAvailable();
             foreach (var s in wingCargo.items)
                 if (s != null && s.item == favItem) favWas = s.favourite;
             var fav = wingCargo.Add(favItem, 2);
@@ -64,6 +65,12 @@ internal static class FleetHoldsCheck
             int fill = Mathf.FloorToInt(wing.spaceShipData.GetCargoAvailable() / ore.m3);
             if (fill > 0) wingCargo.Add(ore, fill);
             float room0 = wing.spaceShipData.GetCargoAvailable();
+            if (room0 + flagFree0 < ore.m3 + 0.01f)
+            {
+                ctx.Skip("overflow", $"flagship has {flagFree0:0.0} m3 free, not enough to take over one {ore.identifier} from a full wing");
+                ctx.Skip("throttle", "needs the overflow hand-over");
+                yield break;
+            }
             loot = Singleton<LootManager>.Instance.SpawnLootItem(new TractorableItemData
             {
                 itemType = ore,
@@ -84,7 +91,8 @@ internal static class FleetHoldsCheck
             float gained = flagship.spaceShipData.cargoUsed - flagUsed0;
             float want = Mathf.Min(5 * ore.m3 + wing.spaceShipData.cargoCapacity * FleetHolds.Headroom, wing.spaceShipData.cargoCapacity);
             string detail = $"{wing.spaceShipData.GetShipName()} hold {wing.spaceShipData.cargoCapacity:0} m3, room {room0:0.0} -> {room1:0.0} (wanted {want:0.0}); game alone fits={vanilla}, with overflow fits={fits}; flagship took {gained:0} m3; favourite {favItem.identifier} stack {favLeft}/2 and own ammo {ammoLeft} stayed";
-            if (!vanilla && fits && room1 >= want - ore.m3 && gained >= room1 - room0 - 0.01f && favLeft == 2 && (ammo == null || ammoLeft >= 10)) ctx.Pass("overflow", detail);
+            float flagCanTake = room0 + flagFree0;   // the mover can't hand over more than the flagship has free
+            if (!vanilla && fits && room1 >= Mathf.Min(want, flagCanTake) - ore.m3 && gained >= room1 - room0 - 0.01f && favLeft == 2 && (ammo == null || ammoLeft >= 10)) ctx.Pass("overflow", detail);
             else ctx.Fail("overflow", detail);
 
             // Throttled: right after a hand-over, a ship doesn't try again for 2 s.
