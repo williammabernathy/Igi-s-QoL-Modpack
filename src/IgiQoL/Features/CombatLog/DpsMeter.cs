@@ -318,14 +318,15 @@ internal sealed class MeterList : MonoBehaviour
 
     private void Update()
     {
-        if (Time.unscaledTime < next) return;
+        if (!CombatLog.Instance.Active || Time.unscaledTime < next) return;
         var current = settings.session ? CombatLog.Session : CombatLog.Fights.Count > 0 ? CombatLog.Fights[0] : null;
         if (!dirty && version == CombatLog.Version && current == fight) return;
         next = Time.unscaledTime + 1f;
         version = CombatLog.Version;
         fight = current;
         dirty = false;
-        Refresh();
+        try { Refresh(); }
+        catch (Exception e) { CombatLog.Instance.Fail(e, nameof(MeterList)); }
     }
 
     private void Refresh()

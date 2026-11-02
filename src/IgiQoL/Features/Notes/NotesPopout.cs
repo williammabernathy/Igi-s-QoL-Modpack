@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Behaviour.UI.Shared;
 using Behaviour.UI.Spacestation;
@@ -130,7 +131,9 @@ internal sealed class NoteView : MonoBehaviour
 
     private void Update()
     {
-        if (version != NotesStore.Version) Redraw();
+        if (!Notes.Instance.Active || version == NotesStore.Version) return;
+        try { Redraw(); }
+        catch (Exception e) { Notes.Instance.Fail(e, nameof(NoteView)); }
     }
 
     private void Redraw()

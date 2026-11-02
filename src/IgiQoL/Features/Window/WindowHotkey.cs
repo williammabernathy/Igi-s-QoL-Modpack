@@ -88,8 +88,14 @@ public static class HudButton
         float deadline = Time.realtimeSinceStartup + 60f;
         // The side menu scene loads with the HUD but asynchronously; without it the button goes above the Dock button.
         while (SidePanel.instance == null && Time.realtimeSinceStartup < deadline) yield return null;
-        if (Instance != null || HudManager.Instance == null) yield break;
-        try { Create(HudManager.Instance.dockButton); }
+        if (Instance != null || HudManager.Instance == null || !WindowFeature.Instance.Active) yield break;
+        var dock = HudManager.Instance.dockButton;
+        if (dock == null)
+        {
+            Plugin.Log.LogInfo("[Window] no dock button to clone; hotkey only");
+            yield break;
+        }
+        try { Create(dock); }
         catch (System.Exception e) { WindowFeature.Instance.Fail(e, nameof(HudButton)); }
     }
 
@@ -121,7 +127,8 @@ public static class HudButton
         FleetBarParts.SetTooltip(b, null, Tooltip(true));
 
         // The side menu column has a layout group; the button sits outside its flow.
-        var layout = go.GetComponent<LayoutElement>() ?? go.AddComponent<LayoutElement>();
+        var layout = go.GetComponent<LayoutElement>();
+        if (layout == null) layout = go.AddComponent<LayoutElement>();
         layout.ignoreLayout = true;
         var drag = go.AddComponent<DragHandle>();
         drag.target = (RectTransform)go.transform;
@@ -135,7 +142,7 @@ public static class HudButton
     {
         if (Instance == null) return;
         var rt = (RectTransform)Instance.transform;
-        var dock = (RectTransform)HudManager.Instance.dockButton.transform;
+        var dock = HudManager.Instance != null ? HudManager.Instance.dockButton : null;
         var menu = SidePanel.instance != null ? SidePanel.instance.transform.Find("SidePanelMenu") as RectTransform : null;
         if (WindowFeature.Instance.Place.Value == ButtonPlace.SideMenu && menu != null)
         {
@@ -150,12 +157,14 @@ public static class HudButton
         }
         else
         {
-            rt.SetParent(dock.parent, false);
-            rt.anchorMin = dock.anchorMin;
-            rt.anchorMax = dock.anchorMax;
-            rt.pivot = dock.pivot;
-            rt.sizeDelta = dock.sizeDelta;
-            home = dock.anchoredPosition + new Vector2(0f, dock.rect.height + 4f);
+            if (dock == null) return;
+            var dockRt = (RectTransform)dock.transform;
+            rt.SetParent(dockRt.parent, false);
+            rt.anchorMin = dockRt.anchorMin;
+            rt.anchorMax = dockRt.anchorMax;
+            rt.pivot = dockRt.pivot;
+            rt.sizeDelta = dockRt.sizeDelta;
+            home = dockRt.anchoredPosition + new Vector2(0f, dockRt.rect.height + 4f);
         }
         rt.anchoredPosition = home + Offset;
     }

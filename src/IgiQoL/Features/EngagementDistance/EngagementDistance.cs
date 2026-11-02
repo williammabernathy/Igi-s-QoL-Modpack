@@ -86,20 +86,23 @@ internal static class ApproachPatch
             var turrets = __instance.turrets;
             if (turrets == null) return;
             float d = float.MaxValue;
-            bool any = false;
+            bool any = false, reached = false;
             Vector2 unitPos = unit.transform.position;
             for (int i = 0; i < turrets.Length; i++)
             {
                 var t = turrets[i];
                 if (t == null || !t.CanTarget(target)) continue;
                 any = true;
+                // The game skips launchers with no ammo when it works out the distance (EvaluateTurretApproach).
+                if (!(t.HasAmmo() || t.ammoType == null || t.AmmoAmountAvailable() > 0)) continue;
+                reached = true;
                 if (s.engagement == EngagementMode.Fixed) { d = s.engagementDistance; break; }
                 float reach = t.customApproachDistance > 0f
                     ? t.customApproachDistance
                     : Mathf.Max(t.range - Vector2.Distance((Vector2)t.transform.position, unitPos) - 0.5f, 1f);
                 if (reach < d) d = reach;
             }
-            if (!any) return;
+            if (!any || !reached) return;
             __instance.approachDistance = Mathf.Clamp(d, __instance.GetMinDistanceToTarget(), 30f);
         }
         catch (Exception e) { feature.Fail(e, nameof(ApproachPatch)); }

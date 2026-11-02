@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Behaviour.Dungeon;
 using HarmonyLib;
 using IgiQoL.Core;
 using LightJson;
@@ -119,11 +120,25 @@ internal static class CrewLossPatches
         catch (Exception e) { F.Fail(e, nameof(CrewLossPatches)); }
     }
 
+    // Crew coming back from an operation is the crew that went out, not a replacement.
+    private static bool returning;
+
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(DungeonOperation), nameof(DungeonOperation.AccumulateCrewOverflow))]
+    private static void ReturnPrefix() => returning = true;
+
+    // A finalizer, so an exception inside the game's method can't leave the flag set.
+    [HarmonyFinalizer]
+    [HarmonyPatch(typeof(DungeonOperation), nameof(DungeonOperation.AccumulateCrewOverflow))]
+    private static void ReturnFinalizer() => returning = false;
+
+    internal static void ResetReturning() => returning = false;
+
     [HarmonyPostfix]
     [HarmonyPatch(typeof(CrewData), nameof(CrewData.AddCrew))]
     private static void AddPostfix(CrewData __instance, string type, int amount)
     {
-        if (amount <= 0 || !F.Active) return;
+        if (amount <= 0 || returning || !F.Active) return;
         try
         {
             var ship = CrewLosses.Owner(__instance);

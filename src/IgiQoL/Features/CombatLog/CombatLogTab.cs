@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Behaviour.UI.Shared;
 using IgiQoL.UI;
@@ -87,10 +88,11 @@ public static class CombatLogTab
 
         private void Update()
         {
-            if (Time.unscaledTime < next || version == CombatLog.Version) return;
+            if (!CombatLog.Instance.Active || Time.unscaledTime < next || version == CombatLog.Version) return;
             next = Time.unscaledTime + 1f;
             version = CombatLog.Version;
-            Refresh();
+            try { Refresh(); }
+            catch (Exception e) { CombatLog.Instance.Fail(e, nameof(CombatTable)); }
         }
 
         private void Refresh()

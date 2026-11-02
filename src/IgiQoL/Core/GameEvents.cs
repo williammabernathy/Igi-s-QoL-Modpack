@@ -23,6 +23,7 @@ public static class GameEvents
         if (Arrived == null) return;
         foreach (Action<SpaceShip> h in Arrived.GetInvocationList())
         {
+            if (h.Target is Feature { Active: false }) continue;
             try { h(ship); }
             catch (Exception e) { Report(h, e, nameof(Arrived)); }
         }
@@ -33,6 +34,7 @@ public static class GameEvents
         if (ev == null) return;
         foreach (Action h in ev.GetInvocationList())
         {
+            if (h.Target is Feature { Active: false }) continue;
             try { h(); }
             catch (Exception e) { Report(h, e, name); }
         }

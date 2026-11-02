@@ -48,15 +48,17 @@ public sealed class WindowFeature : Feature
         GameEvents.HudReady += OnHudReady;
         Place.SettingChanged += (_, _) =>
         {
+            if (!Active) return;
             try { HudButton.Place(); }
             catch (Exception e) { Fail(e, nameof(Place)); }
         };
         Hotkey.SettingChanged += (_, _) =>
         {
+            if (!Active) return;
             try { HudButton.RefreshTooltips(); }
             catch (Exception e) { Fail(e, nameof(Hotkey)); }
         };
-        ModWindow.Register("settings", "Settings", 90, BuildSettings);
+        ModWindow.AddTab(this, "settings", "Settings", 90, BuildSettings);
     }
 
     private void OnHudReady()
@@ -104,7 +106,7 @@ public sealed class WindowFeature : Feature
         {
             if (kv.Key.Section == "Dev") continue;
             var owner = Array.Find(FeatureRegistry.All, f => f.Id == kv.Key.Section);
-            if (kv.Key.Key == "Enabled" || owner == null || owner.SettingsTab == null) entries++;
+            if (kv.Key.Key == "Enabled" || owner == null || owner.SettingsTab == null || !ModWindow.HasTab(owner.SettingsTab)) entries++;
         }
         int rows = 0;
         if (ModWindow.IsOpen)

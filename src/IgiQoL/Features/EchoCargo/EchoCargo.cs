@@ -33,7 +33,7 @@ public sealed class EchoCargo : Feature
 
     public override string Id => "EchoCargo";
     public override string Title => "ECHO cargo rules";
-    public override string Description => "When ECHO unloads at a station, the dock action from the Item rules tab decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks, ammo the flagship uses and the usable items the game keeps aboard are never touched.";
+    public override string Description => "When ECHO unloads at a station, the dock action from the Item rules tab decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks, ammo a ship fires and the usable items the game keeps aboard are never touched.";
     public override string SettingsTab => "Item rules";
     public override Type[] PatchClasses => new[] { typeof(EchoCargoPatches) };
 
@@ -386,24 +386,16 @@ public sealed class EchoCargo : Feature
         else if (d < 0) inv.Add(t, -d);
     }
 
-    // Sellable ammo no ship of the fleet fires or carries, preferring a type the armory doesn't hold. Null while a fleet
-    // ship isn't spawned, because ArmoryKeeps then keeps every ammo type.
+    // Sellable ammo no ship of the fleet fires or carries, preferring a type the armory doesn't hold.
     internal static InventoryItemType UnfiredAmmo()
     {
         var player = GamePlayer.current;
-        var units = new List<SpaceShip>();
-        foreach (var s in Fleet.Ships(withMercenaries: false))
-        {
-            var u = Fleet.Unit(s);
-            if (u == null) return null;
-            units.Add(u);
-        }
         InventoryItemType any = null;
         foreach (var t in InventoryItemType.all)
         {
             if (t.itemCategory != ItemCategory.Ammo || t.identifier == null || !t.canSell || t.sellValue <= 0 || player.RequiredItemCountForMissions(t) > 0 || Carried(t)) continue;
             bool fired = false;
-            foreach (var u in units) fired |= u.DoWeUseAmmo(t);
+            foreach (var s in Fleet.Ships(withMercenaries: false)) fired |= Items.FiredBy(s, t);
             if (fired) continue;
             if (player.globalInventory.GetCount(t) == 0) return t;
             any ??= t;
@@ -419,7 +411,7 @@ public sealed class EchoCargo : Feature
         if (unit == null) return null;
         foreach (var t in InventoryItemType.all)
         {
-            if (t.itemCategory != ItemCategory.Ammo || t.identifier == null || !t.canSell || t.sellValue <= 0 || !unit.DoWeUseAmmo(t)) continue;
+            if (t.itemCategory != ItemCategory.Ammo || t.identifier == null || !t.canSell || t.sellValue <= 0 || !Items.FiredBy(unit.spaceShipData, t)) continue;
             bool elsewhere = false;
             foreach (var s in Fleet.Ships(withMercenaries: true))
                 elsewhere |= s != player.currentSpaceShip && s.cargo.GetCount(t) > 0;
@@ -493,7 +485,7 @@ public sealed class EchoCargo : Feature
         var ammo = UnfiredAmmo();
         if (ammo == null || !CargoRules.CanSellHere(ss, ammo))
         {
-            ctx.Skip("armory-echo", ammo == null ? "no sellable ammo the fleet doesn't fire or carry (or a fleet ship isn't spawned)" : "station has no shop");
+            ctx.Skip("armory-echo", ammo == null ? "no sellable ammo the fleet doesn't fire or carry" : "station has no shop");
             return;
         }
         var fired = FiredAmmo();
@@ -598,7 +590,7 @@ public static class CargoRules
         && item.canSell && item.sellValue > 0 && !RefinedMaterialExtensions.IsCanister(item);
 
     // Armory items the rules never sell, on top of StoredSell's guards: the usables the game keeps aboard, warp fuel, ammo a
-    // ship of your fleet fires (every ammo type while one of them isn't spawned) and the exact pieces a saved loadout names
+    // ship of your fleet fires and the exact pieces a saved loadout names
     // (LoadoutApply.Identity). pieces: those identities, built on first need and reused for the rest of one pass.
     public static bool ArmoryKeeps(InventoryItemType item, ref HashSet<string> pieces)
     {
@@ -606,10 +598,7 @@ public static class CargoRules
         if (item.itemCategory == ItemCategory.Ammo)
         {
             foreach (var s in Fleet.Ships(withMercenaries: false))
-            {
-                var unit = Fleet.Unit(s);
-                if (unit == null || unit.DoWeUseAmmo(item)) return true;
-            }
+                if (Items.FiredBy(s, item)) return true;
             return false;
         }
         if (item.equipmentDefinition == null) return false;
@@ -730,7 +719,9 @@ internal static class EchoCargoPatches
     // The rule's step for one cargo stack. Stacks vanilla keeps aboard come back as Keep, "Game default" as Default.
     private static CargoRules.Step StepFor(IdleManager im, SpaceStation ss, SpaceShipData ship, Inventory.InventoryItem stack)
     {
-        if (im.ShouldKeepInCargo(ship, stack)) return new CargoRules.Step { action = DockAction.Keep };   // vanilla protections always win
+        // Vanilla protections always win; vanilla keeps only the flagship's ammo, so a fleet ship keeps the ammo its own fit fires too.
+        if (im.ShouldKeepInCargo(ship, stack) || stack.item.itemCategory == ItemCategory.Ammo && Items.FiredBy(ship, stack.item))
+            return new CargoRules.Step { action = DockAction.Keep };
         var item = stack.item;
         var rule = ItemRules.Resolve(item);
         if (rule.dockAction == DockAction.Default) return default;

@@ -55,10 +55,10 @@ A rule per flagship ability and per deployable type (from the flagship's cargo o
 
 - Every rule except Whenever ready only fires in a fight: damage in the last 10 s, or a target.
 - Untargeted abilities fire as they are. Hostile-targeted ones go on ECHO's target, friendly-targeted ones on your most damaged ship, asteroid ones (Crackshot Drone) on the asteroid the flagship mines, and wreck ones (LB-RTR, SF-CRK) on the nearest wreck whose cargo box or credits are still there. Drone-targeted abilities aren't automated.
-- Toggle abilities are switched on while the rule holds, and off again only if the rule switched them on.
+- Toggle abilities are switched on while the rule holds, and off again (once the ability is ready) only if the rule switched them on.
 - Deployables (turrets, shield pylons, decoys, mines) are dropped from the flagship's cargo, at most one per 2 s and only when the game's deploy cooldown allows.
 
-`PickUpTurrets` (on) tractors the turrets these rules dropped back in 5 s after the fight; turrets you placed yourself stay. `AlsoWithoutEcho` (off) applies the rules while you fly the ship yourself.
+`PickUpTurrets` (on) tractors the turrets these rules dropped back in, 5 s after the fight and before ECHO leaves the location (it waits for them as it does for its own loot); turrets you placed yourself stay. `AlsoWithoutEcho` (off) applies the rules while you fly the ship yourself.
 
 ## Preferred ores
 
@@ -78,7 +78,7 @@ The stealth mode, ammo type and buyout choice for operations ECHO starts on its 
 
 ## ECHO cargo rules
 
-When ECHO unloads at a station, the dock action from the [Item rules tab](loot-and-cargo.md#item-rules) decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks, ammo the flagship uses and the usable items the game keeps aboard are never touched.
+When ECHO unloads at a station, the dock action from the [Item rules tab](loot-and-cargo.md#item-rules) decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks, ammo a ship fires and the usable items the game keeps aboard are never touched.
 
 ECHO sells before it deposits. Each unload step first looks for something to sell on the flagship and every fleet cargo ship, and only deposits once nothing is left to sell. For Sell above N, the part above N is sold right away and only N goes to storage. A full material storage or armory then holds up only the deposits: the game's ECHO stops at the first stack that doesn't fit and never reaches the stacks behind it.
 
@@ -88,4 +88,4 @@ Data items (intel and records, blueprint pieces, jumpgate passes, claims) never 
 
 Material storage is kept per station. With `SellFromStorage` (off by default), the same rules (only those that name the item or its category) also sell what is already stored at the station you're docked at, one stack per unload step, after the data inventory and before any deposit. Sell above N keeps N in that station's storage, so a storage that already holds more than N is trimmed back to N. Favourites and the items your missions need stay. It's off by default because it sells stock you stored on purpose. The setting applies to Station services' selling too.
 
-The armory holds the weapons, modules, boosters, ammo and usables you or ECHO stored, for every station at once. With `SellFromArmory` (off by default), the same rules (only those that name the item or its category) also sell from the armory, one stack per unload step, last: after cargo, the data inventory and station storage, before any deposit. Sell above N keeps N in the armory. On top of favourites and the items your missions need, the armory keeps the usables the game keeps aboard, warp fuel, every ammo type a ship of your fleet fires (all ammo while a fleet ship isn't spawned), and the exact pieces any saved [loadout](stations.md#ship-loadouts) uses. A piece of the same type and rarity that no loadout names can still be sold. It's off by default because it sells gear you stored on purpose. The setting applies to Station services' selling too.
+The armory holds the weapons, modules, boosters, ammo and usables you or ECHO stored, for every station at once. With `SellFromArmory` (off by default), the same rules (only those that name the item or its category) also sell from the armory, one stack per unload step, last: after cargo, the data inventory and station storage, before any deposit. Sell above N keeps N in the armory. On top of favourites and the items your missions need, the armory keeps the usables the game keeps aboard, warp fuel, every ammo type a ship of your fleet fires, and the exact pieces any saved [loadout](stations.md#ship-loadouts) uses. A piece of the same type and rarity that no loadout names can still be sold. It's off by default because it sells gear you stored on purpose. The setting applies to Station services' selling too.

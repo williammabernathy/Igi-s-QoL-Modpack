@@ -149,11 +149,19 @@ public static class Popouts
     public static void Open(string id)
     {
         var kind = KindOf(id);
-        if (kind == null || IsOpen(id) || HudManager.Instance == null) return;
+        if (kind == null || IsOpen(id) || HudManager.Instance == null || kind.Owner != null && !kind.Owner.Active) return;
         var s = State(id);
         s.open = true;
         s.Save(id);
-        open[id] = Popout.Create(kind, id, s);
+        try { open[id] = Popout.Create(kind, id, s); }
+        catch (Exception e)
+        {
+            s.open = false;
+            s.Save(id);
+            if (kind.Owner != null) kind.Owner.Fail(e, "Popout " + id);
+            else Plugin.Log.LogError($"[Window] pop-out '{id}' failed to build: {e}");
+            return;
+        }
         Version++;
     }
 
@@ -205,7 +213,7 @@ public static class Popouts
     public static string OpenNew(string kindId, Action<PopoutState> init = null)
     {
         var kind = Find(kindId);
-        if (kind == null || !kind.Multiple || HudManager.Instance == null) return null;
+        if (kind == null || !kind.Multiple || HudManager.Instance == null || kind.Owner != null && !kind.Owner.Active) return null;
         var list = List(kind);
         int n = 1;
         while (list.Contains(kind.Id + "-" + n)) n++;
@@ -384,7 +392,12 @@ public sealed class Popout : MonoBehaviour
         p.State = state;
         p.root = root;
         p.rootGroup = root.gameObject.AddComponent<CanvasGroup>();
-        p.Build();
+        try { p.Build(); }
+        catch
+        {
+            Object.Destroy(root.gameObject);
+            throw;
+        }
         return p;
     }
 
@@ -587,6 +600,11 @@ public sealed class Popout : MonoBehaviour
 
     private void Update()
     {
+        if (Kind.Owner != null && !Kind.Owner.Active)
+        {
+            Popouts.Close(Id);
+            return;
+        }
         try
         {
             if (Time.unscaledTime >= nextShowCheck) UpdateShown();
@@ -717,7 +735,11 @@ internal sealed class PopoutStrip : MonoBehaviour
                 if (p == null) continue;
                 any = true;
                 string chipId = id, title = kind.TitleFor(p.State);
-                var chip = Kit.TextButton(row, title, () => Popouts.Get(chipId)?.Flash(), 130f);
+                var chip = Kit.TextButton(row, title, () =>
+                {
+                    var target = Popouts.Get(chipId);
+                    if (target != null) target.Flash();
+                }, 130f);
                 var text = chip.GetComponentInChildren<TMP_Text>();
                 // As wide as its title, shrinking (down to 40 px) when the strip runs out of room.
                 var le = chip.GetComponent<LayoutElement>();

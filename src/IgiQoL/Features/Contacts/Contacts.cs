@@ -72,7 +72,7 @@ public sealed class Contacts : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("contacts", "Scanner", 5, Build);
+        ModWindow.AddTab(this, "contacts", "Scanner", 5, Build);
         ScannerPopout.Register(this);
         GameEvents.SaveLoaded += OnSaveLoaded;
         GameEvents.HudReady += OnHudReady;

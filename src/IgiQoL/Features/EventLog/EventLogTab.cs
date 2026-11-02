@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Behaviour.Item;
@@ -133,10 +134,11 @@ public static class EventLogTab
 
         private void Update()
         {
-            if (Time.unscaledTime < next || version == EventLog.Version) return;
+            if (!EventLog.Instance.Active || Time.unscaledTime < next || version == EventLog.Version) return;
             next = Time.unscaledTime + 1f;
             version = EventLog.Version;
-            Refresh();
+            try { Refresh(); }
+            catch (Exception e) { EventLog.Instance.Fail(e, nameof(LogList)); }
         }
 
         private void Refresh()

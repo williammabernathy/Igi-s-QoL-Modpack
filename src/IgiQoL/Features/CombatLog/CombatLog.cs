@@ -130,7 +130,7 @@ public sealed class CombatLog : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("combat", "DPS parser", 7, CombatLogTab.Build);
+        ModWindow.AddTab(this, "combat", "DPS parser", 7, CombatLogTab.Build);
         DpsMeter.Register(this);
         GameEvents.SaveLoaded += Reset;
         Plugin.Instance.StartCoroutine(WriteFinishedFights());

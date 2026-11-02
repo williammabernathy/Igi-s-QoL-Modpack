@@ -42,7 +42,7 @@ How close each ship flies to its combat target, set per ship in the popup:
 
 - Auto: the game decides (the default).
 - Max range: stay as far back as the shortest-range weapon that can hit the target allows.
-- Fixed distance: stay this many units away (1 to 30; the game never holds further than 30).
+- Fixed distance: stay this many units away (6 to 30: the game never holds closer than 6 or further than 30).
 
 It only changes combat targeting. Mining, salvage, repair and painter modules approach their targets as the game does.
 

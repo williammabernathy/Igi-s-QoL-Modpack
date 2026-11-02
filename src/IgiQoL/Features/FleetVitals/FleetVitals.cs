@@ -39,7 +39,9 @@ public sealed class FleetVitalsFeature : Feature
     {
         BarHeight.SettingChanged += (_, _) =>
         {
-            foreach (var v in Object.FindObjectsByType<FleetVitals>(FindObjectsInactive.Include)) v.Layout();
+            if (!Active) return;
+            try { foreach (var v in Object.FindObjectsByType<FleetVitals>(FindObjectsInactive.Include)) v.Layout(); }
+            catch (Exception e) { Fail(e, nameof(BarHeight)); }
         };
     }
 

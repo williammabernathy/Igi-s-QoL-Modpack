@@ -298,19 +298,6 @@ public static class Services
 
     // ---- Sell: the Item rules tab's dock actions (Sell, Sell above N) for your own docking, like EchoCargo does for ECHO.
 
-    // Vanilla IdleManager.ShouldKeepInCargo, widened to the ammo each fleet ship uses.
-    private static bool Protected(SpaceShipData s, Inventory.InventoryItem stack)
-    {
-        if (stack.favourite) return true;
-        var item = stack.item;
-        if (item.itemCategory == ItemCategory.Ammo)
-        {
-            var unit = Fleet.Unit(s);
-            return unit == null || unit.DoWeUseAmmo(item);
-        }
-        return item.itemCategory == ItemCategory.Usable && item.storageOverride == StorageOverride.None;
-    }
-
     public static ServiceReport Sell(bool run)
     {
         var r = new ServiceReport();
@@ -327,7 +314,7 @@ public static class Services
                 var item = stack.item;
                 var rule = ItemRules.Resolve(item);
                 if (rule.dockAction != DockAction.Sell && rule.dockAction != DockAction.SellAbove) continue;
-                if (Protected(s, stack)) continue;
+                if (Items.KeepAboard(s, stack)) continue;
                 var dest = Cargo.DepositTarget(ss, item);
                 int stored = 0;
                 if (dest != null)

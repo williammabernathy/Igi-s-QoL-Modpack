@@ -32,7 +32,7 @@ public sealed class Guide : Feature
     public override string Description => "The Stat reference tab: damage types with the weapons that deal them and the armour weak to them, every armour type's resistance, how a hit is reduced on its way to the hull, and your ship's handling and crit numbers, all read from the game's data.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 
-    public override void OnActivated() => ModWindow.AddTab("guide", "Stat reference", 85, Build);
+    public override void OnActivated() => ModWindow.AddTab(this, "guide", "Stat reference", 85, Build);
 
     internal sealed class WeaponType
     {

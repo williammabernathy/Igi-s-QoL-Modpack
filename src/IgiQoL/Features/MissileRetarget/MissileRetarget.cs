@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using Behaviour.Equipment.Module;
 using Behaviour.Equipment.Turret.Projectile;
 using Behaviour.Weapons;
 using BepInEx.Configuration;
@@ -33,6 +35,12 @@ public sealed class MissileRetarget : Feature
             "Fly on (game default)", "Weapon's target", "Nearest enemy"));
     }
 
+    public override void OnActivated()
+    {
+        GameEvents.SaveLoaded += MissilePatches.Reset;
+        GameEvents.MainMenuShown += MissilePatches.Reset;
+    }
+
     // Per-ship override (ShipSettings.missileRetarget) wins over the config value.
     public RetargetMode Resolve(SpaceShipData ship) => ShipSettings.Get(ship.guid).missileRetarget ?? Mode.Value;
 
@@ -57,6 +65,26 @@ public sealed class MissileOverride : MonoBehaviour
 [HarmonyPatch]
 internal static class MissilePatches
 {
+    // The scanner's last list per module of your ships: CombatModule.filteredTargets is empty while the module holds a
+    // target, so a missile whose target just died found nothing there.
+    private static readonly Dictionary<CombatModule, List<TargetableUnit>> lastScan = new();
+
+    internal static void Reset() => lastScan.Clear();
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(CombatModule), nameof(CombatModule.UpdateAvailableTargets))]
+    private static void ScanPostfix(CombatModule __instance, IEnumerable<TargetableUnit> targets)
+    {
+        var feature = MissileRetarget.Instance;
+        if (!feature.Active) return;
+        try
+        {
+            if (!(targets is List<TargetableUnit> list) || __instance.parent == null || !Fleet.IsPlayerShip(__instance.parent)) return;
+            lastScan[__instance] = list;
+        }
+        catch (Exception e) { feature.Fail(e, nameof(MissilePatches)); }
+    }
+
     [HarmonyPostfix]
     [HarmonyPatch(typeof(Missile), "FixedUpdate")]
     private static void FixedUpdatePostfix(Missile __instance)
@@ -73,13 +101,12 @@ internal static class MissilePatches
 
             if (mode == RetargetMode.Nearest)
             {
-                var module = turret.targetingModule;
+                var module = turret.targetingModule as CombatModule;
                 TargetableUnit best = null;
-                if (module != null)
+                if (module != null && lastScan.TryGetValue(module, out var list))
                 {
                     Vector3 pos = __instance.transform.position;
                     float bestSqr = float.MaxValue;
-                    var list = module.filteredTargets;
                     for (int i = 0; i < list.Count; i++)
                     {
                         var t = list[i];

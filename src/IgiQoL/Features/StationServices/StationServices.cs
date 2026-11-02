@@ -52,7 +52,7 @@ public sealed class StationServices : Feature
             "Restock (the airlock button, and on dock with \"Restock ammo when you dock\") also tops up the ship you fly to this many warp fuel cells: from your armory first, then bought, fastest cells first (Hyper, then Ion, then Plasma). Only the ship you fly burns warp fuel. A part-used cell counts as one, as it does for ECHO. 0 turns this off. ECHO by itself keeps 2 cells, and only with the Prompt Engineering warp fuel skill.",
             new AcceptableValueRange<int>(0, 50)));
         CrewOnDock = cfg.Bind(Id, "CrewOnDock", false, SettingInfo.Describe("Replace lost crew when you dock",
-            "Every hull hit of 2% or more can kill one crew member, on every ship of yours. The mod counts those deaths per ship and crew type, and when you dock (also while ECHO flies) puts the same crew back: from your crew reserve first, then willing prisoners of that type from the ship's brig and the station brig (recruited at 40% of the hire price, as the game does), then hired at the station's personnel center at its price, as far as its stock goes. Crew added to a ship any other way counts as a replacement. Vanilla ECHO only hires crew for the ship you fly, by that ship's crew ratios, so fleet ships never get their losses back."));
+            "Every hull hit of 2% or more can kill one crew member, on every ship of yours. The mod counts those deaths per ship and crew type, and when you dock (also while ECHO flies) puts the same crew back: from your crew reserve first, then willing prisoners of that type from the ship's brig and the station brig (recruited at 40% of the hire price, as the game does), then hired at the station's personnel center at its price, as far as its stock goes. Crew added to a ship any other way counts as a replacement; crew coming back from an operation doesn't. Vanilla ECHO only hires crew for the ship you fly, by that ship's crew ratios, so fleet ships never get their losses back."));
         BrigOnDock = cfg.Bind(Id, "BrigOnDock", false, SettingInfo.Describe("Unload brigs when you dock",
             "Moves the prisoners in your ships' brigs to the station brig when you dock (also while ECHO flies), so the captives of the next boarding fit aboard instead of being left behind with \"Brig full\". Prisoners willing to join stay willing and can still be recruited, by you or by Replace crew. The station brig grows with your level; whatever doesn't fit stays aboard. With the Crew Slavery skill, prisoners aboard add to the ship's bonuses, so leave this off if you rely on that."));
         AirlockButtons = cfg.Bind(Id, "AirlockButtons", true, SettingInfo.Describe("Buttons on the airlock screen",
@@ -91,12 +91,12 @@ public sealed class StationServices : Feature
         GameEvents.SaveLoaded += () =>
         {
             if (!Active) return;
-            try { CrewLosses.Prune(); }
+            try { CrewLosses.Prune(); CrewLossPatches.ResetReturning(); }
             catch (Exception e) { Fail(e, nameof(CrewLosses)); }
         };
     }
 
-    private static bool EchoSells() => GamePlayer.current.autoPlay && EchoCargo.EchoCargo.Instance != null && EchoCargo.EchoCargo.Instance.Active;
+    private static bool EchoSells() => GamePlayer.current.autoPlay;
 
     // The fleet auto-deposit runs at docking, before the interior the sell needs exists. Selling from station storage or
     // the armory frees room the deposit could use, so a dock that sells holds the deposit back and runs it after the sale.

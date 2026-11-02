@@ -39,7 +39,7 @@ public sealed class Loadouts : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("loadouts", "Loadouts", 25, LoadoutsTab.Build);
+        ModWindow.AddTab(this, "loadouts", "Loadouts", 25, LoadoutsTab.Build);
         GameEvents.SaveLoaded += () =>
         {
             ready = true;

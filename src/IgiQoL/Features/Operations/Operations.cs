@@ -56,7 +56,7 @@ public sealed class Operations : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("operations", "Operations", 20, BuildOperations);
+        ModWindow.AddTab(this, "operations", "Operations", 20, BuildOperations);
     }
 
     // Display names in StealthMode / AmmoType declaration order, and the explanations the game's own tooltips give.

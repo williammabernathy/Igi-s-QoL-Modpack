@@ -4,6 +4,7 @@ using Behavior.UI.GalaxyMap;
 using Behaviour.UI.HUD;
 using Behaviour.UI.Shared;
 using Behaviour.UI.Side_Menu.SideTabs.Captain;
+using IgiQoL.Core;
 using IgiQoL.Features.Window;
 using Source.Player;
 using Source.UI.Tooltip;
@@ -21,6 +22,7 @@ public static class ModWindow
 {
     public sealed class Tab
     {
+        public Feature Owner;
         public string Id, Title;
         public int Order;
         public Action<RectTransform> Build;
@@ -59,6 +61,8 @@ public static class ModWindow
     private const float MoreWidth = 120f;
 
     private static readonly List<Tab> tabs = new();
+    // The tabs of the open window: registered tabs whose owner is active when it was built.
+    private static readonly List<Tab> shown = new();
     private static RectTransform root, body, scroll, header;
     private static Kit.Choice more;
     // Tabs shown in the header; the rest are in the More dropdown.
@@ -70,28 +74,21 @@ public static class ModWindow
     public static string CurrentTab { get; private set; }
     public static RectTransform Content { get; private set; }
 
-    public static void AddTab(string id, string title, int order, Action<RectTransform> build)
+    // Tabs register from any feature's OnActivated, in any registry order. Whether the window may open is decided in
+    // Open, and a tab whose owner is off is left out of the window (owner null: always shown).
+    public static void AddTab(Feature owner, string id, string title, int order, Action<RectTransform> build)
     {
-        if (WindowFeature.Instance == null || !WindowFeature.Instance.Active)
-        {
-            Plugin.Log.LogInfo($"[Window] tab '{id}' not added: Window feature inactive");
-            return;
-        }
-        Register(id, title, order, build);
-    }
-
-    // Used by WindowFeature.OnActivated, which runs before the registry marks the feature Active.
-    internal static void Register(string id, string title, int order, Action<RectTransform> build)
-    {
-        tabs.Add(new Tab { Id = id, Title = title, Order = order, Build = build });
+        tabs.Add(new Tab { Owner = owner, Id = id, Title = title, Order = order, Build = build });
         tabs.Sort((a, b) => a.Order.CompareTo(b.Order));
     }
 
-    public static bool HasTab(string title) => tabs.Exists(t => t.Title == title);
+    private static bool Shown(Tab t) => t.Owner == null || t.Owner.Active;
+
+    public static bool HasTab(string title) => tabs.Exists(t => t.Title == title && Shown(t));
 
     // For the self-check: the window, its tabs, how many fit the header (the rest are in More) and More's caption.
     internal static RectTransform Root => root;
-    internal static IReadOnlyList<Tab> Tabs => tabs;
+    internal static IReadOnlyList<Tab> Tabs => shown;
     internal static int HeaderTabCount => fitting;
     internal static string MoreCaption => more == null ? null : more.root.TryGetComponent<TMP_Dropdown>(out var dd) ? dd.captionText.text : more.root.GetComponentInChildren<TMP_Text>().text;
     internal static float MinWidth => Mathf.Max(FloorWidth * grow, tabMinWidth);
@@ -104,9 +101,14 @@ public static class ModWindow
 
     public static void Open(string tabId = null)
     {
-        if (GamePlayer.current == null || HudManager.Instance == null || tabs.Count == 0) return;
+        if (WindowFeature.Instance == null || !WindowFeature.Instance.Active || GamePlayer.current == null || HudManager.Instance == null) return;
         if (!IsOpen) Build();
-        Show(tabId ?? PlayerPrefs.GetString(PrefTab, tabs[0].Id));
+        if (shown.Count == 0)
+        {
+            Close();
+            return;
+        }
+        Show(tabId ?? PlayerPrefs.GetString(PrefTab, shown[0].Id));
     }
 
     public static void Close()
@@ -118,7 +120,15 @@ public static class ModWindow
     public static void Show(string id)
     {
         if (!IsOpen) return;
-        var tab = Find(id) ?? tabs[0];
+        var tab = Find(id);
+        // The owner failed or was switched off while the window was open: rebuild the window without its tab.
+        if (tab != null && !Shown(tab))
+        {
+            Close();
+            Open();
+            return;
+        }
+        if (tab == null) tab = shown[0];
         // Tabs rebuild themselves from their own button handlers, so the old content is destroyed at end of frame.
         if (scroll != null)
         {
@@ -127,7 +137,7 @@ public static class ModWindow
         }
         Content = Kit.Scroll(body);
         scroll = (RectTransform)Content.GetComponentInParent<ScrollRect>().transform;
-        foreach (var t in tabs)
+        foreach (var t in shown)
             ((Image)t.button.targetGraphic).color = t == tab ? ColorHelper.mapDockButtonActive : ColorHelper.panelButton;
         CurrentTab = tab.Id;
         PlayerPrefs.SetString(PrefTab, tab.Id);
@@ -144,13 +154,16 @@ public static class ModWindow
 
     private static Tab Find(string id)
     {
-        foreach (var t in tabs)
+        foreach (var t in shown)
             if (t.Id == id) return t;
         return null;
     }
 
     private static void Build()
     {
+        shown.Clear();
+        foreach (var t in tabs)
+            if (Shown(t)) shown.Add(t);
         var position = new Vector2(PlayerPrefs.GetFloat(PrefX, 0f), PlayerPrefs.GetFloat(PrefY, 0f));
         // Tab captions grow with the Text size setting; each tab is at least 90 px and wide enough for its caption.
         grow = Mathf.Max(1f, Features.TextScale.TextScale.Factor);
@@ -167,7 +180,7 @@ public static class ModWindow
         FleetBarParts.AddIcon(header, Kit.Icon("Info", PoiIconKeys.Captain("Command")), ColorHelper.stationCardTitle, 16f);
         var title = FleetBarParts.AddLine(header, "Igi's QoL", 12f, ColorHelper.stationCardTitle, TextAlignmentOptions.MidlineLeft);
         titleWidth = Mathf.Ceil(title.GetPreferredValues(title.text).x);
-        foreach (var tab in tabs)
+        foreach (var tab in shown)
         {
             string id = tab.Id;
             var button = Kit.TextButton(header, tab.Title, () => Show(id), 90f * grow);
@@ -260,40 +273,40 @@ public static class ModWindow
     {
         float room = root.sizeDelta.x - Padding - (8f + 16f + titleWidth + 22f + 3 * 6f);
         float all = 0f;
-        foreach (var t in tabs) all += t.width + 6f;
-        int fit = tabs.Count;
+        foreach (var t in shown) all += t.width + 6f;
+        int fit = shown.Count;
         if (all > room)
         {
             float left = room - (MoreWidth * grow + 6f);
             fit = 0;
-            while (fit < tabs.Count && tabs[fit].width + 6f <= left)
+            while (fit < shown.Count && shown[fit].width + 6f <= left)
             {
-                left -= tabs[fit].width + 6f;
+                left -= shown[fit].width + 6f;
                 fit++;
             }
         }
         if (fit == fitting) return;
         fitting = fit;
-        for (int i = 0; i < tabs.Count; i++) tabs[i].button.gameObject.SetActive(i < fit);
+        for (int i = 0; i < shown.Count; i++) shown[i].button.gameObject.SetActive(i < fit);
         if (more != null)
         {
             more.root.SetActive(false);
             Object.Destroy(more.root);
             more = null;
         }
-        if (fit == tabs.Count) return;
+        if (fit == shown.Count) return;
         var names = new List<string> { "More" };
         var ids = new List<string>();
-        for (int i = fit; i < tabs.Count; i++)
+        for (int i = fit; i < shown.Count; i++)
         {
-            names.Add(tabs[i].Title);
-            ids.Add(tabs[i].Id);
+            names.Add(shown[i].Title);
+            ids.Add(shown[i].Id);
         }
         more = Kit.Dropdown(header, names, 0, i =>
         {
             if (i > 0) Show(ids[i - 1]);
         }, MoreWidth * grow);
-        more.root.transform.SetSiblingIndex(tabs[tabs.Count - 1].button.transform.GetSiblingIndex() + 1);
+        more.root.transform.SetSiblingIndex(shown[shown.Count - 1].button.transform.GetSiblingIndex() + 1);
         SyncMore();
     }
 
@@ -302,8 +315,8 @@ public static class ModWindow
     {
         if (more == null) return;
         int index = 0;
-        for (int i = fitting; i < tabs.Count; i++)
-            if (tabs[i].Id == CurrentTab) index = i - fitting + 1;
+        for (int i = fitting; i < shown.Count; i++)
+            if (shown[i].Id == CurrentTab) index = i - fitting + 1;
         more.SetIndex(index);
     }
 

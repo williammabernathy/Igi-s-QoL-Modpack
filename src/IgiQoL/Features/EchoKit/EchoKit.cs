@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Behaviour.Ability;
 using Behaviour.Ability.Payload;
 using Behaviour.Equipment.Module;
+using Behaviour.Gameplay;
 using Behaviour.Item;
 using Behaviour.Item.Usable;
 using Behaviour.Managers;
@@ -14,6 +15,7 @@ using Behaviour.UI.Spacestation;
 using Behaviour.Unit;
 using Behaviour.Util;
 using BepInEx.Configuration;
+using HarmonyLib;
 using IgiQoL.Core;
 using IgiQoL.Game;
 using LightJson;
@@ -48,7 +50,7 @@ public sealed class EchoKit : Feature
     public override string Description => "Lets ECHO use your flagship's abilities and the deployables in its cargo (turrets, shield pylons, decoys, mines) by rules you set on the ECHO tab, and pick its turrets back up after the fight. Every rule starts off.";
     public override string SettingsTab => "ECHO";
 
-    public override Type[] PatchClasses => Type.EmptyTypes;
+    public override Type[] PatchClasses => new[] { typeof(EchoKitPatches) };
 
     public ConfigEntry<bool> AlsoWithoutEcho;
     public ConfigEntry<bool> PickUpTurrets;
@@ -363,7 +365,11 @@ public sealed class EchoKit : Feature
             if (ability.toggledAbility)
             {
                 if (want && !ability.toggleActive && ability.isReady && Fire(ship, s.combat, ability)) { ourToggles.Add(ability.identifier); used++; }
-                else if (!want && ability.toggleActive && ourToggles.Remove(ability.identifier)) ability.TriggerPayload();
+                else if (!want && ability.toggleActive && ability.isReady && ourToggles.Contains(ability.identifier))
+                {
+                    ability.TriggerPayload();   // toggles off, and starts no cooldown
+                    if (!ability.toggleActive) ourToggles.Remove(ability.identifier);
+                }
                 continue;
             }
             if (want && ability.isReady && Fire(ship, s.combat, ability)) used++;
@@ -479,5 +485,38 @@ public sealed class EchoKit : Feature
             started++;
         }
         return started;
+    }
+
+    // Turrets the rules dropped are collected before ECHO leaves, as the game does with its own loot: start one, or
+    // name the one still in the beam. Null when nothing is left to collect.
+    internal static InventoryItemType PickUpBeforeLeaving(SpaceShip ship)
+    {
+        PickUp(ship);
+        foreach (var t in deployed)
+            if (t != null && t.TryGetComponent<TractorableItem>(out var item) && item.isTractored && item.data != null) return item.data.itemType;
+        return null;
+    }
+}
+
+[HarmonyPatch]
+internal static class EchoKitPatches
+{
+    // ECHO waits a decision while a manual tractor target is set; this makes it wait for the turrets the rules dropped.
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.TryLootBeforeLeaving))]
+    private static bool TryLootBeforeLeavingPrefix(ref bool __result)
+    {
+        var f = EchoKit.Instance;
+        if (!f.Active) return true;
+        try
+        {
+            if (!f.PickUpTurrets.Value || !EchoKit.Allowed(out var ship)) return true;
+            var item = EchoKit.PickUpBeforeLeaving(ship);
+            if (item == null) return true;
+            IdleManager.UpdateActivity("@IdleLooting", item.displayName);
+            __result = true;
+            return false;
+        }
+        catch (Exception e) { f.Fail(e, nameof(TryLootBeforeLeavingPrefix)); return true; }
     }
 }

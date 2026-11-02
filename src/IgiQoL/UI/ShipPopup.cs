@@ -133,7 +133,7 @@ public static class ShipPopup
             var row = Kit.Row(Body, 8f, 26f);
             // A tooltip, not a line under the row: the popup has no scroll, and with a full target rule chain the
             // line pushed it off screen at 130% text.
-            Kit.Tooltip(Kit.Label(row, "Engagement distance"), null, "Auto: the game decides how close to get. Weapons' max range: stay as far back as the shortest-range weapon that can hit the target allows. Fixed distance: stay this many units away (1 to 30; the game never holds further than 30).");
+            Kit.Tooltip(Kit.Label(row, "Engagement distance"), null, "Auto: the game decides how close to get. Weapons' max range: stay as far back as the shortest-range weapon that can hit the target allows. Fixed distance: stay this many units away (6 to 30: the game never holds closer than 6 or further than 30).");
             TMP_InputField field = null;
             Kit.Dropdown(row, new[] { "Auto (game default)", "Weapons' max range", "Fixed distance" }, (int)s.engagement, i =>
             {
@@ -146,7 +146,7 @@ public static class ShipPopup
             {
                 var e = ShipSettings.Edit(guid);
                 if (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out var f))
-                    e.engagementDistance = Mathf.Clamp(f, 1f, 30f);
+                    e.engagementDistance = Mathf.Clamp(f, 6f, 30f);
                 field.SetTextWithoutNotify(e.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture));
                 ShipSettings.Save(guid);
             }, 70f);

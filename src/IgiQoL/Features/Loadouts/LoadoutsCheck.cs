@@ -133,14 +133,25 @@ internal static class LoadoutsCheck
             ship.RemoveCrew(hireType, 3);
             long credits = player.credits;
             center.available.TryGetValue(hireType, out int stockBefore);
-            r = LoadoutApply.Apply(ship, a);
-            yield return new WaitForSeconds(1f);
-            center.available.TryGetValue(hireType, out int stockAfter);
-            long spent = credits - player.credits;
-            if (reserved > 0) player.unassignedCrew.AddCrew(hireType, reserved, false);
-            d = $"{hireType}: stock {stockBefore}->{stockAfter}, spent {spent} cr; {Report(r)}";
-            if (Fit(ship) == before && stockAfter == stockBefore - 3 && spent > 0) ctx.Pass("hire", d);
-            else ctx.Fail("hire", d);
+            long spent = 0;
+            int stockAfter = stockBefore;
+            try
+            {
+                r = LoadoutApply.Apply(ship, a);
+                yield return new WaitForSeconds(1f);
+                center.available.TryGetValue(hireType, out stockAfter);
+                spent = credits - player.credits;
+                d = $"{hireType}: stock {stockBefore}->{stockAfter}, spent {spent} cr; {Report(r)}";
+                if (Fit(ship) == before && stockAfter == stockBefore - 3 && spent > 0) ctx.Pass("hire", d);
+                else ctx.Fail("hire", d);
+            }
+            finally
+            {
+                // The check hired for real: put the reserve crew, the credits and the station's stock back.
+                if (reserved > 0) player.unassignedCrew.AddCrew(hireType, reserved, false);
+                player.credits = credits;
+                if (stockBefore > 0) center.available[hireType] = stockBefore;
+            }
         }
 
         // Swap two weapons of the same slot size, then put them back.

@@ -226,6 +226,7 @@ internal sealed class ShipStatsHover : MonoBehaviour
         timer -= Time.unscaledDeltaTime;
         if (timer > 0f) return;
         timer = RefreshSeconds;
-        UITooltip.Refresh(source);
+        try { UITooltip.Refresh(source); }
+        catch (Exception e) { ShipStats.Instance.Fail(e, nameof(ShipStatsHover)); }
     }
 }

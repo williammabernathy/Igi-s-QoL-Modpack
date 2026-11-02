@@ -57,7 +57,7 @@ public sealed class EventLog : Feature
 
     public override void OnActivated()
     {
-        ModWindow.AddTab("log", "Log", 8, EventLogTab.Build);
+        ModWindow.AddTab(this, "log", "Log", 8, EventLogTab.Build);
         EventLogTab.RegisterPopout(this);
         GameEvents.Arrived += OnArrived;
     }

@@ -44,12 +44,12 @@ sequenceDiagram
 | `PatchClasses` | The `[HarmonyPatch]` classes to apply |
 | `SettingsTab` | The tab that shows this feature's settings (e.g. `"ECHO"`); the Settings tab then shows only the on/off switch |
 | `BindConfig` | Call `base.BindConfig(cfg)` (binds `Enabled`), then bind settings with `SettingInfo.Describe(label, help, ...)` |
-| `OnActivated` | Subscribe to `GameEvents`, add a tab with `ModWindow.AddTab(id, title, order, build)` |
+| `OnActivated` | Subscribe to `GameEvents`, add a tab with `ModWindow.AddTab(owner, id, title, order, build)` |
 | `SelfCheck` | The in-game test, see [dev-harness.md](dev-harness.md) |
 
 ## Game events
 
-`Core/GameEvents.cs` raises four events. Each subscriber runs in its own try/catch; an exception logs `[Core] <Event> handler <Type.Method>` and switches off the subscriber's feature only (when the handler is an instance method on a `Feature`).
+`Core/GameEvents.cs` raises four events. Each subscriber runs in its own try/catch; an exception logs `[Core] <Event> handler <Type.Method>` and switches off the subscriber's feature only (when the handler is an instance method on a `Feature`). Handlers that are instance methods of a feature that is off are skipped.
 
 | Event | When | Use it for |
 |---|---|---|
@@ -75,7 +75,7 @@ sequenceDiagram
 
 ## Mod window and settings
 
-`ModWindow.AddTab(id, title, order, build)` registers a tab; `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. `ModWindow.Open(id)`, `Show(id)` (rebuild) and `Close()` are the rest of the API. Widgets come from `Kit`: `Row`, `Column`, `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Dropdown`, `Tile`, `Tooltip`.
+`ModWindow.AddTab(owner, id, title, order, build)` registers a tab (a tab whose owner feature is off is hidden; pass `null` for a tab several features share); `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. `ModWindow.Open(id)`, `Show(id)` (rebuild) and `Close()` are the rest of the API. Widgets come from `Kit`: `Row`, `Column`, `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Dropdown`, `Tile`, `Tooltip`.
 
 A view that floats outside the window registers a `PopoutKind` with `Popouts.Register` from `OnActivated`: an id, a title, the owning feature, default and minimum size, the default show condition with its `Relevant` test, a `Build(popout, body)` for the body and an optional `BuildOptions` for rows of its own in the Options panel. `Popouts.Open(id)`, `Close(id)`, `Toggle(id)` and `Rebuild(id)` drive it. The frame handles dragging, collapsing, resizing, opacity, click-through, the show condition and saving the layout; the kind's own options go in `popout.State.options`, saved with `State.Save(popout.Id)`. The combat overview (`Features/CombatOverview/`) is the example.
 

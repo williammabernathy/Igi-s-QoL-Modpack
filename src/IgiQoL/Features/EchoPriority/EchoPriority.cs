@@ -63,13 +63,13 @@ public sealed class EchoPriority : Feature
 
     private static bool tabAdded;
 
-    // Every feature whose settings live on the ECHO tab calls this from OnActivated; the tab is added once. Features
-    // registered before Window find it inactive and leave the tab to the ones after it (or to the Settings tab fallback).
+    // Every feature whose settings live on the ECHO tab calls this from OnActivated; the tab is added once. It has no
+    // owner: several features share it, and BuildEcho guards each section by its own feature.
     public static void EnsureTab()
     {
-        if (tabAdded || Window.WindowFeature.Instance == null || !Window.WindowFeature.Instance.Active) return;
+        if (tabAdded) return;
         tabAdded = true;
-        ModWindow.AddTab("echo", "ECHO", 10, BuildEcho);
+        ModWindow.AddTab(null, "echo", "ECHO", 10, BuildEcho);
     }
 
     public override void OnActivated()

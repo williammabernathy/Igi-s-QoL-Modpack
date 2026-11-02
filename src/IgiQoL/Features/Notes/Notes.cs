@@ -9,7 +9,6 @@ using BepInEx;
 using IgiQoL.Core;
 using IgiQoL.UI;
 using LightJson;
-using LightJson.Serialization;
 using Source.Util;
 using TMPro;
 using UnityEngine;
@@ -30,7 +29,7 @@ public sealed class Notes : Feature
     public override void OnActivated()
     {
         NotesStore.Load();
-        ModWindow.AddTab("notes", "Notes", 30, NotesTab.Build);
+        ModWindow.AddTab(this, "notes", "Notes", 30, NotesTab.Build);
         NotesPopout.Register(this);
     }
 
@@ -149,32 +148,51 @@ public static class NotesStore
 
     public static string FilePath => Paths.ConfigPath + "/IgiQoL/notes.json";
 
+    // A line for the Notes tab when notes.json couldn't be read at load; null otherwise.
+    public static string Problem { get; private set; }
+    // The file exists but couldn't be read (locked, no permission): it's kept, and nothing is written over it.
+    public static bool ReadOnly { get; private set; }
+
     public static void Load()
     {
         Tabs.Clear();
+        Problem = null;
+        ReadOnly = false;
         string path = FilePath;
         if (File.Exists(path))
         {
-            try
+            string text = null;
+            try { text = File.ReadAllText(path); }
+            catch (Exception e)   // locked by another program, or unreadable: keep the file and never write over it
             {
-                var root = JsonReader.ParseFile(path);
-                if (!root.IsJsonObject || !root.AsJsonObject["tabs"].IsJsonArray) throw new FormatException("no tabs array");
-                foreach (var item in root.AsJsonObject["tabs"].AsJsonArray)
-                {
-                    if (!item.IsJsonObject) continue;
-                    var o = item.AsJsonObject;
-                    var tab = new NoteTab { name = o["name"].AsString ?? "Notes", text = o["text"].AsString ?? "" };
-                    if (o["id"].IsString) tab.id = o["id"].AsString;
-                    Tabs.Add(tab);
-                }
+                ReadOnly = true;
+                Problem = $"notes.json couldn't be read ({e.Message}). Your notes are still in the file; edits here won't be saved. Fix the file and restart the game.";
+                Plugin.Log.LogWarning("[Notes] " + Problem);
             }
-            catch (Exception e)
+            if (text != null)
             {
-                Tabs.Clear();
-                string moved = path + ".broken-" + DateTime.UtcNow.Ticks;
-                try { File.Move(path, moved); }
-                catch (Exception e2) { moved = path + " (rename failed: " + e2.Message + ")"; }
-                Plugin.Log.LogWarning($"[Notes] could not read notes.json ({e.Message}); moved to {moved}");
+                try
+                {
+                    var root = JsonValue.Parse(text);
+                    if (!root.IsJsonObject || !root.AsJsonObject["tabs"].IsJsonArray) throw new FormatException("no tabs array");
+                    foreach (var item in root.AsJsonObject["tabs"].AsJsonArray)
+                    {
+                        if (!item.IsJsonObject) continue;
+                        var o = item.AsJsonObject;
+                        var tab = new NoteTab { name = o["name"].AsString ?? "Notes", text = o["text"].AsString ?? "" };
+                        if (o["id"].IsString) tab.id = o["id"].AsString;
+                        Tabs.Add(tab);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Tabs.Clear();
+                    string moved = path + ".broken-" + DateTime.UtcNow.Ticks;
+                    try { File.Move(path, moved); }
+                    catch (Exception e2) { moved = path + " (rename failed: " + e2.Message + ")"; }
+                    Plugin.Log.LogWarning($"[Notes] could not read notes.json ({e.Message}); moved to {moved}");
+                    Problem = $"notes.json couldn't be read ({e.Message}) and was moved to {moved}. Starting with an empty note.";
+                }
             }
         }
         if (Tabs.Count == 0) Tabs.Add(new NoteTab { name = "Notes", text = "" });
@@ -184,6 +202,7 @@ public static class NotesStore
     public static void Save()
     {
         Version++;
+        if (ReadOnly) { Plugin.Log.LogWarning("[Notes] not saved: notes.json couldn't be read at startup"); return; }
         try
         {
             var array = new JsonArray();
@@ -253,6 +272,7 @@ public sealed class NotesTab : MonoBehaviour
         var shown = note;
         PopoutTabButton.Add(bar, "Pop out", "Dock back", () => NotesPopout.IsOut(shown), () => NotesPopout.PopOut(shown), () => NotesPopout.DockBack(shown), 80f,
             "This note in a window of its own beside the game, read-only. You edit it here.");
+        if (NotesStore.Problem != null) Kit.Muted(content, NotesStore.Problem);
 
         if (editing) BuildEditor(content);
         else BuildViewer(content);

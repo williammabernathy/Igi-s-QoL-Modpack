@@ -42,7 +42,7 @@ public sealed class FavouriteStations : Feature
     {
         Load();
         GameEvents.SaveLoaded += OnSaveLoaded;
-        ModWindow.AddTab(TabId, "Stations", 22, FavouriteStationsTab.Build);
+        ModWindow.AddTab(this, TabId, "Stations", 22, FavouriteStationsTab.Build);
     }
 
     private void OnSaveLoaded()

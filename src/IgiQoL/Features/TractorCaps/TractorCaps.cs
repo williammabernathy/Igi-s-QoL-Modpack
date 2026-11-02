@@ -37,29 +37,29 @@ public sealed class TractorCaps : Feature
     {
         base.BindConfig(cfg);
         MinCreditsPerM3 = cfg.Bind(Id, "MinCreditsPerM3", 0, SettingInfo.Describe("Skip loot worth less per m3 than",
-            "Your ships (and ECHO's loot-before-leaving) don't pull in loot whose sell value per m3 of hold space is below this many credits, so cheap bulky items don't fill the hold. Items your missions need and ammo a ship uses are still picked up, and clicking an item yourself always works. 0 turns this off.",
+            "Your ships (and ECHO's loot-before-leaving) don't pull in loot whose sell value per m3 of hold space is below this many credits, so cheap bulky items don't fill the hold. Items your missions need and ammo a ship fires are still picked up, and clicking an item yourself always works. 0 turns this off.",
             new AcceptableValueRange<int>(0, 1000000)));
     }
 
     // Why the filters hold an item back from a ship's auto-tractor. None = they let it through.
     public enum Skip { None, Limit, Never, Cheap }
 
-    public static bool Allows(SpaceShipData ship, InventoryItemType item, AbstractUnit unit = null) => Check(ship, item, unit) == Skip.None;
+    public static bool Allows(SpaceShipData ship, InventoryItemType item) => Check(ship, item) == Skip.None;
 
     // Runs inside the tractor gate on every scan, so it returns an enum and builds no text.
-    public static Skip Check(SpaceShipData ship, InventoryItemType item, AbstractUnit unit = null)
+    public static Skip Check(SpaceShipData ship, InventoryItemType item)
     {
         int cap = ItemRules.Resolve(item).tractorCap;
-        if (cap == ItemRule.Never) return Exempt(unit, item) ? Skip.None : Skip.Never;
+        if (cap == ItemRule.Never) return Exempt(ship, item) ? Skip.None : Skip.Never;
         if (cap > 0 && Cargo.Count(ship, item) >= cap) return Skip.Limit;
-        return TooCheap(unit, item) ? Skip.Cheap : Skip.None;
+        return TooCheap(ship, item) ? Skip.Cheap : Skip.None;
     }
 
-    public static bool TooCheap(AbstractUnit unit, InventoryItemType item)
+    public static bool TooCheap(SpaceShipData ship, InventoryItemType item)
     {
         int min = Instance.MinCreditsPerM3.Value;
         if (min <= 0 || item.m3 <= 0f || item.sellValue >= min * item.m3) return false;
-        return !Exempt(unit, item);
+        return !Exempt(ship, item);
     }
 
     public static string Describe(Skip skip, InventoryItemType item) => skip switch
@@ -81,17 +81,18 @@ public sealed class TractorCaps : Feature
         {
             var unit = Fleet.Unit(data);
             if (unit == null || !unit.gameObject.activeInHierarchy || unit.GetModule<TractorModule>() == null) continue;
-            var skip = Check(data, item, unit);
+            var skip = Check(data, item);
             if (skip == Skip.None) return null;
             why ??= Describe(skip, item);
         }
         return why;
     }
 
-    // Loot the filters never hold back: items your missions need and ammo the ship fires.
-    private static bool Exempt(AbstractUnit unit, InventoryItemType item) =>
+    // Loot the -1 rule and the value floor never hold back: items your missions need and ammo the ship fires. A numeric
+    // limit still applies to them.
+    private static bool Exempt(SpaceShipData ship, InventoryItemType item) =>
         GamePlayer.current.RequiredItemCountForMissions(item) > 0
-        || item.itemCategory == ItemCategory.Ammo && unit != null && unit.DoWeUseAmmo(item);
+        || item.itemCategory == ItemCategory.Ammo && Items.FiredBy(ship, item);
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
@@ -152,19 +153,17 @@ public sealed class TractorCaps : Feature
         finally { Instance.MinCreditsPerM3.Value = min0; }
 
         // Never (-1): the ore is left alone; ammo the flagship fires is still picked up.
-        var unit = ship.unit;
         InventoryItemType usedAmmo = null;
-        if (unit != null)
-            foreach (var t in InventoryItemType.all)
-                if (t.itemCategory == ItemCategory.Ammo && unit.DoWeUseAmmo(t)) { usedAmmo = t; break; }
+        foreach (var t in InventoryItemType.all)
+            if (t.itemCategory == ItemCategory.Ammo && Items.FiredBy(ship, t)) { usedAmmo = t; break; }
         bool neverOre, neverAmmo;
         string neverWhy;
         try
         {
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":-1}}");
-            neverOre = Allows(ship, bulky, unit);
-            neverWhy = Describe(Check(ship, bulky, unit), bulky);
-            neverAmmo = usedAmmo == null || Allows(ship, usedAmmo, unit);
+            neverOre = Allows(ship, bulky);
+            neverWhy = Describe(Check(ship, bulky), bulky);
+            neverAmmo = usedAmmo == null || Allows(ship, usedAmmo);
         }
         finally { ItemRules.Load(); }
         string nd = $"cap -1: {bulky.identifier} allows={neverOre} ('{neverWhy}'), used ammo {usedAmmo?.identifier ?? "(none fitted)"} allows={neverAmmo}";
@@ -181,7 +180,7 @@ internal static class TractorCapsPatch
         if (!TractorCaps.Instance.Active) return;
         try
         {
-            if (__result && Fleet.IsPlayerShip(unit) && !TractorCaps.Allows((SpaceShipData)unit.unitData, __instance.data.itemType, unit))
+            if (__result && Fleet.IsPlayerShip(unit) && !TractorCaps.Allows((SpaceShipData)unit.unitData, __instance.data.itemType))
                 __result = false;
         }
         catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(TractorCapsPatch)); }
