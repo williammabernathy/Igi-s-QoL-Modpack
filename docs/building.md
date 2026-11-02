@@ -32,7 +32,7 @@ That builds every project in `VanguardGalaxyMods.sln` and copies each plugin int
 - After each build, copies the DLL and PDB to `BepInEx/plugins/<AssemblyName>/`. Turn this off with `-p:DeployToGame=false`.
 - Before compiling, snapshots the game DLLs (see [After a game update](#after-a-game-update)).
 
-`tools/Directory.Build.props` and `templates/Directory.Build.props` are empty on purpose: they stop the root file from turning the tools and the template sources into game plugins.
+`tools/Directory.Build.props` is empty on purpose: it stops the root file from turning the tools into game plugins. The template has a `Directory.Build.props` of its own under `templates/VgMod/`.
 
 Build options that only `src/IgiQoL` understands:
 

@@ -102,11 +102,16 @@ internal static class OrePreferenceCheck
         }
 
         OrePreference.Set(OreMode.Only, new[] { ore });
+        bool withOk, withoutOk;
+        MapPointOfInterest found;
         OrePreferencePatches.strict = true;
-        bool withOk = idle.IsSuitableForMining(with, TargetLayer.Surface);
-        bool withoutOk = idle.IsSuitableForMining(without, TargetLayer.Surface);
-        var found = idle.FindSuitableMiningPoi(TargetLayer.Surface);
-        OrePreferencePatches.strict = false;
+        try
+        {
+            withOk = idle.IsSuitableForMining(with, TargetLayer.Surface);
+            withoutOk = idle.IsSuitableForMining(without, TargetLayer.Surface);
+            found = idle.FindSuitableMiningPoi(TargetLayer.Surface);
+        }
+        finally { OrePreferencePatches.strict = false; }
         bool vanillaWithout = idle.IsSuitableForMining(without, TargetLayer.Surface);
         bool onlyWants = OrePreference.WantsPreferredPoi(TargetLayer.Surface);
         OrePreference.Set(OreMode.Prefer, new[] { ore });

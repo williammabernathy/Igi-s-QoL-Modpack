@@ -166,7 +166,8 @@ public static class NotesStore
             catch (Exception e)   // locked by another program, or unreadable: keep the file and never write over it
             {
                 ReadOnly = true;
-                Problem = $"notes.json couldn't be read ({e.Message}). Your notes are still in the file; edits here won't be saved. Fix the file and restart the game.";
+                // Forward slashes: TMP reads the "\n" of a Windows path like ...\notes.json as a line break.
+                Problem = $"notes.json couldn't be read ({e.Message}). Your notes are still in the file; edits here won't be saved. Fix the file and restart the game.".Replace('\\', '/');
                 Plugin.Log.LogWarning("[Notes] " + Problem);
             }
             if (text != null)
@@ -191,7 +192,7 @@ public static class NotesStore
                     try { File.Move(path, moved); }
                     catch (Exception e2) { moved = path + " (rename failed: " + e2.Message + ")"; }
                     Plugin.Log.LogWarning($"[Notes] could not read notes.json ({e.Message}); moved to {moved}");
-                    Problem = $"notes.json couldn't be read ({e.Message}) and was moved to {moved}. Starting with an empty note.";
+                    Problem = $"notes.json couldn't be read ({e.Message}) and was moved to {moved}. Starting with an empty note.".Replace('\\', '/');
                 }
             }
         }

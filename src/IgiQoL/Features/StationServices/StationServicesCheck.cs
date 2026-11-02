@@ -755,19 +755,27 @@ internal static class StationServicesCheck
         foreach (var job in StationHangar.current?.jobs.ToArray() ?? new Source.Spacestation.RepairJob[0])
             if (job.spaceshipGuid == ship.guid) StationHangar.current.CancelJob(job);
         ship.currentHullHP = ship.maxHullHP * 0.7f;
-        f.RepairOnDock.Value = true;
-        f.RestockOnDock.Value = false;
-        f.SellOnDock.Value = false;
-        f.CrewOnDock.Value = true;
-        var lost = SimulateLoss(out string lostType);
-        StationServices.lastDockSummary = null;
-        Behaviour.UI.PlayerCargo.AutoDepositOnDock();
-        float until = Time.realtimeSinceStartup + 5f;
-        while (StationServices.lastDockSummary == null && Time.realtimeSinceStartup < until) yield return null;
-        f.RepairOnDock.Value = r0;
-        f.RestockOnDock.Value = s0;
-        f.SellOnDock.Value = l0;
-        f.CrewOnDock.Value = c0;
+        SpaceShipData lost;
+        string lostType;
+        try
+        {
+            f.RepairOnDock.Value = true;
+            f.RestockOnDock.Value = false;
+            f.SellOnDock.Value = false;
+            f.CrewOnDock.Value = true;
+            lost = SimulateLoss(out lostType);
+            StationServices.lastDockSummary = null;
+            Behaviour.UI.PlayerCargo.AutoDepositOnDock();
+            float until = Time.realtimeSinceStartup + 5f;
+            while (StationServices.lastDockSummary == null && Time.realtimeSinceStartup < until) yield return null;
+        }
+        finally
+        {
+            f.RepairOnDock.Value = r0;
+            f.RestockOnDock.Value = s0;
+            f.SellOnDock.Value = l0;
+            f.CrewOnDock.Value = c0;
+        }
         if (lost != null)
         {
             string crewDetail = $"{lost.GetShipName()} lost 1 {lostType}: pending now {CrewLosses.Pending(lost, lostType)}, summary='{StationServices.lastDockSummary}'";

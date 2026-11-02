@@ -51,10 +51,13 @@ internal static class FleetHoldsCheck
         if (wing.torpedoBayModule != null && wing.torpedoBayModule.ammoType != null) ammo = wing.torpedoBayModule.ammoType;
 
         TractorableItem loot = null;
+        bool? favWas = null;
         try
         {
             // The wing's hold: a favourite stack, some of its own ammo, then ore until less than one unit of room is left.
             float flagUsed0 = flagship.spaceShipData.cargoUsed;
+            foreach (var s in wingCargo.items)
+                if (s != null && s.item == favItem) favWas = s.favourite;
             var fav = wingCargo.Add(favItem, 2);
             if (fav != null) fav.favourite = true;
             if (ammo != null) wingCargo.Add(ammo, 10);
@@ -100,6 +103,9 @@ internal static class FleetHoldsCheck
                 Object.Destroy(loot.gameObject);
             }
             Restore(wingCargo, before);
+            if (favWas.HasValue)
+                foreach (var s in wingCargo.items)
+                    if (s != null && s.item == favItem) s.favourite = favWas.Value;
             Restore(flagCargo, flagBefore);
         }
     }

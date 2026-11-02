@@ -62,7 +62,7 @@ The check runs when the ship takes a hit, as the game's does. It has no effect o
 
 ## Ship stats on hover
 
-Hovering any ship, enemy, neutral or your own, adds a Resistances block to the game's hover card: one row per damage type with the share of a hit the ship resists right now. Buffs and debuffs are counted, so a ship hit by a resistance debuff shows the lower figure. This figure can't go above 80%, and it goes below 0% when debuffs push it there.
+Hovering any ship, enemy, neutral or one of your fleet ships (the game shows no card for the ship you fly), adds a Resistances block to the game's hover card: one row per damage type with the share of a hit the ship resists right now. Buffs and debuffs are counted, so a ship hit by a resistance debuff shows the lower figure. This figure can't go above 80%, and it goes below 0% when debuffs push it there.
 
 Ships with armour get a second figure per row, after the `|`: what a hit on the armour loses in total, the ship's resistance plus the armour's own resistance or weakness to that type (paint strip included). That figure applies only while the armour has HP left. A row turns red when either figure is below 0%, meaning that type hits harder than normal.
 

@@ -223,18 +223,21 @@ public sealed class CraftRollup : Feature
         snap.Restore();
 
         // A part job that disappears (cancelled by hand) leaves its part short: the status names it instead of "in progress".
-        foreach (var kv in plan.missing) storage.Add(kv.Key, kv.Value);
-        var stall = Rollups.Build(forge, target, 1);
-        Rollups.Start(stall);
-        var cancelled = stall.steps[0];
-        if (cancelled.job != null) forge.CancelJob(cancelled.job);
-        stall.nextCheck = 0f;
-        Rollups.Advance(stall);
-        string part = Rollups.Name(cancelled.product);
-        string std = $"cancelled {Rollups.RecipeName(cancelled.recipe)} job; waiting={stall.waiting ?? "-"}";
-        if (stall.waiting != null && stall.waiting.EndsWith(part)) ctx.Pass("stalled-part", std);
-        else ctx.Fail("stalled-part", std);
-        snap.Restore();
+        try
+        {
+            foreach (var kv in plan.missing) storage.Add(kv.Key, kv.Value);
+            var stall = Rollups.Build(forge, target, 1);
+            Rollups.Start(stall);
+            var cancelled = stall.steps[0];
+            if (cancelled.job != null) forge.CancelJob(cancelled.job);
+            stall.nextCheck = 0f;
+            Rollups.Advance(stall);
+            string part = Rollups.Name(cancelled.product);
+            string std = $"cancelled {Rollups.RecipeName(cancelled.recipe)} job; waiting={stall.waiting ?? "-"}";
+            if (stall.waiting != null && stall.waiting.EndsWith(part)) ctx.Pass("stalled-part", std);
+            else ctx.Fail("stalled-part", std);
+        }
+        finally { snap.Restore(); }
     }
 
     // A station with both a forge and a refinery, preferring the one you're at, then your own.
@@ -275,96 +278,96 @@ public sealed class CraftRollup : Feature
         foreach (var s in basePlan.steps)
             if (s.product != null) products.Add(s.product);
         var snap = new Snapshot(station, products);
-        refinery.autoRefine = false;
+        try
+        {
+            refinery.autoRefine = false;
 
-        foreach (var t in new List<InventoryItemType>(snap.Tracked))
-            if (t.itemCategory == ItemCategory.Ore || RefinedMaterialExtensions.IsCanister(t)) storage.Remove(t, storage.GetCount(t));
-        if (Rollups.RefinableOre(refinery).Count > 0)
-        {
-            ctx.Skip("refine-plan", "ore left in docked cargo");
-            snap.Restore();
-            yield break;
-        }
-        basePlan = Rollups.Build(forge, target, 1);
-        InventoryItemType canister = null;
-        foreach (var kv in basePlan.missing)
-            if (RefinedMaterialExtensions.IsCanister(kv.Key)) { canister = kv.Key; break; }
-        var material = canister != null ? RefinedMaterialExtensions.FromCanister(canister) : null;
-        OreItemData ore = null;
-        float bestYield = 0f;
-        if (material != null)
-        {
-            foreach (var o in OreItemData.regularOres)
+            foreach (var t in new List<InventoryItemType>(snap.Tracked))
+                if (t.itemCategory == ItemCategory.Ore || RefinedMaterialExtensions.IsCanister(t)) storage.Remove(t, storage.GetCount(t));
+            if (Rollups.RefinableOre(refinery).Count > 0)
             {
-                float y = Rollups.YieldOf(o, material.Value);
-                if (!o.disableAutoRefine && y > bestYield) { ore = o; bestYield = y; }
+                ctx.Skip("refine-plan", "ore left in docked cargo");
+                yield break;
             }
-        }
-        if (ore == null)
-        {
-            ctx.Skip("refine-plan", canister == null ? "the recipe needs no canisters" : $"no ore yields {canister.identifier}");
-            snap.Restore();
-            yield break;
-        }
+            basePlan = Rollups.Build(forge, target, 1);
+            InventoryItemType canister = null;
+            foreach (var kv in basePlan.missing)
+                if (RefinedMaterialExtensions.IsCanister(kv.Key)) { canister = kv.Key; break; }
+            var material = canister != null ? RefinedMaterialExtensions.FromCanister(canister) : null;
+            OreItemData ore = null;
+            float bestYield = 0f;
+            if (material != null)
+            {
+                foreach (var o in OreItemData.regularOres)
+                {
+                    float y = Rollups.YieldOf(o, material.Value);
+                    if (!o.disableAutoRefine && y > bestYield) { ore = o; bestYield = y; }
+                }
+            }
+            if (ore == null)
+            {
+                ctx.Skip("refine-plan", canister == null ? "the recipe needs no canisters" : $"no ore yields {canister.identifier}");
+                yield break;
+            }
 
-        float mult = PlayerStation.GetRefineryYieldMultiplier(station);
-        int need = basePlan.missing[canister];
-        int added = Rollups.UnitsFor(need, refinery.GetPendingYield(material.Value), bestYield, mult) + 3;
-        storage.Add(ore.item, added);
-        // The same ore is topped up for every other missing material it yields, up to what's there.
-        int expect = 0;
-        foreach (var c in ore.contents)
-        {
-            var ci = c.product.GetCanisterItem();
-            if (ci == null || !basePlan.missing.TryGetValue(ci, out int n)) continue;
-            expect = Math.Max(expect, Rollups.UnitsFor(n, refinery.GetPendingYield(c.product), Rollups.YieldOf(ore, c.product), mult));
-        }
-        expect = Math.Min(expect, added);
-        var plan = Rollups.Build(forge, target, 1);
-        var r0 = plan.refines.Count > 0 ? plan.refines[0] : null;
-        string pd = $"{station.name} {target.identifier}: base refines={basePlan.refines.Count}, missing {need} {canister.identifier}; added {added} {ore.item.identifier} (yield {bestYield:0.###} x{mult}); planned {plan.refines.Count} refine(s), {r0?.amount}x {r0?.ore.item.identifier} (expect {expect}); still missing {canister.identifier}={plan.missing.ContainsKey(canister)}; refinery {plan.refineSeconds:0}s, {plan.credits} cr";
-        if (basePlan.refines.Count == 0 && plan.refines.Count == 1 && r0.ore == ore && r0.amount == expect && !plan.missing.ContainsKey(canister)) ctx.Pass("refine-plan", pd);
-        else ctx.Fail("refine-plan", pd);
-        yield return CheckPanel(ctx, "panel-refine", station, target, RollupPanel.StartLabel, "ore to refine");
+            float mult = PlayerStation.GetRefineryYieldMultiplier(station);
+            int need = basePlan.missing[canister];
+            int added = Rollups.UnitsFor(need, refinery.GetPendingYield(material.Value), bestYield, mult) + 3;
+            storage.Add(ore.item, added);
+            // The same ore is topped up for every other missing material it yields, up to what's there.
+            int expect = 0;
+            foreach (var c in ore.contents)
+            {
+                var ci = c.product.GetCanisterItem();
+                if (ci == null || !basePlan.missing.TryGetValue(ci, out int n)) continue;
+                expect = Math.Max(expect, Rollups.UnitsFor(n, refinery.GetPendingYield(c.product), Rollups.YieldOf(ore, c.product), mult));
+            }
+            expect = Math.Min(expect, added);
+            var plan = Rollups.Build(forge, target, 1);
+            var r0 = plan.refines.Count > 0 ? plan.refines[0] : null;
+            string pd = $"{station.name} {target.identifier}: base refines={basePlan.refines.Count}, missing {need} {canister.identifier}; added {added} {ore.item.identifier} (yield {bestYield:0.###} x{mult}); planned {plan.refines.Count} refine(s), {r0?.amount}x {r0?.ore.item.identifier} (expect {expect}); still missing {canister.identifier}={plan.missing.ContainsKey(canister)}; refinery {plan.refineSeconds:0}s, {plan.credits} cr";
+            if (basePlan.refines.Count == 0 && plan.refines.Count == 1 && r0.ore == ore && r0.amount == expect && !plan.missing.ContainsKey(canister)) ctx.Pass("refine-plan", pd);
+            else ctx.Fail("refine-plan", pd);
+            yield return CheckPanel(ctx, "panel-refine", station, target, RollupPanel.StartLabel, "ore to refine");
 
-        if (refinery.jobs.Count >= refinery.maxJobs || forge.jobs.Count >= forge.maxJobs)
-        {
-            ctx.Skip("refine-run", $"queue full (refinery {refinery.jobs.Count}/{refinery.maxJobs}, forge {forge.jobs.Count}/{forge.maxJobs})");
-            snap.Restore();
-            yield break;
-        }
-        foreach (var kv in plan.missing) storage.Add(kv.Key, kv.Value);
-        if (!GamePlayer.current.CanAfford(plan.credits)) GamePlayer.current.credits += plan.credits;
-        var live = Rollups.Build(forge, target, 1);
-        Rollups.Start(live);
-        var started = live.refines.Count == 1 ? live.refines[0] : null;
+            if (refinery.jobs.Count >= refinery.maxJobs || forge.jobs.Count >= forge.maxJobs)
+            {
+                ctx.Skip("refine-run", $"queue full (refinery {refinery.jobs.Count}/{refinery.maxJobs}, forge {forge.jobs.Count}/{forge.maxJobs})");
+                yield break;
+            }
+            foreach (var kv in plan.missing) storage.Add(kv.Key, kv.Value);
+            if (!GamePlayer.current.CanAfford(plan.credits)) GamePlayer.current.credits += plan.credits;
+            var live = Rollups.Build(forge, target, 1);
+            Rollups.Start(live);
+            var started = live.refines.Count == 1 ? live.refines[0] : null;
 
-        Rollups.Load();
-        var loaded = Rollups.Active.Count == 1 ? Rollups.Active[0] : null;
-        var lr = loaded != null && loaded.refines.Count == 1 ? loaded.refines[0] : null;
-        string sd = $"refine started={started?.started}, job={(started?.job != null ? "linked" : "none")}; loaded refines={loaded?.refines.Count}, started={lr?.started}, same job={lr?.job != null && lr.job == started?.job}";
-        if (started != null && started.started && started.job != null && lr != null && lr.started && lr.job == started.job) ctx.Pass("refine-save", sd);
-        else ctx.Fail("refine-save", sd);
-        if (loaded != null) live = loaded;
-        yield return CheckPanel(ctx, "panel-refine-running", station, target, RollupPanel.StopLabel, "1 of 1 refinery jobs started");
+            Rollups.Load();
+            var loaded = Rollups.Active.Count == 1 ? Rollups.Active[0] : null;
+            var lr = loaded != null && loaded.refines.Count == 1 ? loaded.refines[0] : null;
+            string sd = $"refine started={started?.started}, job={(started?.job != null ? "linked" : "none")}; loaded refines={loaded?.refines.Count}, started={lr?.started}, same job={lr?.job != null && lr.job == started?.job}";
+            if (started != null && started.started && started.job != null && lr != null && lr.started && lr.job == started.job) ctx.Pass("refine-save", sd);
+            else ctx.Fail("refine-save", sd);
+            if (loaded != null) live = loaded;
+            yield return CheckPanel(ctx, "panel-refine-running", station, target, RollupPanel.StopLabel, "1 of 1 refinery jobs started");
 
-        int ticks = 0;
-        string firstWait = live.waiting;
-        while (Rollups.Active.Contains(live) && ticks < 3000)
-        {
-            live.nextCheck = 0f;
-            refinery.ProgressJobs(120f);
-            forge.ProgressJobs(120f);
-            ticks++;
-            if (ticks % 50 == 0) yield return null;
+            int ticks = 0;
+            string firstWait = live.waiting;
+            while (Rollups.Active.Contains(live) && ticks < 3000)
+            {
+                live.nextCheck = 0f;
+                refinery.ProgressJobs(120f);
+                forge.ProgressJobs(120f);
+                ticks++;
+                if (ticks % 50 == 0) yield return null;
+            }
+            ForgeJob finalJob = null;
+            foreach (var job in forge.jobs)
+                if (job.recipe == target && !snap.ForgeJobs.Contains(job)) finalJob = job;
+            string rd = $"waiting at start={firstWait ?? "-"}; done after {ticks} x 120 s; target job {(finalJob != null ? "queued" : "missing")}; waiting={live.waiting ?? "-"}; refinery jobs {refinery.jobs.Count}";
+            if (!Rollups.Active.Contains(live) && finalJob != null) ctx.Pass("refine-run", rd);
+            else ctx.Fail("refine-run", rd);
         }
-        ForgeJob finalJob = null;
-        foreach (var job in forge.jobs)
-            if (job.recipe == target && !snap.ForgeJobs.Contains(job)) finalJob = job;
-        string rd = $"waiting at start={firstWait ?? "-"}; done after {ticks} x 120 s; target job {(finalJob != null ? "queued" : "missing")}; waiting={live.waiting ?? "-"}; refinery jobs {refinery.jobs.Count}";
-        if (!Rollups.Active.Contains(live) && finalJob != null) ctx.Pass("refine-run", rd);
-        else ctx.Fail("refine-run", rd);
-        snap.Restore();
+        finally { snap.Restore(); }
     }
 
     // Station storage counts (canisters, every ore, the given items), credits, queued jobs, the refinery's

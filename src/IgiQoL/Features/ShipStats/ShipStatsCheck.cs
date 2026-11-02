@@ -276,6 +276,8 @@ internal static class ShipStatsCheck
             table.Clear();
             foreach (var kv in saved) table[kv.Key] = kv.Value;
             if (enemy.autoActions != original) enemy.SetTemporaryActions(original);
+            // SetManualTarget above left the enemy aiming at the flagship.
+            if (enemy.targetProvider != null) enemy.targetProvider.ResetCurrentTargets();
         }
     }
 

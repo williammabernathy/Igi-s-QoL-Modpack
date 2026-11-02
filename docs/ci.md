@@ -31,14 +31,14 @@ git fetch --tags --force --quiet origin
 base=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/IgiQoL/IgiQoL.csproj)
 last=$(git tag -l "v${base%.*}.*" --sort=-v:refname | head -n 1)
 if [ -n "$last" ]; then VERSION="${base%.*}.$(( ${last##*.} + 1 ))"; else VERSION="$base"; fi
-dotnet build VanguardGalaxyMods.sln -c Release -p:GameDir="$G" -p:DeployToGame=false -p:Version="$VERSION" -p:ReleaseZip=true
+dotnet build VanguardGalaxyMods.sln -c Release -warnaserror -p:GameDir="$G" -p:DeployToGame=false -p:Version="$VERSION" -p:ReleaseZip=true
 
 # patch-check
 dotnet run --project tools/VersionDiff -c Release -- patches --new "$G/VanguardGalaxy_Data/Managed" \
   --mod src/IgiQoL/bin/Release/IgiQoL.dll --out patch-report.md
 ```
 
-`build` passes when the output ends in `Build succeeded` with no `warning CS` lines; `patch-check` passes when VersionDiff exits 0. The zip lands in `artifacts/` (gitignored). The `release` job needs the workflow's GitHub token and only makes sense in CI.
+`build` runs `dotnet build` with `-warnaserror`, so it passes only with no warnings at all; `patch-check` passes when VersionDiff exits 0. The zip lands in `artifacts/` (gitignored). The `release` job needs the workflow's GitHub token and only makes sense in CI.
 
 ## The runner
 

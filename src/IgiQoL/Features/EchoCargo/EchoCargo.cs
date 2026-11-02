@@ -195,6 +195,7 @@ public sealed class EchoCargo : Feature
         var storeB = Cargo.DepositTarget(ss, sold);
         int storedA0 = storeA.GetCount(deposit), storedB0 = storeB.GetCount(sold);
         long credits0 = player.credits;
+        int shop0 = ss.shopInventory.GetCount(sold);
         try
         {
             cargo.Add(deposit, 5);
@@ -226,6 +227,8 @@ public sealed class EchoCargo : Feature
             cargo.Remove(sold, cargo.GetCount(sold));
             storeA.Remove(deposit, storeA.GetCount(deposit) - storedA0);
             storeB.Remove(sold, storeB.GetCount(sold) - storedB0);
+            int shopAdded = ss.shopInventory.GetCount(sold) - shop0;
+            if (shopAdded > 0) ss.shopInventory.Remove(sold, shopAdded);
             player.credits = credits0;
         }
     }
@@ -328,6 +331,7 @@ public sealed class EchoCargo : Feature
         bool setting0 = setting.Value;
         int count0 = storage.GetCount(ore);
         long credits0 = player.credits;
+        int shop0 = ss.shopInventory.GetCount(ore);
         try
         {
             setting.Value = true;
@@ -366,6 +370,8 @@ public sealed class EchoCargo : Feature
             setting.Value = setting0;
             ItemRules.Load();
             storage.Remove(ore, storage.GetCount(ore) - count0);
+            int shopAdded = ss.shopInventory.GetCount(ore) - shop0;
+            if (shopAdded > 0) ss.shopInventory.Remove(ore, shopAdded);
             player.credits = credits0;
         }
     }
@@ -495,6 +501,7 @@ public sealed class EchoCargo : Feature
         bool setting0 = setting.Value;
         int ammo0 = armory.GetCount(ammo), fired0 = fired != null ? armory.GetCount(fired) : 0;
         long credits0 = player.credits;
+        int ammoShop0 = ss.shopInventory.GetCount(ammo), firedShop0 = fired != null ? ss.shopInventory.GetCount(fired) : 0;
         try
         {
             setting.Value = true;
@@ -520,6 +527,14 @@ public sealed class EchoCargo : Feature
             ItemRules.Load();
             RestoreCount(armory, ammo, ammo0);
             if (fired != null) RestoreCount(armory, fired, fired0);
+            // What the check sold stays in the station's shop otherwise.
+            int ammoShopAdded = ss.shopInventory.GetCount(ammo) - ammoShop0;
+            if (ammoShopAdded > 0) ss.shopInventory.Remove(ammo, ammoShopAdded);
+            if (fired != null)
+            {
+                int firedShopAdded = ss.shopInventory.GetCount(fired) - firedShop0;
+                if (firedShopAdded > 0) ss.shopInventory.Remove(fired, firedShopAdded);
+            }
             player.credits = credits0;
         }
     }

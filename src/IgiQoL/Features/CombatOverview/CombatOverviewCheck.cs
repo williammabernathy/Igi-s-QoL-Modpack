@@ -136,6 +136,7 @@ internal static class CombatOverviewCheck
 
         // The mod window lists the open pop-out in its bottom strip.
         ModWindow.Open("combat");
+        ctx.Cleanup(ModWindow.Close);
         yield return null;
         var strip = ModWindow.IsOpen ? GameObject.Find("IgiQoL_Window/PopoutStrip") : null;
         string stripDetail = $"window={ModWindow.IsOpen} strip={(strip != null && strip.activeSelf)} children={(strip != null ? strip.transform.childCount : 0)}";

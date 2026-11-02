@@ -124,13 +124,16 @@ public static class MissionBatch
         {
             int held0 = Held();
             f.MissionsAtOnce.Value = Mathf.Max(3, held0 + 2);
-            bool result = idle.DecideMissionActivity();
+            bool result = false;
+            // The prefix alone: the game's own decision would undock and fly off. Handled = the prefix took the decision;
+            // true means it handed over to the game, which this setup (limit above 1, open board) must not do.
+            bool handled = !MissionBatchPatches.DecideMissionActivityPrefix(ref result);
             var taken = new List<string>();
             foreach (var m in GamePlayer.current.missions)
                 if (!before.Contains(m)) taken.Add($"{m.name} @ {m.GetActivePoi(forEcho: true)?.name} idle={m.idle}");
             var next = NextOpen();
-            string detail = $"held {held0} -> {Held()} (limit {f.MissionsAtOnce.Value}), returned {result}, took [{string.Join("; ", taken)}], tracker on {focus.focusedMission?.name}, nearest open {next?.name}";
-            if (result && Held() == f.MissionsAtOnce.Value && taken.Count == f.MissionsAtOnce.Value - held0 && next != null && focus.focusedMission == next)
+            string detail = $"held {held0} -> {Held()} (limit {f.MissionsAtOnce.Value}), handled {handled}, returned {result}, took [{string.Join("; ", taken)}], tracker on {focus.focusedMission?.name}, nearest open {next?.name}";
+            if (handled && result && Held() == f.MissionsAtOnce.Value && taken.Count == f.MissionsAtOnce.Value - held0 && next != null && focus.focusedMission == next)
                 ctx.Pass("missions-at-once", detail);
             else ctx.Fail("missions-at-once", detail);
 

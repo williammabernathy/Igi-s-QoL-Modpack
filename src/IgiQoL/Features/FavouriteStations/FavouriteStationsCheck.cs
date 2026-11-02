@@ -45,10 +45,13 @@ internal static class FavouriteStationsCheck
         }
         finally { Restore(saved); }
 
-        yield return CheckTab(ctx, here, stored);
-        Restore(saved);
-        yield return CheckAirlock(ctx);
-        Restore(saved);
+        try
+        {
+            yield return CheckTab(ctx, here, stored);
+            Restore(saved);
+            yield return CheckAirlock(ctx);
+        }
+        finally { Restore(saved); }
     }
 
     private static void Restore(List<string> saved)

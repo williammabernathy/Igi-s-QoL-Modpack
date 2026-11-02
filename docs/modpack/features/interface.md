@@ -36,7 +36,7 @@ The features behind these rows are described in [fleet-combat.md](fleet-combat.m
 
 ## Fleet command strip
 
-A second row of buttons under each ship in the fleet panel (bottom left): stop, hold position, regroup, the four combat stances (fleet ships only), auto-tractor, deploy or recall drones, the ship's cargo window, and the ship settings popup. Clicking a button doesn't select the row.
+A second row of buttons under each ship in the fleet panel (bottom left): stop, hold position, regroup and the four combat stances (fleet ships only), auto-tractor, deploy or recall drones, the ship's cargo window (fleet ships you manage), and the ship settings popup. Clicking a button doesn't select the row.
 
 ## Fleet shield and armor bars
 
