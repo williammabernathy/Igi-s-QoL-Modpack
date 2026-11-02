@@ -9,3 +9,5 @@ decompiled-*/
 game-versions/
 # Local task tracking: open features and bugs.
 FEATURELIST.md
+# Local planning doc for the sandbox test harness; not ready to publish.
+docs/modpack/sandbox-harness.md
