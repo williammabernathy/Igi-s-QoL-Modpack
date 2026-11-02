@@ -16,13 +16,13 @@ When a save loads, `SceneLoader.LoadScenesOnStartGame` (`Behaviour.Bootstrap/Sce
 
 | Goal | Hook |
 |---|---|
-| XP multiplier for kills, mining, salvage and missions together | postfix the 3-argument `Source.Util.GameMath.GetExperienceRewardValue(float, int, int)` (`Source.Util/GameMath.cs:329`); the 2-argument overload calls it |
-| Commander XP only | prefix `GamePlayer.GainExperience(long)` (`Source.Player/GamePlayer.cs:3174`) |
+| XP multiplier for kills, mining, salvage and missions together | postfix the 3-argument `Source.Util.GameMath.GetExperienceRewardValue(float, int, int)` (`Source.Util/GameMath.cs:337`); the 2-argument overload calls it |
+| Commander XP only | prefix `GamePlayer.GainExperience(long)` (`Source.Player/GamePlayer.cs:3319`) |
 | Crew XP | prefix `AbstractUnit.AddCrewExperience` and its `SpaceShip`/`Drone` overrides |
 | Mission credit rewards | postfix `MissionGenerator.CreditReward` (`Source.MissionSystem/MissionGenerator.cs`, around line 238) |
-| Cheaper or free spending | prefix `GamePlayer.RemoveCredits(double, string)` (`GamePlayer.cs:549`); the string is a spending category |
+| Cheaper or free spending | prefix `GamePlayer.RemoveCredits(double, string)` (`GamePlayer.cs:573`); the string is a spending category |
 | Mining yield | prefix `Asteroid.SpawnSurfaceOre` / `SpawnInnerCoreOre` (`Behaviour.Mining/Asteroid.cs:513`) and scale `yield` |
-| Salvage scrap | postfix `SalvageData.ComputeScrapAmount` (`Source.Data.Persistable/SalvageData.cs:609`) |
+| Salvage scrap | postfix `SalvageData.ComputeScrapAmount` (`Source.Data.Persistable/SalvageData.cs:608`) |
 | Loot drops | `LootManager.DropLoot`, `DropRegularLoot`, `CreateLootItem` (`Behaviour.Managers/LootManager.cs`) |
 | Damage dealt or taken | `DamageData.CalculateDamage` (`Behaviour.Weapons/DamageData.cs:136`) or `AbstractUnit.TakeDamage`; there is also a static `DamageData.OnDamageDealt` event you can subscribe to without patching |
 | Market prices | `MarketPricing.GetTargetValue` and `Trade` (`Source.Simulation.Economy/MarketPricing.cs`) |
@@ -63,9 +63,9 @@ Text comes from `Resources/Language/*` and goes through `Translation.Translate("
 
 ## Saving your mod's own data (medium)
 
-- Write: postfix `GamePlayer.ToJson()` (`Source.Player/GamePlayer.cs:1705`) and add your own key to the returned JSON object. The game uses the `LightJson` library, not Newtonsoft.
+- Write: postfix `GamePlayer.ToJson()` (`Source.Player/GamePlayer.cs:1793`) and add your own key to the returned JSON object. The game uses the `LightJson` library, not Newtonsoft.
 - Read: after a save loads, `GamePlayer.current` is set. Postfix `SceneLoader.LoadScenesOnStartGame` (`Behaviour.Bootstrap/SceneLoader.cs:175`) and read your key back.
-- Version migrations for vanilla data run in `GamePlayer` around lines 2389-2514 (`GamePatch.IsBelowAndReport`).
+- Version migrations for vanilla data run in `GamePlayer` around lines 2501-2824 (`GamePatch.IsBelowAndReport`).
 - Autosaves serialise on a background thread. Hand `ToJson` a copy of your data, not the live object your code keeps changing.
 
 Unknown keys are likely ignored when the game loads, so an unmodded game should still open the save. I haven't tested that.

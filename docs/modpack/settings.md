@@ -288,8 +288,8 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `PlayerAutoBuyOut` | Accept buyouts automatically | `false` | `true`, `false` |
-| `BoardingCompartment` | Boardings | `None` | `None` or a compartment type: `Armory`, `CargoHold`, `Bridge`, `LivingQuarters`, `ReactorRoom`, `MessHall`, `Brig`, `OfficersLounge` and the others the game has |
-| `InstallationCompartment` | Installations | `None` | `None` or a compartment type: `StorageBay`, `ControlRoom`, `GeneratorRoom`, `ServerRoom`, `Workshop` and the others the game has |
+| `BoardingCompartment` | Boardings | `None` | `None` or the name of one of the game's compartment types, for example `Armory`, `CargoHold`, `Bridge`, `LivingQuarters`, `ReactorRoom`, `MessHall`, `Brig`, `OfficersLounge` |
+| `InstallationCompartment` | Installations | `None` | `None` or a compartment type name, the same list as `BoardingCompartment`; installations mostly have rooms such as `StorageBay`, `ControlRoom`, `GeneratorRoom`, `ServerRoom`, `Workshop` |
 
 ### `[FavouriteStations]`
 

@@ -8,16 +8,16 @@ Every setting here starts at the game's own behaviour, with one exception: ECHO 
 
 ![The ECHO tab: activity list and decisions](../../images/tab-echo.jpg)
 
-An ordered list of activities. When ECHO looks for something to do (docked, or in empty space), it tries them from the top down and takes the first one your ship is equipped for and can find work for. The top entry is also the game's preferred activity: picking an activity in the Autopilot tab's dropdown moves it to the top here, and picking Autodetect empties the list. An empty list is the game's behaviour, one preferred activity.
+An ordered list of activities: Mining Surface, Mining Core, Salvage Surface, Salvage Core, Combat and Cargo, the same names as the Autopilot tab's dropdown. Rows have up, down and remove buttons; an "Add an activity" dropdown at the bottom adds the ones not listed. When ECHO looks for something to do (docked, or in empty space), it tries them from the top down and takes the first one your ship is equipped for and can find work for. Cargo has no search of its own (the game has none either), so it only matters at the top. If none of the listed activities fits the ship's loadout, the status line says there is no suitable loadout for the top one. The top entry is also the game's preferred activity: picking an activity in the Autopilot tab's dropdown moves it to the top here, and picking Autodetect empties the list. Putting Cargo at the top turns the Autopilot tab's missions switch on. An empty list is the game's behaviour, one preferred activity. The list is saved per save game.
 
 ## ECHO decisions
 
-Thresholds ECHO checks before it acts. Each defaults to the game's value.
+Thresholds ECHO checks before it acts. Each defaults to the game's value, except where noted.
 
 | Setting | What it does |
 |---|---|
 | Pick up loot before leaving | Collect the loot floating nearby before flying on. Off leaves sooner |
-| Raid factions at reputation or below (-500) | Raiding costs reputation, so ECHO only raids factions you're already at or below this with |
+| Raid factions at reputation or below (-500) | Raiding costs reputation, so ECHO only raids factions you're already at or below this with. A higher number such as 0 lets it raid factions you get on better with, and you lose that reputation. The Umbral transponder skips the check, as in the game |
 | Crew needed to start an operation (3) | Pilots don't count |
 | Crew needed to board a ship (0.5) | Share of the flagship's maximum crew |
 | Hire crew when below (0.5) | ECHO flies off to hire when the flagship's crew drops below this share. 0 stops those trips |
@@ -31,19 +31,19 @@ Thresholds ECHO checks before it acts. Each defaults to the game's value.
 
 ![ECHO missions settings](../../images/tab-echo-missions.jpg)
 
-`MissionsAtOnce` (1-5, default 1) lets ECHO take several missions from a board in one visit. It flies from each finished mission location to the nearest open one in the system and turns them all in on one trip home, in one decision instead of one per 10 s. It still goes home first when the hold is full, it has no ammo it could restock, crew is short, the flagship's hull or armour is below half, or (with [ECHO retreat](#echo-retreat) on) a ship is below its hull threshold.
+`MissionsAtOnce` ("Missions ECHO takes at once", 1-5, default 1) lets ECHO take several missions from a board in one visit. It only takes missions it would work on itself (not too risky for the flagship, loadout in place) and stops at the game's own mission limit. It flies from each finished mission location to the nearest open one in the system and turns them all in on one trip home, in one decision instead of one per 10 s. Finished missions at the station it's docked at are turned in before it picks a new one. It still goes home first when the hold is full, it has no ammo it could restock, crew is short, the flagship's hull or armour is below half, or (with [ECHO retreat](#echo-retreat) on) a ship is below its hull threshold. At 1, or with travel off in the Autopilot tab, it goes home after each mission as the game does.
 
-Below that is one switch per mission kind ECHO can be given: Eliminate, Reclaim Salvage Rights, Reclaim Asteroid Belt, Clear Pirate Base, Capture Enemy Vessel, Recover (item), Salvage (material), Mine (ore), Collect (ore) and Support (ore) Mining. A kind that's off is never offered to ECHO; with every kind off, ECHO skips missions and goes on to its activities. ECHO only gets missions for its preferred activity, so only that activity's kinds matter. Courier missions stay on the Autopilot tab's own switch.
+Below that is one switch per mission kind ECHO can be given: Eliminate, Reclaim Salvage Rights, Reclaim Asteroid Belt, Clear Pirate Base, Capture Enemy Vessel, Recover (item), Salvage (material), Mine (ore), Collect (ore) and Support (ore) Mining. A kind that's off is never offered to ECHO. ECHO only gets missions for its preferred activity, so only that activity's kinds matter: with every kind of that activity off (and no mission held), ECHO skips missions and goes on to its activities, whatever the other activities' switches say. A flagship without a preferred activity skips missions only when every kind is off. Courier missions (the Cargo activity) have no switch here and stay on the Autopilot tab's own one.
 
-Clear Pirate Base is an installation raid: 3-5 minutes, credits and items found aboard, some crew lost. In two 30-minute test runs these paid far more than the other combat missions.
+Clear Pirate Base is an installation raid: 3-5 minutes, credits and items found aboard, some crew lost, which ECHO hires again at the station. In two 30-minute test runs these paid far more than the other combat missions. Clear Pirate Base and Capture Enemy Vessel are also ruled out by the Autopilot tab's operations setting.
 
 ## ECHO retreat
 
 ![ECHO retreat thresholds](../../images/tab-echo-retreat.jpg)
 
-`FlagshipHullPercent` and `FleetHullPercent` (0-90, both 0 = off). While ECHO is on and the flagship's hull, or that of a fleet ship at the same location, drops below its threshold, ECHO stops fighting, skips the loot pickup and flies the fleet to the nearest friendly station (the home station when it's in this system). There it docks, waits for the hangar's free auto-repair (about 200 s; [Station services](stations.md#station-services) "Pay for repairs when you dock" buys the 20 s repair instead) and carries on. The status line reads "Retreating to Tower I for repairs: Eclipse hull at 20%".
+`FlagshipHullPercent` ("Retreat when the flagship's hull is below (%)") and `FleetHullPercent` ("Retreat when a fleet ship's hull is below (%)"), 0-90, both 0 = off. While ECHO is on and the flagship's hull, or that of a fleet ship at the same location, drops below its threshold, ECHO stops fighting, skips the loot pickup and flies the fleet to the nearest friendly station (the home station when it's in this system). There it docks, waits for the hangar's free auto-repair (about 200 s; [Station services](stations.md#station-services) "Pay for repairs when you dock" buys the 20 s repair instead) and carries on. The status line reads "Retreating to Tower I for repairs: Eclipse hull at 20%".
 
-It doesn't leave while an operation or boarding is running, from next to a station, or when the Autopilot tab's travel is off.
+It doesn't leave while an operation or boarding is running, from next to a station, or on a trip it's already making. When the Autopilot tab's travel is off, or no friendly station can be reached, ECHO stays and the status line says so.
 
 Without it the flagship fights until the emergency jump at 0 hull, and every heavy hull hit can kill a crew member; the 10 autopilot sessions one save kept had 50 emergency jumps in 48 hours. Fleet ships already leave by themselves at 10% hull for two minutes of repairs, so `FleetHullPercent` only matters above 10.
 
@@ -51,20 +51,20 @@ Without it the flagship fights until the emergency jump at 0 hull, and every hea
 
 ![ECHO abilities and deployables](../../images/tab-echo-kit.jpg)
 
-A rule per flagship ability and per deployable type (from the flagship's cargo or the armory): Off, In combat when ready, Shields / Armour / Hull below N %, Targeted by at least N enemies, or Whenever ready. All rules start off.
+A rule per flagship ability and per deployable type (from the flagship's cargo or the armory): Off, In combat when ready, Shields / Armour / Hull below N %, Targeted by at least N enemies, or Whenever ready. Each rule has a number box next to it (1-100, default 50) for N. All rules start off. The rules only run while the flagship is in space and not travelling, and the ability rows show while you're in space.
 
 - Every rule except Whenever ready only fires in a fight: damage in the last 10 s, or a target.
 - Untargeted abilities fire as they are. Hostile-targeted ones go on ECHO's target, friendly-targeted ones on your most damaged ship, asteroid ones (Crackshot Drone) on the asteroid the flagship mines, and wreck ones (LB-RTR, SF-CRK) on the nearest wreck whose cargo box or credits are still there. Drone-targeted abilities aren't automated.
 - Toggle abilities are switched on while the rule holds, and off again (once the ability is ready) only if the rule switched them on.
 - Deployables (turrets, shield pylons, decoys, mines) are dropped from the flagship's cargo, at most one per 2 s and only when the game's deploy cooldown allows.
 
-`PickUpTurrets` (on) tractors the turrets these rules dropped back in, 5 s after the fight and before ECHO leaves the location (it waits for them as it does for its own loot); turrets you placed yourself stay. `AlsoWithoutEcho` (off) applies the rules while you fly the ship yourself.
+`PickUpTurrets` ("Pick deployed turrets back up", on) tractors the turrets these rules dropped back in, 5 s after the fight and before ECHO leaves the location (it waits for them as it does for its own loot, also with "Pick up loot before leaving" off); turrets you placed yourself stay. `AlsoWithoutEcho` ("Also while you fly", off) applies the rules while you fly the ship yourself.
 
 ## Preferred ores
 
 ![Preferred ores with two ores listed](../../images/tab-echo-ores.jpg)
 
-A list of ores and a mode, saved per save game.
+A list of ores and a mode, saved per save game. The mode dropdown reads "Off (nearest asteroid, game default)", "Prefer these ores" or "Only these ores"; ores are added from an "Add an ore" dropdown, listed by name and level and coloured by rarity, and adding the first one switches the mode from Off to Prefer.
 
 - Prefer: ECHO, your ships' own asteroid picks and their mining drones take the nearest asteroid with a listed ore first, and ECHO picks a mining location in the system that still has one. With none left anywhere, mining works as usual.
 - Only: other asteroids are left alone, and ECHO moves on to its next activity when no listed ore is left.
@@ -78,9 +78,9 @@ The stealth mode, ammo type and buyout choice for operations ECHO starts on its 
 
 ## ECHO cargo rules
 
-When ECHO unloads at a station, the dock action from the [Item rules tab](loot-and-cargo.md#item-rules) decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks, ammo a ship fires and the usable items the game keeps aboard are never touched.
+When ECHO unloads at a station, the dock action from the [Item rules tab](loot-and-cargo.md#item-rules) decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks are never touched, and neither are the ammo a ship fires and the usable items the game keeps aboard while ECHO unloads; the fleet auto-deposit below deposits those as the game does. Sell and Sell above N both leave the items your missions still need aboard.
 
-ECHO sells before it deposits. Each unload step first looks for something to sell on the flagship and every fleet cargo ship, and only deposits once nothing is left to sell. For Sell above N, the part above N is sold right away and only N goes to storage. A full material storage or armory then holds up only the deposits: the game's ECHO stops at the first stack that doesn't fit and never reaches the stacks behind it.
+ECHO sells before it deposits. Each unload step first looks for something to sell on the flagship and every fleet cargo ship, and only deposits once nothing is left to sell. For Sell above N, the part above N is sold right away and only N goes to storage. At a station without a shop nothing can be sold, so the game's own unload takes over once storage holds N and the rest is deposited chunk by chunk past N. A full material storage or armory then holds up only the deposits: the game's ECHO stops at the first stack that doesn't fit and never reaches the stacks behind it.
 
 `ApplyToAutoDeposit` (on) covers the game's fleet auto-deposit too, which empties fleet holds the moment you dock: Keep aboard stays aboard, Sell stays aboard until ECHO unloads it, and Sell above N deposits up to N. When you dock yourself nothing is sold, unless Station services' "Sell by item rules when you dock" is on or you press the airlock's Sell by rules button. With that setting on, the fleet auto-deposit runs after the sale instead of at docking. Off: the game deposits everything as usual, so the rules only matter for fleet ships with auto-deposit off.
 

@@ -9,9 +9,9 @@ How `src/IgiQoL` is put together and the rules every feature follows. Building a
 | `Plugin.cs` | The BepInEx plugin (`igi.qol`). Logs the game version against `TestedGameVersion`, then starts the registry |
 | `Core/` | The feature registry, the `Feature` base class, game events, save data, per-ship settings, the startup report, the `[Dev]` harness and its dumps and profiler |
 | `Features/<Name>/` | One folder per feature: the `Feature` subclass, its Harmony patch classes, its tab, its self-check |
-| `Game/` | Small helpers over game objects shared by several features: `Fleet` (flagship, fleet ship list, data-to-unit), `Cargo` (count, move, deposit target), `Items` (rule keys, the ammo a ship's fit fires), `Resists` (the share of a hit a unit takes by damage type, shields and hull, then armour) |
+| `Game/` | Small helpers over game objects shared by several features: `Fleet` (flagship, fleet ship list, data-to-unit), `Cargo` (count, move, deposit target), `Items` (rule keys, the ammo a ship's fit fires), `Resists` (the share of a hit a unit takes by damage type, shields and hull, then armour), `Effects` (the buffs and debuffs on a unit), `Aggro` (a unit's target, what an NPC's threat table is after, and who is targeting a unit) |
 | `Rules/` | `ItemRules`, the per-save item rule table that loot pickup limits, ECHO cargo rules and station services read |
-| `UI/` | The mod window and its widgets (`Kit`), pop-out windows (`Popout`), settings rows, the ship settings popup, drag handles, fleet row layout |
+| `UI/` | The mod window and its widgets (`Kit`), pop-out windows (`Popout`), settings rows, the ship settings popup, drag handles, fleet row layout, link clicks (`LinkClicks`), shared UI templates (`Templates`) |
 
 ## Startup and lifecycle
 

@@ -37,7 +37,7 @@ flowchart LR
 
    Some checks need things in the save: a fleet ship besides the flagship, a station with a hangar and a mission board, an asteroid field in the system. Without them those checks SKIP with the reason.
 2. In `BepInEx/config/igi.qol.cfg`, `[Dev]`: `Enabled = true`, `AutoLoadSave = igiqol-dev`, `SelfCheck = true`, `QuitAfterSeconds = 10`.
-3. Start the game through Steam (`steam -applaunch 3471800` on Linux, or Play in the Steam library) and wait for `Self-check complete` in `LogOutput.log`. A full run takes about four minutes.
+3. Start the game through Steam (`steam -applaunch 3471800` on Linux, or Play in the Steam library) and wait for `Self-check complete` in `LogOutput.log`. A full run takes a little over five minutes.
 4. Read the results:
 
    ```bash
@@ -46,17 +46,21 @@ flowchart LR
 
    In PowerShell: `Select-String -Path "$G\BepInEx\LogOutput.log" -Pattern "startup:|switched off|Self-check complete|CHECK .* (FAIL|SKIP)"`.
 
-   On the reference save (a copy of an autosave that loads next to a station with hostiles about), a full run ends with `Self-check complete: 268 pass, 4 fail, 14 skip`. Three of the fails are standing: `EchoMissions/missions-at-once` (the board offers no mission ECHO takes, so the mission-batch prefix takes none and hands over to the game), `DroneModes/popup-anchor` (the anchor list has an extra "(a ship not in your fleet)" entry) and `StationServices/crew-track`. `Separation/apart` fails in some runs and not others. The skips each need a situation the save doesn't reach:
+   On the reference save (a copy of an autosave that loads next to a station with hostiles about), a full run ends with `Self-check complete: 279 pass, 0 fail, 17 skip`. The skips each need a situation the save doesn't reach:
    - `EchoGates/dungeon-min`: a dungeon at the location.
    - `EchoMissions/kinds`: a flagship whose preferred activity is combat.
-   - `EngagementDistance/live`: a flagship target while docked.
+   - `EchoMissions/missions-at-once`: a board offer ECHO would take (on this save the board offers a mission that's too risky or needs a loadout the flagship lacks).
    - `EchoPriority/dropdown-to-list`: the game's Autopilot tab in the scene.
    - `EchoCargo/live-keep`, `sell-first`, `data-echo`, `storage-echo` and `armory-echo`: being docked at that point of the run. All five run in a run limited to `OnlyChecks = EchoCargo`, which starts docked; `live-keep` also needs droppable cargo.
    - `DroneModes/gatherer-assist`: a ship with a salvage module.
+   - `CraftRollup/parts-to-storage` and `refine-to-storage`: being docked at the forge's station with room in the flagship's hold, and no forge or refinery jobs of your own queued there.
    - `OrePreference/locations`: mining locations that differ in their ores.
    - `Loadouts/no-mercenary-reason`: a hired mercenary.
    - `RefineryFilter/filter`: a station with a refinery.
    - `MissionDistance/tracker`: an accepted mission with a location.
+   - `MissionDistance/board-far`: a station board within 3 jumps that holds a mission outside this system.
+
+   `Separation/push` and `apart` skip instead when another ship sits where the check would place the fleet ship; the reason names it.
 5. Set `Enabled = false` again and delete the copy. Steam Cloud sometimes restores a deleted save; delete it again if it comes back.
 
 Each check writes one line:

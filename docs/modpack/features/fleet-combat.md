@@ -12,9 +12,9 @@ Which enemy your ships attack when they pick a target on their own. `Rule`:
 |---|---|
 | Nearest | The closest enemy (the game's choice) |
 | Lowest hull % / Highest hull % | The most damaged or the healthiest enemy |
-| Most damage to my fleet | Whoever has hurt your ships most in the last few seconds |
-| Attacking my flagship | Enemies shooting at or aiming at the ship you fly |
-| Smallest first / Largest first | By hull class |
+| Most damage to my fleet | Whoever has hurt your ships most in the last 3 seconds |
+| Attacking my flagship | Enemies that hit the ship you fly in the last 3 seconds, or have it as their target |
+| Smallest first / Largest first | By hull class. Drones and carrier fighters count as the smallest, anything that isn't a ship (turrets, station parts) as the largest |
 | Lowest level / Highest level | By enemy level |
 | Weakest to my weapons | The enemy that takes the most damage from the ship's guns: each gun's expected DPS times what the enemy lets through of its damage type, on the layer a hit lands on now (shields have no per-type resistance, armour adds its own resistance or weakness, paint strip included) |
 | Debuffed first | The enemy carrying the most debuffs: the ones the game's buff bar marks red, plus stat penalties applied from outside such as the painter drone's strip, plus an armour paint strip |
@@ -23,25 +23,25 @@ The two newest rules only prefer an enemy that leads by more than `WeakestGuardP
 
 `RepickSeconds` (0-30, default 0) is how often a ship re-applies its rule. 0 keeps the game's stickiness: a ship stays on its target until it dies or leaves. Above 0, a ship switches when another enemy is clearly better (for example 10 points of hull, or 20% closer), so ships don't flicker between two similar targets. `FinishBelowPercent` (0-100, default 0) keeps a ship on a target below that hull %, so nearly dead enemies get finished. With any rule other than Nearest alone, ships also stop jumping to whoever just hit a nearby ally. "Attacking my flagship" is the exception for hits on the flagship: a ship whose first rule it is switches to whoever hits the ship you fly, even at `RepickSeconds` 0, unless it's already on an enemy at least as good by its rules, is finishing a target below `FinishBelowPercent`, or the attacker is past its "Only attack within" distance.
 
-In the popup a ship can chain up to three rules: "Target choice", then two "Then by" rows, for example "Attacking my flagship, then Weakest to my weapons, then Nearest". Enemies are compared rule by rule. A difference within a rule's margin (10 points of hull, 20% of the distance, the lead above for the two newest rules, an exact tie for size, level and "Attacking my flagship") counts as a tie and the next rule decides; after the last rule the nearest enemy wins. So a rule placed first wins over the ones after it, and a rule placed later is a fallback. Re-checks walk the same chain.
+In the popup a ship can chain up to three rules: "Target choice", then two "Then by" rows, for example "Attacking my flagship, then Weakest to my weapons, then Nearest". Enemies are compared rule by rule. A difference within a rule's margin (10 points of hull, 20% of the distance, 25% of the damage taken for "Most damage to my fleet", the lead above for the two newest rules, an exact tie for size, level and "Attacking my flagship") counts as a tie and the next rule decides; after the last rule the nearest enemy wins. So a rule placed first wins over the ones after it, and a rule placed later is a fallback. Re-checks walk the same chain.
 
 "Attacking my flagship" only pulls a ship onto whoever hits your flagship when it's the chain's first rule; further down it breaks ties like any other rule. Weapon rules stay one rule each, and the Settings tab's `Rule` stays the one rule for ships without their own. Choosing "None" in a "Then by" row ends the chain there. Saves from before rule chains load each ship's rule as a one-rule chain.
 
 The ship settings popup adds, per ship:
 
-- its own rule chain, re-check interval and finish threshold;
-- "Avoid enemies above level": enemies above it are only picked when nothing else is in range (0 = off);
-- "Only attack within (units of the flagship)": fleet ships don't pick enemies further than this from the ship you fly, and drop a target that moves past it (0 = off);
-- one rule per combat weapon (hardpoint). A weapon with a rule shoots the best enemy by that rule among those it can hit and has in range, and follows the ship's target otherwise. For example, one turret on drones while the rest follow the ship.
+- its own rule chain, re-check interval (Never, every 2, 5 or 10 s) and finish threshold (Off, below 25% or 50% hull). Both start on "Default", which follows the Settings tab;
+- "Avoid enemies above level" (0-999): enemies above it are only picked when nothing else is in range (0 = off);
+- "Only attack within (units of the flagship)" (0-200): fleet ships don't pick enemies further than this from the ship you fly, and drop a target that moves past it (0 = off);
+- one rule per combat weapon (hardpoint). A weapon with a rule shoots the best enemy by that rule among those it can hit and has in range, and follows the ship's target otherwise. For example, one turret on drones while the rest follow the ship. The ship itself keeps flying at its own target; a weapon with its own pick doesn't steer it.
 
-The Escort and Defensive stances pick the ship's target themselves (Defensive: whoever is hitting it, else your target; Escort: your target), so under them the chain, "Attacking my flagship" included, only decides when there is nothing to copy. New fleet ships start in the Defensive stance; set Aggressive for the chain to decide every pick. Weapon rules still apply under every stance.
+The Escort and Defensive stances pick the ship's target themselves (Defensive: whoever is hitting it, else your target; Escort: your target), so under them the chain, "Attacking my flagship" included, only decides when there is nothing to copy. New fleet ships start in the Defensive stance; set Aggressive for the chain to decide every pick. A ship on Hold fire picks no targets. Weapon rules still apply under every stance.
 
 ## Engagement distance
 
 How close each ship flies to its combat target, set per ship in the popup:
 
 - Auto: the game decides (the default).
-- Max range: stay as far back as the shortest-range weapon that can hit the target allows.
+- Max range: stay as far back as the shortest-range weapon that can hit the target allows. Launchers out of ammo don't count, as in the game.
 - Fixed distance: stay this many units away (6 to 30: the game never holds closer than 6 or further than 30).
 
 It only changes combat targeting. Mining, salvage, repair and painter modules approach their targets as the game does.
@@ -64,22 +64,26 @@ The check runs when the ship takes a hit, as the game's does. It has no effect o
 
 Hovering any ship, enemy, neutral or one of your fleet ships (the game shows no card for the ship you fly), adds a Resistances block to the game's hover card: one row per damage type with the share of a hit the ship resists right now. Buffs and debuffs are counted, so a ship hit by a resistance debuff shows the lower figure. This figure can't go above 80%, and it goes below 0% when debuffs push it there.
 
-Ships with armour get a second figure per row, after the `|`: what a hit on the armour loses in total, the ship's resistance plus the armour's own resistance or weakness to that type (paint strip included). That figure applies only while the armour has HP left. A row turns red when either figure is below 0%, meaning that type hits harder than normal.
+![Two hover cards for the same enemy. The left one shows the Resistances and Effects blocks and a Targeting row reading "nothing". The right one shows the ship targeting one of your ships, with a Threat block listing the two ships in its threat list, the targeted one badged "target"](../../images/ship-stats-hover.jpg)
 
-Below that, a Buffs and debuffs block lists what the game's buff bar would show if that ship were yours: one row per effect, with its stacks (`x3`), the time left and a bar that empties as it runs out. Buffs are blue and debuffs red, as in the game's buff bar, and the block's header counts both. An ability that's running without a timer of its own reads "active" (or "on" for a toggle). The block is left out when the ship has no effects.
+Ships with armour get a second figure per row, after the `|` (the block's header reads "shield, hull | armour"): what a hit on the armour loses in total, the ship's resistance plus the armour's own resistance or weakness to that type (paint strip included). That figure applies only while the armour has HP left. A row turns red when either figure is below 0%, meaning that type hits harder than normal.
+
+Below that, an Effects block lists what the game's buff bar would show if that ship were yours: one row per effect, with its stacks (`x3`), the time left and a bar that empties as it runs out. Buffs are blue and debuffs red, as in the game's buff bar, and the block's header counts both. An ability that's running without a timer of its own reads "active" (or "on" for a toggle). The block is left out when the ship has no effects.
 
 The card also says what the ship is targeting right now ("Targeting", next to the Captain row) and adds two blocks when they have something to show:
 
 - Threat: the ship's threat list, highest first, each as a share of the top entry, so you can see how close another ship is to pulling it away. The unit it's attacking has a red "target" badge. That isn't always the top entry, because the game skips units out of its weapon or chase range first. Only combat ships that aren't yours keep a threat list, and at a station location most ships follow the station's behaviour instead and have none.
 - Attacked by: the units whose current target is this ship, on any ship, yours included. Units with the same name share a row ("Defense Platform x6"), and the header gives the total.
 
-Each block shows 5 rows, then "+N more".
+Each block shows 5 rows, then "+N more". Your drones show up in these lists with "(drone)" after their name.
 
 The card rebuilds twice a second while you hover it, so timers count down, the resistance figures follow debuffs as they land and expire, and the threat shares and attackers stay current.
 
 ## Combat overview
 
-A pop-out window (see [pop-out windows](interface.md#pop-out-windows)) that lists every ship at your location, enemies first, then yours, then everyone else, nearest first within each. Open and close it with F7 (`Hotkey`) or the "Combat overview" button on the DPS parser tab. Carrier fighters and drones aren't listed.
+A pop-out window (see [pop-out windows](interface.md#pop-out-windows)) that lists every ship at your location, enemies first, then yours, then everyone else, nearest first within each. Open and close it with F7 (`Hotkey`; type another key name such as F8, or None to turn the key off) or the "Combat overview" button on the DPS parser tab, which reads "Close combat overview" while the window is open. Carrier fighters and drones aren't listed.
+
+![The combat overview window with one enemy expanded to show its resistances, effects, weapons, threat and attackers, above the other enemy and the player's ships. Columns: level, shield, armour, hull, buffs, debuffs, targeting](../../images/combat-overview.jpg)
 
 Each ship gets one row: its level, shield, armour and hull as a share of the maximum, how many buffs and debuffs it carries (debuffs counted as for "Debuffed first", in red when there are any) and what it's targeting. Names are red for enemies, green for your ships. Click a ship's name for its details, the same figures the [hover card](#ship-stats-on-hover) shows:
 
@@ -96,7 +100,7 @@ What your missiles do when their target is destroyed before they hit. `Mode`:
 
 - Off (Fly on): the game's behaviour; the missile flies on and is wasted.
 - WeaponTarget (Weapon's target): steer to whatever the launcher is aiming at now.
-- Nearest (Nearest enemy): steer to the closest enemy the launcher could hit.
+- Nearest (Nearest enemy): steer to the enemy closest to the missile that the launcher could hit. With none in range, the missile steers to the weapon's target instead.
 
 Each ship can override it in the popup.
 
@@ -107,13 +111,13 @@ Drone behaviours beyond the game's Free roam and Follow ship:
 | Mode | Combat and painter drones | Mining and salvage drones | Repair drones |
 |---|---|---|---|
 | Follow the ship | Without a target, come back once further than N units | Without a target, come back once further than N units | Without a target, come back once further than N units |
-| Guard the ship | Only take targets whose hull is within N units of the ship, stay within N, drop targets that drift past 1.25 × N | Join the ship's asteroid or wreck when nothing free is within N | Fix the ship first when it's damaged, else anything within N |
+| Guard the ship | Only take targets whose hull is within N units of the ship, drop targets that drift past 1.25 × N, and without a target come back once further than N | Join the ship's asteroid or wreck when nothing free is within N | Fix the ship first when it's damaged, else anything within N |
 | Ship's target only | Attack the ship's target, otherwise follow | Join the ship's asteroid or wreck when they can (a driller only if the asteroid has room), else take one within N | Fix the ship first when it's damaged, else anything within N |
 
 Mining, salvage and repair drones switch at their next pick, so nothing is pulled off a job. "Drones stay with" in the popup makes "the ship" another ship of your fleet; while that ship is elsewhere (travelling, docked, destroyed), the drones stay with their own ship.
 
-The HUD's drone button cycles Free roam → Follow ship → Follow → Guard → Ship's target for the flagship, with its label showing the mode. Every ship has the mode, distance and anchor in its popup. The game's own saved mode stays Free roam or Follow ship, so a save loads fine without the mod.
+The HUD's drone button cycles Free roam → Follow ship → Follow → Guard → Ship's target for the flagship, with its label showing the mode ("Follow 10u", "Guard 10u", "Ship's target"). Every ship has the mode, distance (N, 2-40 units, default 10) and anchor in its popup. The game's own saved mode stays Free roam or Follow ship, so a save loads fine without the mod.
 
 ## Drones on arrival
 
-`Default` (off): every ship of yours launches its docked drones as soon as it arrives somewhere that isn't a station. Drones you recalled yourself stay docked. Each ship can override it in the popup.
+`Default` (off): every ship of yours launches its docked drones as soon as it arrives somewhere that isn't a station. Drones you recalled yourself stay docked. On a route with several stops only the last arrival launches them, so the ship doesn't recall and wait for its drones at every leg. Each ship can override it in the popup.

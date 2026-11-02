@@ -33,7 +33,7 @@ After editing the template, reinstall it: `dotnet new uninstall <absolute path t
 
 ## How it differs from Igi's QoL Modpack
 
-The modpack has a feature registry, per-feature Harmony instances, save data, a mod window and about 160 self-checks ([modpack/developing.md](modpack/developing.md)). The template has none of that. It's one plugin class and a harness of under 200 lines, so a small mod starts small. The patch-per-class loading, the `CHECK` log format and the game-version snapshots are the same, so [VersionDiff](../tools/VersionDiff/README.md) works on a template mod as it does here:
+The modpack has a feature registry, per-feature Harmony instances, save data, a mod window and about 290 self-checks ([modpack/developing.md](modpack/developing.md)). The template has none of that. It's one plugin class and a harness of under 200 lines, so a small mod starts small. The patch-per-class loading, the `CHECK` log format and the game-version snapshots are the same, so [VersionDiff](../tools/VersionDiff/README.md) works on a template mod as it does here:
 
 ```fish
 dotnet run --project <path to this repo>/tools/VersionDiff -- patches --mod bin/Release/MyMod.dll --out patch-report.md

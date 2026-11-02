@@ -38,11 +38,11 @@ The features, by area:
 | `BepInEx/config/igi.qol.cfg` | Every setting, one section per feature |
 | The save game, key `Player.igiQol` | Per-ship settings and loadouts, item rules, preferred ores, ECHO's activity list and ability rules, running crafting roll-ups, crew losses and favourite stations |
 | `BepInEx/config/IgiQoL/item-rules.json` | Optional. Starting item rules for saves that have none ([format](features/loot-and-cargo.md#starting-rules-for-new-saves)) |
-| `BepInEx/config/IgiQoL/notes.json` | The Notes tab |
+| `BepInEx/config/IgiQoL/notes.json` | The Notes tab. It's written through a temporary `notes.json.tmp`; a file the mod can't parse is renamed to `notes.json.broken-<number>` instead of being overwritten |
 | `BepInEx/config/IgiQoL/combat-log.txt` | Only with the DPS parser's `WriteFile` on |
-| The game's Unity PlayerPrefs | Where the mod window and the [pop-out windows](features/interface.md#pop-out-windows) sit, their size and their options |
+| The game's Unity PlayerPrefs | Where the mod window and the [pop-out windows](features/interface.md#pop-out-windows) sit, their size, their options and the open tab (also the open note on the Notes tab) |
 | `BepInEx/config/IgiQoL/dumps/` | Only from the developer harness |
-| Next to the game's `Saves` folder | `igiqol-*.png` screenshots, only from the developer harness |
+| Next to the game's `Saves` folder (Unity's `LocalLow/Bat Roost Games/VanguardGalaxy`) | `igiqol-*.png` screenshots, only from the developer harness |
 
 The mod keeps its own data under that one key and leaves the game's values in their vanilla form (drone modes, for example, are saved as the game's Free roam or Follow ship), so a save should still load without the mod and only lose the mod's data. Loading such a save in an unmodded game hasn't been tested yet; keep a backup.
 
