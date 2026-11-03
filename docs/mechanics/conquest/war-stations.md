@@ -13,7 +13,7 @@ A war-zone system is one where factions fight over ownership: the Conquest secto
 | Name | What it is |
 |---|---|
 | hub | The main station of a war-zone system, shown as "Space Station" on the map. It carries the owner's flag. Destroying it abandons the system. |
-| headquarters | The one system a faction cannot lose to a fleet. Its hub has the faction commander and shop. |
+| headquarters | The one system a faction cannot lose to a fleet. Its hub has the faction commander and shop. Destroying that hub still abandons the system, and the faction sets up a new headquarters in one of its other systems. |
 | Defense station | A station type that holds a garrison and fires on enemies. Not the same as the Defense number on the system card. |
 | economic outpost | A station that produces something: Mining, Salvage, Refinery, Forge, Production, Trading, Recruitment or Construction Yard. Raids target these. It is not a Defense station. |
 
@@ -106,10 +106,10 @@ In the code: [turret tier rules](#code-turret-tier-rules).
 
 ## How long damage lasts in a war zone
 
-Damage and kills are saved, but stations are rebuilt from their seed, which restores every part at full HP. Besides the 3600 second rule that applies to every station ([basics/stations.md](../basics/stations.md#how-long-damage-lasts)), two more situations rebuild war-zone stations:
+Damage and kills are saved, but stations are rebuilt from their seed, which restores every part at full HP. Besides the 3600 second rule that applies to space stations ([basics/stations.md](../basics/stations.md#how-long-damage-lasts)), two more situations rebuild war-zone stations:
 
 - In every war-zone sector, the hourly conquest update (every 3600 seconds, 1 hour; the "Conquest Update" countdown card on the galaxy map) rebuilds every station except the one you are at and abandoned hulks.
-- When a hub changes hands, the hub is rebuilt (after you leave, if you are there).
+- When a system is claimed (a fleet taking an abandoned or unowned system), the hub is rebuilt (after you leave, if you are there). A siege capture does not rebuild it; it waits for the next hourly rebuild.
 
 For a war-zone system this means that killing parts is temporary unless the hub itself is lost.
 
@@ -117,10 +117,10 @@ In the code: [how long damage lasts in a war zone](#code-how-long-damage-lasts-i
 
 ## When the last part dies in a war zone
 
-These steps come on top of the ones in [basics/stations.md](../basics/stations.md#when-the-last-part-dies). They run after the mission trigger for a destroyed combat station and before the pocket achievement, and in this order:
+These steps come on top of the ones in [basics/stations.md](../basics/stations.md#when-the-last-part-dies). The station counts as destroyed when no part other than Connectors is left. They run after the mission trigger for a destroyed combat station and before the pocket achievement, and in this order:
 
 1. The conquest side handles the station. If it is the hub of an owned war-zone system, the system is abandoned and handed on; what that does is on [war.md](war.md). A hub that is waiting to be rebuilt when you leave is skipped.
-2. If the station is a faction station that is not already wrecked: if you contributed, it is wrecked on the spot ([wrecking](../basics/stations.md#wrecking-a-faction-station)). Then, if an active live siege of that Defense station exists, the siege ends with the attacker taking the station. Otherwise, and if it is not wrecked yet, the faction station is destroyed.
+2. If the station is a faction station that is not already wrecked: if a part you hit was among those destroyed, it is wrecked on the spot ([wrecking](../basics/stations.md#wrecking-a-faction-station)). Then, if an active live siege of that Defense station exists, the siege ends with the attacker taking the station. Otherwise, and if it is not wrecked yet, the faction station is destroyed.
 
 A Defense station that is not destroyed by your hand but is taken during a live siege (the Empire Log shows "Defense station destroyed" or "Defense station lost") goes through the same destruction step.
 
@@ -149,7 +149,7 @@ Totals per layout, with every tier turret S2 (below level 45), and the range whe
 | Medium 2 | 975 (1020 to 1065) | 400 (520 to 640) |
 | Large 1 | 1210 (1270 to 1330) | 480 (640 to 800) |
 
-These are summed over the system's hub and every un-wrecked same-faction Defense station, scaled by the sector's station-defense bonus, and halved while the system is settling (the hours after a system changes owner; the game has no name for this). A station siege uses this hull number as the "station structure" pool. A raid on an economic outpost (any non-Defense station) uses 15% of the hull and 50% of the firepower. How the Defense number, siege resolution and raids use these figures is on [war.md](war.md).
+These are summed over the system's hub and every un-wrecked same-faction Defense station, scaled by the sector's station-defense bonus, and halved while the system is settling (the 6 conquest updates after a system changes owner; the game has no name for this). A station siege uses this hull number as the "station structure" pool. A raid on an economic outpost (any non-Defense station) uses 15% of the hull and 50% of the firepower. How the Defense number, siege resolution and raids use these figures is on [war.md](war.md).
 
 Because the score ignores partial damage and the live fight does not feed back, shooting a Defense Platform's hull down without killing it changes nothing off-screen. Killing parts does lower the score until the station is rebuilt.
 
@@ -179,7 +179,7 @@ Each garrison ship is a warship chosen to fit its per-ship budget at the NPC fle
 - Each conquest update would add one ship per 10 combat strength, on a 900 s timer. It never fires, because nothing in the game raises a system's combat strength above 0 (see [war.md](war.md)).
 - Newly seeded Defense stations are provisioned to their wanted count.
 
-Refit: when the garrison's level is below the current NPC fleet level and the system is not besieged, a 300 second refit starts and raises every ship below that level to it. It does not add ships. Refits stop while the station is in raid recovery, and a wrecked station runs no jobs at all.
+Refit: when the garrison's average level (weighted by ship points) is 3 or more levels below the current NPC fleet level and the system is not besieged, a 300 second refit starts and raises every ship below that level to it. It does not add ships. Refits stop while the station is in raid recovery, and a wrecked station runs no jobs at all.
 
 When a Defense station siege is running and you are at that station, the garrison ships are spawned into the live fight as real ships at their stored level, hull rating and seed, along with the defending fleets in the system. When the siege targets the hub instead, the garrisons of every Defense station in the system spawn at the hub. Ships killed in the live fight are removed from the garrison. When the station is taken (live or at the siege cap) it is destroyed: if you are there the garrison is cleared and the station is marked wrecked, otherwise it is swapped for a wreck right away. A system holds at most 2 faction stations of any type.
 
@@ -193,7 +193,7 @@ In the code: [defense stations and garrisons](#code-defense-stations-and-garriso
 
 ## Not verified
 
-- How a faction station's tier rises (it sets the garrison size above).
+- How a faction station's tier rises (it sets the garrison size above). New Defense stations start at tier 1 (3 ships, 270 points). The faction economy can pay wealth to raise the tier of an owned station that is below its maximum, but whether it ever picks a Defense station is not verified.
 
 ## In the game code
 
@@ -254,16 +254,16 @@ In the Small, Medium and Large builders each "tier" turret is `DefenseTurret{S2|
 
 ### Code: How long damage lasts in a war zone
 
-Stations are rebuilt from their seed. `DoConquestTick` runs every 3600 seconds and calls `Conquest.RepairConquestStations`, which rebuilds every station except the one you are at and abandoned hulks. When a hub changes hands, `ConquestOwnership.RebuildHub` rebuilds it, and `ConquestOwnership.CompleteHubRebuild` finishes the job after you leave. Part kills matter beyond the rebuild only if the hub is lost, which `OnStationDestroyed` handles on the conquest side.
+Stations are rebuilt from their seed. `DoConquestTick` runs every 3600 seconds and calls `Conquest.RepairConquestStations`, which rebuilds every station except the one you are at and abandoned hulks (`Conquest.IsAbandonedHulk`: a `ConquestStation` with no faction). When a system is claimed, `ConquestOwnership.Claim` calls `BuildOrRebuildHub`, which uses `ConquestOwnership.RebuildHub` (deferred with `rebuildOnLeave` while you are at the hub), and `ConquestOwnership.CompleteHubRebuild` finishes the job after you leave. A siege capture (`BattleManager.ApplyDecisiveStationCapture`) does not call `RebuildHub`. Part kills matter beyond the rebuild only if the hub is lost, which `OnStationDestroyed` handles on the conquest side.
 
 Source: `Conquest.DoConquestTick`, `Conquest.RepairConquestStations`, `ConquestOwnership.RebuildHub`, `ConquestOwnership.CompleteHubRebuild`.
 
 ### Code: When the last part dies in a war zone
 
-These steps run after the `CombatStationDestroyed` mission trigger and before the pocket achievement, in this order:
+These steps run after the `CombatStationDestroyed` mission trigger and before the pocket achievement, in this order. `CombatStationPart.CheckCombatStationFullyDestroyed` fires them once no `CombatStationPart` other than a Connector is left in the station:
 
 1. `ConquestOwnership.OnStationDestroyed` runs for the current station. If it is the hub of an owned war-zone system, the system is abandoned and handed on. A hub flagged `rebuildOnLeave` is skipped.
-2. If the station is a faction station that is not already wrecked: if you contributed, it is wrecked on the spot. Then, if an active live siege of that Defense station exists, the siege ends with the attacker taking the station. Otherwise, and if it is not wrecked yet, the faction station is destroyed.
+2. If the station is a faction station that is not already wrecked: if a part you hit was destroyed (`playerContributedToDestruction`), it is wrecked on the spot. Then, if an active live siege of that Defense station exists, the siege ends with the attacker taking the station. Otherwise, and if it is not wrecked yet, the faction station is destroyed.
 
 A Defense station taken during a live siege (`DefenseStationDestroyed`, shown in the Empire Log as "Defense station destroyed" or "Defense station lost") goes through `FactionStationDestruction.Destroy` the same way.
 
@@ -280,7 +280,7 @@ Source: `ConquestOwnership.OnStationDestroyed`, `BattleManager.OnDefenseStationD
 
 `S` is the sum over the part's prefab weapon slots of `max(1, size)`: Small 1, Medium 2, Large 3. So S1 is 1, S2 is 2, M2 is 4, L1 is 3, and the drone bay (no weapon slots) is 0. Destroyed parts (HP 0 after damage) are skipped. Damaged parts count in full. `StationDefense.EstimateFromSize` is the fixed estimate for an ungenerated station (never visited): Small 560 hull and 240 firepower, Medium 940 and 480, Large 1390 and 560.
 
-The totals per builder are summed over the system's hub and every un-wrecked same-faction Defense station by `StationDefense.GetDefendingStations`, scaled by the sector's station-defense bonus, and halved while the system is settling (`isSettling`). The siege uses the hull number as the "station structure" pool (`BattleInstance.StartStationStructure`). A raid on an economic outpost (any non-Defense station) uses 15% of the hull and 50% of the firepower (`StationRaid.GetRaidProfile`).
+The totals per builder are summed over the system's hub and every un-wrecked same-faction Defense station by `StationDefense.GetDefendingStations`, scaled by the sector's station-defense bonus, and halved while the system is settling (`isSettling`: `settlingTicks` is set to 6 by `StartSettling` and drops by one per conquest update). The siege uses the hull number as the "station structure" pool (`BattleInstance.StartStationStructure`). A raid on an economic outpost (any non-Defense station) uses 15% of the hull and 50% of the firepower (`StationRaid.GetRaidProfile`).
 
 Source: `StationDefense.ScorePart`, `StationDefense.ScoreParts`, `StationDefense.EstimateFromSize`, `StationDefense.GetStationProfile`, `StationDefense.GetProfile`, `StationDefense.GetDefendingStations`, `StationRaid.GetRaidProfile`, `BattleInstance.StartStationStructure`, `BattleManager.StartDefenseStationStage`.
 
@@ -298,7 +298,7 @@ Garrison refill paths:
 - `Conquest.DrainCombatStrengthIntoGarrisons` runs each conquest update and would add one ship per 10 combat strength through `FactionGarrison.Repair` (900 s timer). It never fires, because nothing in the code raises a system's `combatStrength` above 0 (see [war.md](war.md)).
 - Newly seeded Defense stations are provisioned to their wanted count.
 
-`FactionGarrison.GetWantedCount` gives the wanted ship count and `FactionGarrison.PickShip` the ship. Refit (`FactionGarrison.ProgressRefit`, `FactionGarrison.CompleteRefit`) takes 300 seconds.
+`FactionGarrison.GetWantedCount` gives the wanted ship count and `FactionGarrison.PickShip` the ship (budget per ship is `tierGarrisonBudget / tierGarrisonCount`, integer division). Refit (`FactionGarrison.ProgressRefit`, `FactionGarrison.CompleteRefit`) takes 300 seconds and starts when `FleetLevels.IsDueRefit` is true: the points-weighted average garrison level (`FleetLevels.GetGarrisonLevel`) is at most the NPC fleet level minus 3. A new `FactionStation` has `tier` 1; `FactionEconomicPlanner.TryUpgrade` raises tiers for wealth.
 
 In a live siege, `FactionGarrison.SpawnInto` and `BattleManager.SpawnSiegeDefenders` spawn the garrison ships (`BattleManager.EnsureVenueUnits` for the venue). When the station is taken (live or at the siege cap) `BattleManager.TakeDefenseStation` sends it through `FactionStationDestruction.Destroy`. The cap of 2 is `FactionStation.MaxPerSystem`.
 

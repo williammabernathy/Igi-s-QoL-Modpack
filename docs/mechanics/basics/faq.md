@@ -8,15 +8,15 @@ Short answers to questions players ask about the systems you meet from a new gam
 
 A hit starts as your turret's power, gets a random roll, is boosted by your bonuses, is cut by the target's resistances, and is then spent on the target's shield, armor and hull in that order.
 
-1. The roll: turret power / 5, times a random number from 0.8 to 1.25, divided by the weapon's shots per second. Beams skip the division and deal power / 5 per second of firing.
+1. The roll: turret power / 5, times a random number from 0.8 to 1.25, divided by the weapon's shots per second. Beams skip the division and deal power / 5 per second of firing (a beam fires for 2 s at a time, then reloads).
 2. Crits: each crit multiplies the shot by 2 + Critical Damage.
-3. Your bonuses: multiply by 1 + the type damage stat (Kinetic, Energy and so on) + Damage.
+3. Your bonuses: multiply by 1 + the type damage stat (Kinetic, Energy and so on) + Damage. Nothing in 0.8.3.4 grants either, so in practice this step is x1.
 4. Target resistance: multiply by max(0.2, 1 - Damage Reduction - resistance to the shot's type).
 5. Shield: absorbs first, multiplied by your damage-versus-shield bonus if you have one. Shields treat all seven damage types the same.
 6. Armor: takes what is left, multiplied by your damage-versus-armor bonus. Armor Plating resists 15%, except against Corrosion, which it takes at +25%.
 7. Hull: takes the rest. At zero hull the unit is destroyed, unless it is a ship that becomes boardable instead.
 
-Worked example: a level 30 Standard Medium Autocannon rolls a main Combat Power of 400 to 420; say 410. Your ship has +10% Kinetic Damage and +5% Damage and no crits. The target has Damage Reduction 10%, Kinetic Resistance 20%, a shield of 1000 and 500 Armor Plating.
+Worked example: a level 30 Standard Medium Autocannon rolls a main Combat Power of 400 to 420; say 410. Your ship has +10% Kinetic Damage and +5% Damage and no crits (nothing in 0.8.3.4 grants those two bonuses, so they stand in for any bonus of that kind). The target has Damage Reduction 10%, Kinetic Resistance 20%, a shield of 1000 and 500 Armor Plating.
 
 | Step | Value |
 |---|---|
@@ -33,7 +33,7 @@ Details: [The path of a hit](combat-damage.md#the-path-of-a-hit) and [the worked
 
 ### How much damage per second does a weapon do?
 
-On average one turret deals turret power / 5 x 1.025 damage per second, before crits and bonuses. The 1.025 is the mean of the 0.8 to 1.25 roll. This holds for every weapon family: the reload downtime is already inside the shots per second, so a weapon's rate of fire tells you how fine-grained its damage is, not how much there is. What separates two weapons is the power multiplier (0.9 to 1.15), range, projectile behavior, damage type and size.
+On average one turret deals turret power / 5 x 1.025 damage per second, before crits and bonuses. The 1.025 is the mean of the 0.8 to 1.25 roll. This holds for every weapon that fires shots: the reload downtime is already inside the shots per second, so a weapon's rate of fire tells you how fine-grained its damage is, not how much there is. A beam (Plasma Beam, Cryo Lance) deals power / 5 only while its beam is on, 2 s at a time, and then reloads for its full reload time, so it averages about half of that. What separates two weapons is the power multiplier (0.9 to 1.15), range, projectile behavior, damage type and size.
 
 Turret power has two parts. The weapon's own power stays with that weapon, multiplied by your Combat Power multipliers. Everything else that adds Combat Power (optional rolls on any item, flat skill amounts, crew, hull upgrades) goes into one pool that is split between your active turrets by size: Tiny 0.45, Small 1, Medium 2, Large 3. A Large turret gets three times the pooled share of a Small one. A turret you disable leaves the pool.
 
@@ -47,9 +47,9 @@ Details: [Where a turret's damage comes from](combat-damage.md#where-a-turrets-d
 
 Raise crit chance first, and add crit damage once the chance is high. Critical Damage only pays in proportion to the chance: at the base 3% crit chance, one point of Critical Damage is worth about 0.03 points of damage, while one point of Critical Chance is worth about 1.
 
-Your crit chance is (3% + the chance from Precision + flat Critical Chance) x the Critical Chance multiplier. Precision is measured against your gear's power level: Precision equal to one power level gives +5% crit chance, and past +5% the gain is damped (raw 10% becomes 8.7%, raw 20% becomes 16.1%, raw 50% becomes 37.2%). A crit multiplies the shot by 2 + Critical Damage.
+Your crit chance is (3% + the chance from Precision + flat Critical Chance) x the Critical Chance multiplier. Precision is measured against your gear's power level: Precision equal to one power level gives +5% crit chance, and past +5% the gain is damped (raw 10% becomes 8.7%, raw 20% becomes 16.1%, raw 50% becomes 37.1%). A crit multiplies the shot by 2 + Critical Damage.
 
-Plain Damage and the type damage bonuses all add into one 1 + D term, so each point is worth less as you stack more. A Combat Power multiplier never diminishes: it is worth exactly its own percentage. Critical Recursion lets one hit crit more than once, each extra chance halved, which makes chance worth more still.
+Plain Damage and the type damage bonuses all add into one 1 + D term, so each point is worth less as you stack more (in 0.8.3.4 nothing grants them, so D is 0 in practice). A Combat Power multiplier never diminishes: it is worth exactly its own percentage. Critical Recursion lets one hit crit more than once, each extra chance halved, which makes chance worth more still.
 
 Details: [Crit chance, crit damage or plain damage](combat-damage.md#crit-chance-crit-damage-or-plain-damage) and [Critical hits](combat-damage.md#critical-hits).
 
@@ -59,7 +59,7 @@ Almost nothing, with one exception. Shields ignore the damage type: they have no
 
 The exception is armor. The only armor in 0.8.3.4 is Armor Plating, which resists 15% of everything except Corrosion, which it takes at +25%. Corrosion therefore hits armor for 1.25 against 0.85 for any other type, about 47% more damage. In armor points, 100 armor lasts about 118 points of ordinary damage but only 80 points of Corrosion. Only the Corropult deals Corrosion directly.
 
-A laser painter turret or drone strips 10 points of armor resistance (15% to 5%) and 5 points of Damage Reduction from its target for 6 seconds, and it helps your whole fleet. It is worth bringing against heavily armored targets.
+A Painter Drone (the only painter in the game) strips 10 points of armor resistance (15% to 5%) and 5 points of Damage Reduction from its target for 6 seconds, and it helps your whole fleet. It is worth bringing against heavily armored targets.
 
 Pick the type the target resists least. No turret deals Heat directly: it only comes from torpedoes, Cannon splash and Heat-type extra damage.
 
@@ -71,7 +71,7 @@ Damage Reduction and the type resistance are added together, and the sum is capp
 
 Below the cap each point of either removes one point of the hit. Damage Reduction works against all seven types and a resistance only against its own, so Damage Reduction is the better point when attackers mix types and a resistance is better when one type does most of the damage. Resistances are flat additions in a sum, not multipliers.
 
-Both stats can go negative (the painter, and the Escalation debuff on your ships), which raises incoming damage above 100% with no upper limit.
+Both stats can go negative (the Painter Drone, and the Escalation debuff on your ships), which raises incoming damage above 100% with no upper limit.
 
 Details: [The resistance cap and stacking](combat-damage.md#the-resistance-cap-and-stacking) and [Target resistance](combat-damage.md#4-target-resistance).
 
@@ -101,7 +101,7 @@ Bonuses come from:
 | Temporary boosts | Ability buffs and debuffs, each with a duration |
 | Crew | On a player ship, crew types add to Combat Power, scaled by the crew effectiveness skill |
 
-Damage, the type damage stats (Kinetic, Energy and so on), the damage-versus-shield and damage-versus-armor bonuses, Critical Chance and Damage Reduction never roll on gear in 0.8.3.4. They come from aspects, skills, hull badges, mastery, hull upgrade milestones and officers.
+Damage and the seven type damage stats (Kinetic, Energy and so on) have no source at all in 0.8.3.4: no gear rolls them, and the boss aspects Overcharge and Siege Mode only multiply a Damage total of 0, so they add nothing despite their text. The damage-versus-shield and damage-versus-armor bonuses come only from the boss aspects Shield Slapper and Armor Breaker. Critical Chance and Damage Reduction never roll on gear either; they come from aspects, skills, hull badges, mastery, hull upgrade milestones and officers.
 
 After the bonuses are added up, the game applies the reactor energy modifier (player ships only), then a level-based HP multiplier on hull, armor and shield.
 
@@ -109,13 +109,13 @@ Details: [How a stat is calculated](combat-damage.md#how-a-stat-is-calculated), 
 
 ### Which stats affect drones, torpedoes and fighters?
 
-Drones use the same turret rules as your ship. A drone weapon's power is its own main power x your Combat Power multiplier, plus your Combat Power split by the drone's size rating, plus your Drone Power divided by the base drone count. Drones also read your Damage, type bonuses, Critical Damage, range, attack speed and resistances directly. They do not read your Critical Chance: they work it out from their own Precision. The Drone Defense skill and the second Drones hull milestone (+15%) add Damage Reduction to drones.
+Drones use the same turret rules as your ship. A drone weapon's power is its own main power x your Combat Power multiplier, plus your Combat Power split by the drone's size rating, plus your Drone Power divided by the base drone count. Drones also read your Damage, type bonuses, Critical Damage, range, attack speed and resistances directly. They do not read your Critical Chance: they work it out from their own Precision (the drone's own plus your Precision divided across your drones). The Composite Drone Armor skill and the second Drones hull milestone (+15%) add Damage Reduction to drones.
 
 Torpedoes always deal Heat damage. Torpedo power is your Torpedo Power plus your normalized Combat Power, rolled as power / 5 x random(0.8, 1.25) with no division by shots per second. Crits, Damage and Heat Damage come from the launching ship. A torpedo explodes in a radius of 6 on impact, with falloff down to a minimum of 10%, and hits every enemy in range including the target, using the damage left after the direct hit. A Small bay waits 8 s between launches and 4 s to reload. A Medium bay waits 1 s and 3 s.
 
 Fighters from a hangar bay are ships with their own turrets and follow the ship rules. Hangar Build Speed sets how fast they are repaired and rebuilt.
 
-The reactor energy modifier does not touch Drone Power or Torpedo Power.
+The reactor energy modifier does not touch Drone Power or Torpedo Power themselves, but drones and torpedoes add a share of your Combat Power, so they feel it through that share.
 
 Details: [Drones, torpedoes, fighters](combat-damage.md#drones-torpedoes-fighters).
 
@@ -132,7 +132,7 @@ Nothing is drained and nothing switches off. The reactor's Energy stat is a budg
 | up to 150% | x0.50 |
 | above 150% | x0.25 |
 
-Keep usage at or under 50% for the bonus and at or under 100% to avoid the penalty. The multiplier covers every turret and the pooled flat power, but not Drone Power or Torpedo Power. It runs on player-owned ships only: NPC ships and drones ignore the reactor. The Divert Power skill adds to the multiplier of the 50% bracket.
+Keep usage at or under 50% for the bonus and at or under 100% to avoid the penalty. The multiplier covers every turret and the pooled flat power. It runs on player-owned ships only: NPC ships and drones ignore the reactor. The Divert Power skill adds 5% per rank (2 ranks) to the multiplier of the 50% bracket.
 
 A higher-level reactor has more capacity while weapon draws are fixed numbers, so it carries more weapons. Rarity does not raise a weapon's energy draw (see [What is gear rarity worth?](#what-is-gear-rarity-worth)).
 
@@ -143,7 +143,7 @@ Details: [Energy and the reactor](combat-damage.md#energy-and-the-reactor).
 - Shield Recharge Delay and Shield Gate Time: shown, but the game never reads them in this version. The shield delay is always 5 seconds.
 - Resistances past the 80% combined cap.
 - Range bonus on station parts: it is never switched on.
-- A weapon's shots per second as a measure of its damage: damage per second follows power, not shots.
+- A weapon's shots per second as a measure of its damage: damage per second follows power, not shots. Beams only fire for 2 s at a time and then reload, so they average about half of power / 5.
 - Heat damage as a loadout: no turret deals it directly.
 
 Details: [What looks useful and is not](combat-damage.md#what-looks-useful-and-is-not).
@@ -209,7 +209,7 @@ Escalation is a difficulty setting you choose, from tier 0 to tier 8. Nothing I 
 | 7 Cataclysm | 100 | x6.20 | x6.00 | x2.1 | +125% | +50% | -75% |
 | 8 Extinction | 100 | x8.00 | x10.00 | x2.3 | +150% | +60% | -85% |
 
-"Enemy forces" multiplies the points budget of generated hostile sites, so higher tiers bring more enemies. "Your resists" is subtracted from all seven of your resistances on every ship you own. From tier 4, each kill also has a chance to drop a Combat Upgrade Kit: 0.2% at tier 4, rising to 1.0% at tier 8. Converted to levels, tier 4 HP equals about +15 levels and its damage about +6; tier 8 is about +30 levels of HP and +33 of damage. The popup also has an override with toughness and damage sliders from x1.0 to x4.0 that multiply the tier value.
+"Enemy forces" multiplies the points budget of generated hostile sites, so higher tiers bring more enemies. "Your resists" is subtracted from all seven of your resistances on every ship you own. From tier 4, each kill also has a chance to drop a Hull Upgrade Kit (the popup calls this line "Combat Upgrade Kit drops"): 0.2% at tier 4, rising to 1.0% at tier 8. Converted to levels, tier 4 HP equals about +15 levels and its damage about +6; tier 8 is about +30 levels of HP and +33 of damage. The popup also has an override with toughness and damage sliders from x1.0 to x4.0 that multiply the tier value.
 
 Details: [Escalation](scaling.md#escalation) and [What escalation is worth in levels](scaling.md#what-escalation-is-worth-in-levels).
 
@@ -230,7 +230,7 @@ Each drop is rolled on its own:
 | Ship blueprint piece | 5% (only for ship classes you have not unlocked) |
 | Officer upgrade (High Grade) | 1% (level 30+) |
 
-A dropped module or weapon is one the ship carries, so its rarity follows the enemy gear table. In 95% of cases the drop is picked from the lowest-rarity fitted items, so a ship with one Legendary and one Standard module almost always drops the Standard. A credit drop is round(base x 100 x credit multiplier for the level): 472 credits at level 10, 1,270 at 30, 5,607 at 60 and 40,630 at 100.
+A dropped module or weapon is one the ship carries, so its rarity follows the enemy gear table. In 95% of cases the drop is picked from the lowest-rarity fitted items, so a ship with one Legendary and one Standard module almost always drops the Standard. A credit drop is a random 2.5 to 3.25 x 100 x the credit multiplier for the level, so on average 472 credits at level 10, 1,270 at 30, 5,607 at 60 and 40,630 at 100.
 
 Details: [What a destroyed NPC ship drops](scaling.md#what-a-destroyed-npc-ship-drops).
 
@@ -283,14 +283,14 @@ XP per kill is ceil(5 x base XP reward x level factor x 2^(your level / 9)) x th
 | 1 / 2 / 3 below | 0.8 / 0.6 / 0.4 |
 | 4 or more below | 0.00001 (effectively nothing) |
 
-So XP farming needs enemies close to your level. A higher ship rank pays more: Elite x1.5, Champion x1.6, Commander x2.0, Legendary x2.4. Each level takes more kills than the last, because the XP you need doubles every 5 levels while XP per kill doubles every 9. For a ship of your own level with no ship rank bonus:
+So XP farming needs enemies close to your level. A higher ship rank pays more: Regular x1.2, Veteran x1.3, Elite x1.5, Champion x1.6, Commander x2.0, Legendary x2.4. Each level takes more kills than the last, because the XP you need doubles every 5 levels while XP per kill doubles every 9. For a Rookie ship (x1.0) of your own level:
 
 | Level | XP per kill | XP to finish the level | Kills per level |
 |---|---|---|---|
-| 10 | 108 | 4,000 | 37 |
+| 10 | 109 | 4,000 | 37 |
 | 30 | 504 | 64,000 | 127 |
 | 50 | 2,352 | 1,024,000 | 435 |
-| 100 | 110,598 | 1,048,576,000 | 9,481 |
+| 100 | 110,599 | 1,048,576,000 | 9,481 |
 
 Details: [XP rewards](scaling.md#xp-rewards).
 
@@ -353,7 +353,7 @@ Loot is rolled when the part dies and differs on every kill. In auto-play (idle)
 | Refinery | 50% for ore of this system. 30% for a blueprint |
 | Docking Pad, Docking Tunnel | Refined parts (Titanium Plate, Bulkhead, Hull Beam, Structural Component) |
 | Connector | 70% for one refined part, at half the amount |
-| Defense Platform with turrets | 40% for one of its turrets, and 20% for a stack of ammo |
+| Defense Platform with turrets | 40% for one of its turrets (only turret types you can use), and 20% for a stack of ammo |
 | Defense Platform with a drone bay | Nothing from the table |
 
 Killing a part also pays XP: 50 x the level-gap factor x 2^(effective level / 9), rounded up. Industrial Outpost stations pay no loot, XP or reputation change. Faction skirmish stations, pirate hideouts and the harder Station Offense and Defense missions add extra gear and a skill point item to the Core.
@@ -362,9 +362,9 @@ Details: [What drops when a part dies](stations.md#what-drops-when-a-part-dies) 
 
 ### What does destroying station parts cost in reputation?
 
-Every part you kill hits the owner's reputation, unless the part is exempt (several mission stations are). If your reputation with the owner is above -500 (Neutral or better), each part costs 100 and logs "Betrayal! -100 reputation". At -500 or below (Wary or worse), each part costs 5. Below -500 the faction also counts as your enemy, so you can target its parts with a plain click.
+Every part you kill hits the owner's reputation, unless the part is exempt (several mission stations are). A part counts as your kill if you hit it at any point before it died, even if something else landed the finishing hit. If your reputation with the owner is above -500 (Neutral or better), each part costs 100 and logs "Betrayal! -100 reputation". At -500 or below (Wary or worse), each part costs 5. Below -500 the faction also counts as your enemy, so you can target its parts with a plain click.
 
-Destroying a whole faction station is a second, bigger cost. Wrecking applies to faction stations (Defense stations and economic outposts such as Construction Yards, refineries and production stations) when you contributed to the kill by hitting any part. It costs 5000 reputation, or 1000 if you are already Hostile or worse with the owner, and the log reads "Station destroyed! -N reputation". Without your contribution there is no loot and no reputation cost. A wrecked station leaves a "Wreckage of {station}" salvage site for 3600 seconds (1 hour), holding 10% of each item stack that was in its storage, if anything recoverable remains.
+Destroying a whole faction station is a second, bigger cost. Wrecking applies to faction stations (Defense stations and economic outposts such as Construction Yards, refineries and production stations), not to hubs or guild stations. It happens when the last part that is not a Connector dies and at least one part you hit has died on that station. It costs 5000 reputation, or 1000 if you are already Hostile or worse with the owner, and the log reads "Station destroyed! -N reputation". Leaving one part alive avoids it. If you did not contribute (for example a siege killed it), the last part drops no loot and costs no reputation, but the station can still leave a salvage site. A wrecked station leaves a "Wreckage of {station}" salvage site for 3600 seconds (1 hour), holding 10% of each item stack that was in its storage, if anything recoverable remains. One late-game item cancels both the per-part and the wreck reputation loss while it is active; see the [late-game pages](../late-game/README.md).
 
 If the faction that owns the system you are in is an enemy of the part's owner and you are Neutral with it, you gain 1 reputation with it per kill.
 
@@ -380,7 +380,7 @@ Details: [Ctrl-click on a friendly station](stations.md#ctrl-click-on-a-friendly
 
 ### Why is a station I damaged back at full health?
 
-Damage and kills are saved, but a station is rebuilt from its seed, with every part at full HP, when more than 3600 seconds (1 hour) of game time have passed since you last visited it. The rebuild happens the next time the game saves. Two more rebuild triggers apply to stations in war-zone systems once the war opens at level 28; see the [Conquest stage](../conquest/README.md).
+Damage and kills are saved, but a space station (a faction station, hub, embassy, player station, Industrial Outpost or guild station) is rebuilt from its seed, with every part at full HP, when more than 3600 seconds (1 hour) of game time have passed since you last visited it. The rebuild happens the next time the game saves. Mission, skirmish and pirate stations do not use this rule: their part damage is not reset by it, and only their guard ships are regenerated after 7200 seconds away. Two more rebuild triggers apply to stations in war-zone systems once the war opens at level 28; see the [Conquest stage](../conquest/README.md).
 
 Details: [How long damage lasts](stations.md#how-long-damage-lasts).
 
@@ -388,11 +388,11 @@ Details: [How long damage lasts](stations.md#how-long-damage-lasts).
 
 ### How do I get a ship to become boardable?
 
-A ship becomes boardable only when you shoot it down to a wreck state, not when it is merely weak. Once a hostile ship's hull is under 40%, every 15% of max hull in damage taken below that line gives one roll. With no EMP charge each roll is a base chance of 0.005 times 1/3 at 40% hull, 2/3 at 20% and 1 at 0%, so about 0.17% to 0.5%. Flying manually doubles that. Under autopilot the doubling is skipped and half the rolls are skipped instead. A ship gets at most about 2.7 rolls, so unassisted boardings are rare.
+A ship becomes boardable only when you shoot it down to a wreck state, not when it is merely weak. Once a hostile ship's hull is under 40%, every 15% of max hull in damage taken below that line gives one roll, so a ship gets at most 2 rolls. With no EMP charge the base chance is 0.005, times 1/3 at 40% hull, 2/3 at 20% and 1 at 0%, using the hull left after the hit. The first roll only comes once the hull is at 25% or lower and succeeds with about 0.29%; the second (hull at 10% or lower) with about 0.42%; the most is 0.5% at 0% hull. Flying manually doubles that. Under autopilot the doubling is skipped and half the rolls are skipped instead. Unassisted boardings are rare.
 
 EMP (electromagnetic pulse) weapons build up an EMP charge on the target, and a full charge raises the base chance to 0.025, five times higher. EMP weapons are what make boarding likely.
 
-A ship cannot become boardable if it is flagged as unboardable, is a carrier fighter, is a Drone-size ship, is at an Industrial Outpost location, or has an empty loot list. Left-clicking a boardable ship ("LMB to board") opens the boarding panel. Ctrl+click attacks it instead: the ship revives with at least 15% hull, can never be boarded afterwards, and any capture mission tied to it fails.
+A ship cannot become boardable if it is flagged as unboardable, is a carrier fighter, is a Drone-size ship, is at an Industrial Outpost location, or has an empty loot list. Left-clicking a boardable ship ("LMB to board") opens the boarding panel. Ctrl+click attacks it instead, but only before a boarding has started: the ship revives with at least 15% hull, can never be boarded afterwards, and any capture mission tied to it fails.
 
 Details: [Ships](boarding.md#ships).
 
@@ -409,11 +409,11 @@ The Estimate compares total power: ratio = your power / their power (their power
 | above 25% | Difficult |
 | 25% or below | Very Difficult |
 
-This is a power ratio, not a simulation, and it is not a win probability. A 50% estimate means equal power, not equal outcomes. It ignores HP, positions, specialists and events. Wounded crew count half, Panicked 60% and Heroic 140%.
+This is a power ratio, not a simulation, and it is not a win probability. A 50% estimate means equal power, not equal outcomes. It ignores HP, positions, specialists and events. Wounded crew count half, Panicked 60%, Heroic 140% and Dazed two thirds. Your side also includes the stealth setting, your Assault Doctrine skill and equipment power, but not the ammo setting.
 
-The estimate in the crew-selection panel, before you start, is cruder. It counts every defender as 3 power times the faction's defense multiplier, so it undercounts Marine-heavy factions and defenders at a level gap. It also leaves out your Assault Doctrine skill, so you are usually a little stronger than it says. A facility with hostility None is always Favourable, 100%, because it has no defenders.
+The estimate in the crew-selection panel, before you start, is cruder and is shown for ships only. It counts every defender as 3 power times the faction's defense multiplier, so it undercounts Marine-heavy factions and defenders at a level gap. It also leaves out your Assault Doctrine skill, so you are usually a little stronger than it says. A facility with hostility None is always Favourable, 100%, because it has no defenders.
 
-The facility tooltip adds Hostiles (the expected resistance, from "No hostiles expected" to "Expect heavy resistance"), Specialist, Crews, Progress (friendly rooms over total rooms) and Integrity.
+The facility tooltip adds Status, Hostiles (before entry only: the expected resistance, from "No hostiles expected" to "Expect heavy resistance"), Specialist, Crews and the estimate (once defenders exist), Progress (friendly rooms over total rooms) and Integrity. After a run it shows the Outcome instead of the live rows.
 
 Details: [What each tooltip number means](boarding.md#what-each-tooltip-number-means) and [The Estimate formula](boarding.md#the-estimate-formula).
 
@@ -441,7 +441,7 @@ Details: [Crew types](boarding.md#crew-types), [Picking crew for a ship](boardin
 Count specialists first. The Specialist row of the facility tooltip lists the crew types that count. With a specialist in the room, ambushes are 30% smaller and hazard damage drops by up to 50%, and even one specialist gives a 33% chance to prevent each negative event outright at a level gap under 3.
 
 - Bring the first-listed specialist for the loot. For example Miners at a Mining Outpost, and Marines at Relay and Military facilities. The second-listed type opens locks and shields you from events but misses the profession loot.
-- Locked rooms need a specialist in an adjacent room, and they hold the best loot. Winning does not require them.
+- Locked rooms need a specialist in an adjacent room, and they carry bonus loot. Winning does not require them.
 - At an Ancient Ruin, bring 3 or more distinct crew types. Its bonuses depend on it.
 - Armed facilities use the ship combat rules, so bring Marines. Military Outpost defenders are 70% Marines.
 - Do not overstack one room. Investigation speed is 1 + 0.15 x (n - 1) for n units, and capacity is 3 to 6 per room, so six units cover a room in 57% of the time of one unit, not 17%.
@@ -454,7 +454,7 @@ Use Silent on large ships where defenders are spread out and you clear room by r
 
 | Option | Effect |
 |---|---|
-| Silent | Your power x0.8, casualty rate x0.75. Rooms next to yours go Alert after about 350 s on average |
+| Silent | Your power x0.8, casualty rate x0.75. Rooms next to yours go Alert after about 350 s on average (with Standard or AP ammo) |
 | Balanced | No change. About 70 s before neighboring rooms go Alert |
 | Aggressive | Your power x1.2. About 35 s |
 | Hollow ammo | 0.8x damage to Marines and Gunners, structural damage per kill 1.5 |
@@ -479,7 +479,7 @@ Defenders get an HP multiplier from how far the location's level is above yours 
 | 10 | 2.83 |
 | 15 and above | 4.00 |
 
-A gap also shifts the defender mix toward Marines, up to 80% at a gap of 15. Ships use your effective level and facilities use your player level. A facility whose level is 10 or more above your effective level cannot be started at all. Some factions are hard-boarding: their ships are simulated at least 10 levels above you, unless the boarding comes from a capture mission. That puts their HP multiplier at about 2.8.
+A gap also shifts the defender mix toward Marines, up to 80% at a gap of 15. Ships use your effective level and facilities use your player level. A facility whose level is 10 or more above your effective level cannot be started at all. Some factions are hard-boarding: their ships are simulated at least 10 levels above you, unless the boarding comes from a capture mission. That puts their HP multiplier at about 2.8 at least, and up to 4 at a gap of 15 or more.
 
 Details: [Level scaling of defenders](boarding.md#level-scaling-of-defenders) and [Hard-boarding factions](boarding.md#hard-boarding-factions).
 
@@ -493,26 +493,26 @@ Details: [Reinforcements](boarding.md#reinforcements) and [When to call reinforc
 
 ### How do I lose fewer crew?
 
-- On ships, put the Bridge on priority early. Holding it gives +0.02 morale per second and is required for mass surrender.
-- Keep your rooms connected to the Airlock. A room cut off from it by non-friendly rooms costs 0.05 morale per second.
+- On ships, put the Bridge on priority early. While any room is in combat, holding it gives +0.02 morale per second, and it is required for mass surrender.
+- Keep your rooms connected to the Airlock. While any room is in combat, a room cut off from it by enemy-held rooms costs 0.05 morale per second.
 - Barricade secured rooms next to a front: -35% damage taken there.
 - Carry a Body Armor: -10% casualty rate.
 - Take Assault Doctrine and Crew Conditioning if you board often.
 - Throw grenades into rooms with defenders and none of your crew. Each does 3 damage to everyone in the room and dazes them for 15 s. It also sets the room to Alert and costs 5% of the structure.
 - Do not let a ship's integrity reach zero. Without a won fight it explodes 15 seconds later.
-- If the fight is lost, retreat. Retreating crew take no combat damage. At a facility, retreat while integrity is still above 10% if hazards keep firing: a retreat keeps your crew and half the loot, and the facility stays enterable.
+- If the fight is lost, retreat. Retreating crew take no combat damage. At a facility, retreat while integrity is still above 10% if hazards keep firing: a retreat keeps your crew and, on average, half the loot (each non-data item is kept with a 50% chance), and the facility stays enterable.
 
 Details: [What lowers your losses](boarding.md#what-lowers-your-losses) and [Morale](boarding.md#morale).
 
 ### What does boarding cost in reputation?
 
-If the target's faction has a reputation with you above -500 (Neutral or better), you pay when you press start, before the approach finishes. The penalty is ceil(base XP x 0.5) x 40. Any facility costs 520 (base 25). A ship uses its own base XP, so a ship with base XP 10 costs 200. Cancelling the approach does not refund it. Once your crew lands, the friendly faction is marked hostile to you in that location. Some ships are flagged to skip both the penalty and the hostility.
+If the target's faction has a reputation with you above -500 (Neutral or better), you pay when you press start, before the approach finishes. The penalty is ceil(base XP x 0.5) x 40. Any facility costs 520 (base 25). A ship uses its own base XP, so a ship with base XP 10 costs 200. Cancelling the approach does not refund it. Once your crew lands, the friendly faction is marked hostile to you in that location: every unit of that faction there turns hostile. Some ships are flagged to skip both the penalty and the hostility. The late-game item that blocks reputation loss until you next dock skips the penalty but not the hostility.
 
 Details: [Reputation cost of entering](boarding.md#reputation-cost-of-entering).
 
 ### What happens when I win or retreat?
 
-Win a ship boarding and you capture the ship: it becomes yours, its crew and commander are removed, its modules are damaged by 1 minus its hull fraction, and all loot goes to your cargo. Win a facility run and all loot goes to your cargo and the clear-the-base mission is claimed. The run stays open after the win until you ask for extraction.
+Win a ship boarding and you capture the ship: it becomes yours, its crew and commander are removed, and all loot goes to your cargo. If it has more than two equipped modules, at least two are destroyed (the more hull it has left, the more survive), and the node count on each of its hull upgrade paths is halved. Win a facility run and all loot goes to your cargo and a completed clear-the-base mission with no turn-in step is claimed automatically. The run stays open after the win until you ask for extraction.
 
 Retreat from a ship and it recovers (at least 15% hull), becomes unboardable and flees. Each non-data loot item has a 50% chance to reach your cargo, and boarding missions fail. A facility retreat follows the same partial-loot rule, data items are always kept and integrity stays reduced.
 

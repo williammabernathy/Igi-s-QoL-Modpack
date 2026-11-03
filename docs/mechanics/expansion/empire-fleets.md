@@ -52,7 +52,7 @@ In the code: [service levels and standard-issue copies](#code-service-levels-and
 |---|---|
 | Move | Travel to a system and stay. |
 | Attack | War-zone system only; not your own, not a headquarters, not a system whose hub is already gone, not a for-sale player-sector system, not free territory, not already fought over by a non-friendly faction, and its owner must be your enemy (or you must declare war). Arriving at an unowned system claims it. |
-| Raid | Economic outpost (not a Defense station) in the war zone owned by a hostile faction. |
+| Raid | Economic outpost (not a Defense station, not wrecked, not already being raided) in the war zone owned by a hostile faction. |
 | Return | Home system, or your nearest held system if home is lost. |
 | Refit | Nearest Construction Yard of yours. Refused if it would not raise the fleet's level. |
 | Join siege | Needs a fight in that system with exactly one friendly side. |
@@ -71,7 +71,7 @@ In the code: [orders](#code-orders).
 | Defend system (the default) | While idle, joins the defense of the system it is in. |
 | Defend sector | Also answers sieges and raids on your systems anywhere in the same sector as its post, traveling there with the Responding label. |
 
-Clicking the active stance again returns it to None. An idle fleet counts toward Defense if it has a stance or a Join siege order, is in the system, and is not traveling. If a system with your defending fleets is captured, those fleets fall back to their home system (a Sector-stance fleet whose post is still held stays).
+Clicking the active stance again returns it to None. A fleet counts toward Defense if it has a stance or a Join siege order, is in the system, and is not traveling (a fleet that is refitting or fighting there still counts). If a system with your defending fleets is captured, those fleets fall back to their home system (a Sector-stance fleet whose post is still held stays).
 
 The fleet retreat threshold defaults to 0 and the setting is hidden in this version, so your fleets never break off on their own. A fleet only retreats if that value is changed. Your Empire Fleet ships and patrol ships are real ships: when they die in a simulated or live battle they are removed permanently.
 
@@ -110,7 +110,7 @@ In the code: [your fleets in battle and on the map](#code-your-fleets-in-battle-
 
 Additions to the Defense formula and its explanation in [war](../conquest/war.md#what-the-defense-number-means).
 
-A defending fleet also counts when it is an allied Empire Fleet defending an allied system. Only Empire Fleets have a fleet mix bonus.
+A defending fleet also counts when it is an allied Empire Fleet on a Join siege order for an allied system. Only Empire Fleets have a fleet mix bonus.
 
 In the code: [your fleets and patrols in the Defense number](#code-your-fleets-and-patrols-in-the-defense-number).
 
@@ -197,9 +197,24 @@ Worked cases (worked out from the Defense formula in [war](../conquest/war.md#wh
 
 A level 60 fleet is 2500 points, so it clears the outmatched threshold of the first two kinds. The third needs a level 100 fleet (4000, plus the mix bonus) or several fleets, because the 1.15 and 1.25 margins apply to the total. Capture needs 1.25 times the Defense at that moment. Once the structure is broken and every defender is dead, Defense falls to the 250 floor, so about 313 points is enough; while defenders are alive at the cap it is 1.25 times their points plus the station term.
 
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 320
+---
+flowchart TD
+    A["Fleet beats the defender fleet<br/>(10-minute cap)"] --> B["Every defender ship dead"]
+    B --> C["Station structure takes damage<br/>(up to 29 rounds)"]
+    C --> D["Structure broken, nothing defends,<br/>600 s passed"]
+    D --> E["Fleet points at least<br/>1.25 x Defense now?"]
+    E -->|"Yes"| F["System captured"]
+    E -->|"No"| G["Siege does not capture"]
+```
+
 - Read the Defense row, then work out which figure the warning uses (next-battle strength): the weakest Defense station plus fleets, or the full Defense number. Your Empire Fleet's points must be at least 1.15 times that to avoid the outmatched warning, and at least 1.25 times the current Defense number to capture.
 - A fleet beating the defender fleet at the 10-minute cap passes to the siege. Remove fleets first by fighting them, or by intercepting reinforcements while they are still traveling, before they reach the system.
-- Station structure only takes damage after every defender ship is dead. A siege with large defenders needs most of its 30 rounds just to clear them.
+- Station structure only takes damage after every defender ship is dead. A siege with large defenders needs most of its 29 rounds just to clear them.
 - Capture is allowed at 600 s once the station is broken and nothing defends. Staying on until the cap is not required if those conditions hold.
 - Attack right after a system changes hands: its station profile is halved for 5 to 6 hours (settling), and it pays no taxes for the first 1 to 2 hours (unrest).
 - Missions against the owner, done next to the target, lower the target's station firepower by up to half. Each mission adds one step and resets the 3-hour timer. A red "Your war effort" row shows it.
@@ -215,7 +230,7 @@ In the code: [taking a system with Empire Fleets](#code-taking-a-system-with-emp
 
 - Keep a fleet in the system with a defense stance. It counts in full for Defense, plus the mix bonus (2 or more ship sizes, up to 3% per size at Empire Level 10).
 - Build Defense stations and assign patrol fleets. They count in full for Defense, and the hub siege goes straight to the hub rather than through station stages. Patrol ships lost in a siege are lost for good.
-- Run war effort missions for the faction that owns the system, near that system. A +1.0 bonus doubles the station term, but it is worth at most 700 to 1400 of Defense. Whether this applies to systems you hold is `(not verified)` ([War effort on your own systems](your-empire.md#war-effort-on-your-own-systems)).
+- Run war effort missions for the faction that owns the system, near that system. A +1.0 bonus doubles the station term, which adds 250 to 700 of Defense (the term goes from 250 to 700 up to 500 to 1400). Whether this applies to systems you hold is `(not verified)` ([War effort on your own systems](your-empire.md#war-effort-on-your-own-systems)).
 - Stay out of reach of the 1.15 threshold NPC fleet planning uses: NPC fleets attack when their points are at least 1.15 times the weakest-station strength plus any fleets already traveling to relieve it. A lone NPC fleet is 2000 points, so a Defense number above about 1740 stops single-fleet attacks. Assaults combine 2 or more fleets and can exceed that.
 - A flagship or fleet of yours in the venue turns the battle live and freezes the simulation; the fight then depends on the ships alone, with the real station HP multiplied by x20 (x30 at a headquarters) and war effort scaling station weapons.
 - A defending fleet or patrol in the system stops a raid from running unopposed. An undefended raid finishes at its 600 s minimum once the station structure (15% of normal hull) is broken.

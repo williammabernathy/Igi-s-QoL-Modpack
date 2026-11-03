@@ -26,7 +26,7 @@ The game has several "levels". They are not interchangeable.
 
 Your empire's own level ("Empire Level {n}") is separate from every level above. It unlocks with Beyond the Front ([Your empire](../expansion/your-empire.md)).
 
-A ship does not store its unit level. It is worked out from the gear: take the mean of all equipped item levels, add the highest item level, and halve that, rounded. An enemy generated at location level 40 therefore has unit level 39-41, and every level-based modifier below uses that number.
+A ship does not store its unit level. It is worked out from the gear: take the mean of all equipped item levels (rounded to a whole number), add the highest item level, and halve that, dropping any fraction. An enemy generated at location level 40 therefore has unit level 39-41, and every level-based modifier below uses that number.
 
 In the code: [which level is used for what](#code-which-level-is-used-for-what).
 
@@ -45,7 +45,7 @@ points = the larger of (the site's own points value) and (tier share * personal 
 | Points | 40 | 80 | 130 | 190 | 260 | 335 | 410 | 490 | 570 | 655 | 740 | 830 | 920 | 1015 | 1110 | 1205 | 1300 | 1400 | 1500 |
 | Ships | 2 | 2 | 2 | 3 | 4 | 4 | 5 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 13 | 14 | 16 | 18 | 20 |
 
-Each ship is charged its own points times its ship rank's point multiplier, so higher ship ranks use up the budget faster and produce fewer ships (see the rank table). The ship count cap for combat payloads also grows with the site level.
+Each ship is charged its own points times its ship rank's point multiplier, so higher ship ranks use up the budget faster and produce fewer ships (see the rank table). The ship count cap for combat payloads also grows with the site level. Only payloads of a faction hostile to you use the tier-scaled budget, and small escort groups whose per-ship cap is under a fifth of the site's largest unit keep the site's own points value. A site remembers the tier it was generated at for its budget and ship ranks while it stays recent; the HP and damage multipliers always use your current tier.
 
 In the code: [how many enemies a hostile site gets](#code-how-many-enemies-a-hostile-site-gets).
 
@@ -119,7 +119,7 @@ In the code: [ship rank chances for normal enemies](#code-ship-rank-chances-for-
 
 ### Boss ranks
 
-Boss ranks are the ship ranks used for bounty targets. A bounty boss is one ship worth 40 to 80 points (or more, if the site's largest unit is worth more than 80). The weights depend on the mission level, written `L` below:
+Boss ranks are the ship ranks used for bounty targets. A bounty boss is one ship worth 40 to 80 points (or more, if the site's largest unit is worth more than 80); at high mission levels the lower end rises toward the upper end, because the minimum is also at least the site's budget times 2.5 divided by 16. The weights depend on the mission level, written `L` below:
 
 ```
 Elite     = the larger of (40 - 0.3 * (L - 1)) and 5
@@ -250,6 +250,35 @@ Combat power = sum of the weapons' combat power (each about weapon base * power 
       * hull node Combat bonus (1 + 0.02 * combat nodes)
 ```
 
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 260
+---
+flowchart TD
+    subgraph HP["HP"]
+        direction TD
+        H1["Hull base HP + module amounts"]
+        H2["× module multiplier"]
+        H3["× ship rank HP multiplier"]
+        H4["× NPC ship HP curve"]
+        H5["× base ramp (1 to 4)"]
+        H6["× Escalation tier HP multiplier"]
+        H7["× HP balance multiplier"]
+        H8["× hull node Defense bonus<br/>1 + 0.01 per node"]
+        H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8
+    end
+    subgraph CP["Combat power"]
+        direction TD
+        C1["Sum of the weapons' combat power"]
+        C2["× base ramp (1 to 4)"]
+        C3["× Escalation tier damage multiplier"]
+        C4["× hull node Combat bonus<br/>1 + 0.02 per node"]
+        C1 --> C2 --> C3 --> C4
+    end
+```
+
 NPC modules do not roll bonus HP stats, so apart from hull nodes the module multiplier is the only way gear raises NPC HP. The module multiplier is `1 + main stat * size factor * power level(L) * rarity multiplier`. The power level is 25 * the damage multiplier for level L (it doubles every 10 levels up to 100). The main stat is 0.01-0.014 for the Hull module and 0.013-0.014 for Armor and Shield. The size factor is 1, 1.5 or 2.25 for a small, medium or large module (see [Equipment](#equipment)).
 
 Worked example: a size 5 ship at unit level 60, Veteran, Frontier tier, Large Standard hull module (main stat 0.012):
@@ -307,7 +336,7 @@ Column meanings:
 - Mission credits and mission XP (experience points): the tier is stored on a mission when it is generated. Changing tier recomputes rewards on existing missions from their base amounts; XP gets 0.4 times the credit bonus.
 - Elite and champion share: the Elite weight is the Veteran weight times the share, as in the ship rank formula.
 - Your resists: subtracted from each of your seven resist stats (percentage points) on every player-faction ship.
-- Combat Upgrade Kit: the chance per kill that a destroyed enemy drops one.
+- Combat Upgrade Kit: the chance per kill that a destroyed enemy drops one. The Escalation popup calls this line "Combat Upgrade Kit drops"; the item itself is named Hull Upgrade Kit elsewhere in the game.
 
 The popup also has an override with two sliders (toughness and damage) in 0.1 steps from x1.0 to x4.0. The override factor multiplies the tier value, so Extinction with both sliders at x4.0 gives x32 HP and x40 damage. The override is stored in the save.
 
@@ -327,7 +356,7 @@ Ship rarity (Standard to Legendary) does not multiply any stat. For an NPC it se
 | Exotic | 100 | X |
 | Legendary | no cap | S |
 
-The hull rating on the tooltip and the map reads "Type-" followed by the letter and the node count, for example "Type-C62". The number is held between 0 and 100.
+The fleet hull rating on the map reads "Type-" followed by the letter and the node count, for example "Type-C62"; the letter is the lowest rarity whose node budget holds the count, and the average is held between 0 and 100. The ship tooltip chip reads "Type-" plus the ship's own rarity letter and node count. Conquest fleet and garrison ships roll their starting node count with the same formula, capped at 85.
 
 In the code: [Ship rarity and hull nodes](#code-ship-rarity-and-hull-nodes).
 
@@ -345,7 +374,7 @@ NPC ships spend their nodes on upgrade paths at random. Weights are 5 for the sh
 
 The node bonuses are additive in the node count (a ship with 30 combat nodes has 1 + 0.02 * 30 = x1.6). Milestone bonuses at 10, 20 and 30 nodes in a path also exist, but they need accumulated activity (kills or yield) on the ship, and a freshly generated NPC has none, so I did not count them. Whether long-lived conquest ships accrue progress was not verified.
 
-For a plain combat ship (only the Combat and Defense paths) about 62% of nodes go to Combat and 38% to Defense. With a drone or torpedo bay those shares drop.
+For a plain combat ship (only the Combat and Defense paths) about 71% of nodes go to Combat and 29% to Defense (5 of 7 slots against 2 of 7, because the pick range stops one short of the total weight, so the last path in the list loses one slot). With a drone or torpedo bay those shares drop.
 
 In the code: [what nodes do](#code-what-nodes-do).
 
@@ -365,7 +394,7 @@ The hull nodes base is the last column of the ship rank table. The average roll 
 | 60 | 17 | 23 | 34 | 42 | 48 | 51 |
 | 100 | 24 | 33 | 49 | 61 | 68 | 73 |
 
-A Veteran at level 60 with 34 nodes on a plain combat ship has about 21 combat nodes (x1.42 combat power) and 13 defense nodes (x1.13 HP).
+A Veteran at level 60 with 34 nodes on a plain combat ship has about 24 combat nodes (x1.49 combat power) and 10 defense nodes (x1.10 HP).
 
 In the code: [how many nodes an NPC gets](#code-how-many-nodes-an-npc-gets).
 
@@ -383,7 +412,7 @@ When an NPC ship is fitted out, its ship rarity is rolled from this table by shi
 | Commander | | 30% | 55% | 15% |
 | Legendary | | 15% | 50% | 35% |
 
-The code has a second, more generous table (for example Commander: 10% Standard, 30% Enhanced, 45% High Grade, 14% Exotic, 1% Legendary). Generated sites roll it first, but the fitting step runs afterward and overwrites it with the table above in every path I read. I could not find a path where the first roll survives. A generated NPC also cannot reach Legendary through nodes: the node roll is capped at 60 by ship rank, under the 100 an Exotic ship holds.
+The code has a second, more generous table (for example Commander: 10% Standard, 30% Enhanced, 45% High Grade, 14% Exotic, 1% Legendary). Generated sites roll it first, but the fitting step runs afterward and overwrites it with the table above in every path I read. I could not find a path where the first roll survives. A generated NPC also cannot reach Legendary through nodes: the node roll tops out at 85 (rank base 60 times a level factor of at most 1.43, at level 100), under the 100 an Exotic ship holds.
 
 In the code: [which rarity an NPC ship gets](#code-which-rarity-an-npc-ship-gets).
 
@@ -412,7 +441,7 @@ In the code: [item level](#code-item-level).
 | Exotic | 1.35 | 3 | one rare, plus 25% one common | 3.4 |
 | Legendary | 1.50 | 3 | 75%: one common + one rare; 25%: two rare | 4.5 |
 
-A "bonus stat line" is a random optional stat on top of the item's main stat (main stats are always present). Builders can disable a rarity; the next available rarity in order Standard, Enhanced, High Grade, Exotic, Legendary is used instead.
+A "bonus stat line" is a random optional stat on top of the item's main stat (main stats are always present). Builders can disable a rarity; the lowest rarity that builder allows is used instead.
 
 Rarity multiplies almost every stat by the power multiplier above. Reactor energy capacity is the exception: it takes only the square root of the multiplier (so Legendary gives x1.22). Engine thrust stats grow much more slowly with level than weapons and modules (a level exponent of 0.1).
 
@@ -453,7 +482,7 @@ Main stats read from the equipment builder prefabs (min-max, before level and ra
 | Weapon (most types) | Combat power amount | 1.0-1.05 | 2.0-2.1 | 3.0-3.15 |
 | Reactor | Energy capacity amount | 1.5-1.6 | 3.4-3.5 | 4.5-4.8 |
 
-Small weapons of the "Tiny" type use 0.5-0.6, and drone weapons use 0.5-0.6. Mining and Salvage turrets follow the same 1/2/3 pattern for mining power and salvage power.
+Small weapons of the "Tiny" type use 0.5-0.6, and drone weapons use 0.5-0.6. Mining and Salvage turrets follow the same 1/2/3 pattern for mining power and salvage power. All stat ranges, spawn weights and the reactor and thrust exponents on this page come from the equipment builder asset files, not from the C# code (not verified in code).
 
 Typical bonus stat lines. Unless noted, each stat is as likely as any other to be picked, and it can appear at any item level:
 
@@ -561,15 +590,15 @@ Each of these is rolled independently:
 |---|---|---|
 | One of its fitted modules | 12% | 95% of the time the pool is only the lowest-rarity fitted items |
 | One of its fitted weapons | 12% | same 95% lowest-rarity rule |
-| One cargo item (not ammo) | 30% | up to random(3, 10) * 100 * the credit multiplier for its level, in credits of value |
-| Ammo | 10% | up to random(1, 3) * 100 * the credit multiplier for its level, in value |
+| One cargo item (not ammo) | 30% | up to a whole number from 3 to 9, times 100 * the credit multiplier for its level, in credits of value |
+| Ammo | 10% | up to 1 or 2 times 100 * the credit multiplier for its level, in value |
 | Credits | 30% | random(2.5, 3.25) * 100 * the credit multiplier for its level |
 | Blueprint | 4% | Ship rank Elite or above requests at least High Grade; lower ship ranks use the default roll (not verified) |
 | Ship blueprint piece | 5% | only for ship classes you have not unlocked, at or above the class unlock level |
 | Officer upgrade (High Grade) | 1% | level 30+ |
-| Commendation tag (officers only) | 20% in quadrant 2; otherwise 10% at system level 10+ | Quadrant 2: tag 3 at Champion+ (25%), tag 2 at Veteran+ (33%), else tag 1. Elsewhere: tag 1 |
+| Commendation tag (officers only) | Quadrant 2: 20% roll, then a 10% roll at system level 10+ if it fails; elsewhere 10% at system level 10+ | Quadrant 2 first roll: tag 3 at Champion+ (25%), tag 2 at Veteran+ (33%), else tag 1. Second roll and elsewhere: tag 1 |
 
-The items it drops are the ones it carries, so their rarity follows the NPC gear table above. Because 95% of module and weapon drops filter to the lowest rarity on the ship, you almost always get its worst fitted item. Destroying a station part uses 55% instead of 95% for the same filter.
+The items it drops are the ones it carries, so their rarity follows the NPC gear table above. Because 95% of module and weapon drops filter to the lowest rarity on the ship, you almost always get its worst fitted item. A station defense platform has its own table: a 40% chance of one weapon, with the filter at 55% instead of 95%.
 
 Credit drops follow this formula:
 
@@ -579,7 +608,7 @@ credits = round(base * 100 * credit multiplier(L))
 
 | Level | 10 | 30 | 50 | 60 | 80 | 100 |
 |---|---|---|---|---|---|---|
-| Credit drop when it triggers (30% chance) | 472 | 1,270 | 3,418 | 5,607 | 15,094 | 40,630 |
+| Average credit drop when it triggers (30% chance) | 472 | 1,270 | 3,418 | 5,607 | 15,094 | 40,630 |
 | Bounty credit reward (base 25, before Escalation bonus) | 4,102 | 11,041 | 29,720 | 48,761 | 131,254 | 353,309 |
 
 In the code: [what a destroyed NPC ship drops](#code-what-a-destroyed-npc-ship-drops).
@@ -599,20 +628,20 @@ The base XP reward is 10 unless a ship overrides it (not verified per ship). You
 | 1 / 2 / 3 below | 0.8 / 0.6 / 0.4 |
 | 4 or more below | 0.00001 (effectively nothing) |
 
-XP needed to finish a level is 1000 * 2^(level / 5). Kill XP grows by 2^(1/9) per level while the need grows by 2^(1/5), so each level takes more kills than the last. For a default ship at equal level (no ship rank bonus):
+XP needed to finish a level is 1000 * 2^(level / 5). Kill XP grows by 2^(1/9) per level while the need grows by 2^(1/5), so each level takes more kills than the last. For a Rookie ship (point multiplier x1.0) at equal level:
 
 | Level | XP per kill | XP to finish the level | Kills per level |
 |---|---|---|---|
-| 10 | 108 | 4,000 | 37 |
-| 20 | 233 | 16,000 | 69 |
+| 10 | 109 | 4,000 | 37 |
+| 20 | 234 | 16,000 | 68 |
 | 30 | 504 | 64,000 | 127 |
 | 50 | 2,352 | 1,024,000 | 435 |
 | 70 | 10,973 | 16,384,000 | 1,493 |
-| 100 | 110,598 | 1,048,576,000 | 9,481 |
+| 100 | 110,599 | 1,048,576,000 | 9,481 |
 
 Vanguard (past max level) XP uses a 0.25 scale on the same curve and is not covered further here.
 
-Killing an enemy of higher ship rank is worth more: Elite x1.5, Champion x1.6, Commander x2.0, Legendary x2.4 of the base. Killing targets 4 or more levels below you yields almost nothing, so XP farming needs enemies close to your level.
+Killing an enemy of higher ship rank is worth more: Regular x1.2, Veteran x1.3, Elite x1.5, Champion x1.6, Commander x2.0, Legendary x2.4 of a Rookie's base. Killing targets 4 or more levels below you yields almost nothing, so XP farming needs enemies close to your level.
 
 In the code: [XP rewards](#code-xp-rewards).
 
@@ -622,7 +651,7 @@ In the code: [XP rewards](#code-xp-rewards).
 |---|---|
 | Effective level | Sets the item level cap and kill XP. Conquest levels also follow it, see [war](../conquest/war.md). |
 | Player level | Unlocks Escalation tiers and sets your personal fleet budget step (one step per 5 levels from 10). The budget is counted in points. |
-| Unit level of your ship | The HP balance multiplier applies to your own ship HP, and the power level scales your precision into crit chance (0.03 + 0.05 * precision / power level, with a soft cap above 5%). |
+| Unit level of your ship | The HP balance multiplier applies to your own ship HP, and the power level scales your precision into crit chance (0.03 + 0.05 * precision / power level; the precision part has a soft cap once it passes 5%). |
 | Escalation tier | Lowers your resists by 0 to 85 points at tiers 4 to 8. |
 
 Empire Level, which unlocks with Beyond the Front, adds a fleet mix bonus; see [Your empire](../expansion/your-empire.md).
@@ -709,7 +738,7 @@ This part backs the sections above with the names and formulas from the decompil
 | Unit level | `AbstractUnitData.level` |
 | Fleet budget steps | `FleetLevelSteps` |
 
-Unit level is not stored on the ship. `RecalculateLevel` takes the mean of all equipped item levels, adds the highest item level, and halves that, rounded. An enemy generated at location level 40 therefore has unit level 39-41, and every level-based modifier below uses that number.
+Unit level is not stored on the ship. `RecalculateLevel` takes the mean of all equipped item levels (rounded), adds the highest item level, and halves that with integer division (the fraction is dropped). An enemy generated at location level 40 therefore has unit level 39-41, and every level-based modifier below uses that number.
 
 Source: `GamePlayer.level`, `GamePlayer.effectiveLevel`, `EquipmentBuilder.BuildNewItem`, `AbstractUnitData.RecalculateLevel`
 
@@ -721,7 +750,7 @@ points = max(site.pointsValue, round(threatShare(tier) * PersonalPoints(level)))
 
 `PersonalPoints` is the same table that sets your personal fleet budget (counted in points). It is 0 below level 10 and rises by one row every 5 levels, ending at level 100.
 
-Each unit is charged `ship points * ship rank point multiplier`. The ship count cap for combat payloads also grows by `floor(level * pointsScale / 20)`.
+Each unit is charged `ship points * ship rank point multiplier`. The ship count cap for combat payloads also grows by `floor(level * pointsScale / 20)`. The tier-scaled budget applies when `IsThreatPayload` is true (combat payload of a faction hostile to the player) and the payload is not a filler (`IsFillerCap`: `maxPointsPerUnit < maxUnitPoints / 5`). `payloadTier` is the `generationTier` stored on the guard descriptors (`UnitGenerationDescriptor.rolledTier`, cleared when the site is no longer in the Recent retention bucket), falling back to `EscalationHelper.CurrentTier`.
 
 Source: `MapPointOfInterest.GetPayloadPoints`, `MapPointOfInterest.CreateUnitPayload`, `MapPointOfInterest.ResolveMaxUnits`, `FleetLevelSteps.PersonalPoints`
 
@@ -759,7 +788,7 @@ Source: `UnitRankHelper.GetRandomUnitRankForLevel`, `UnitRankHelper.GetNormalRan
 
 #### Code: Boss ranks
 
-Boss ranks are ship ranks used for bounty targets (`BountyBoard.SpawnBountyBoss`, one ship of 40 to max(80, site max unit points) points). Weights, with `L` the mission level:
+Boss ranks are ship ranks used for bounty targets (`BountyBoard.SpawnBountyBoss`, one ship of 40 to max(80, site max unit points) points; `ResolvePointsPerUnitRange` also raises the minimum to `round(budget * 2.5 / 16)`, capped at the maximum). Weights, with `L` the mission level:
 
 ```
 Elite     = max(40 - 0.3 * (L - 1), 5)
@@ -870,7 +899,7 @@ Source: `EscalationHelper` (tables, `SetTier`, `RecomputeMissionRewards`, `GetNp
 
 ### Code: Ship rarity and hull nodes
 
-`HullRating.ToRating` clamps the number to 0-100. The tooltip text is `Type-<letter><nodes>`, for example `Type-C62`, built by `HullRating.FormatRating`.
+`HullRating.ToRating` clamps the fleet average to 0-100. The map text is `Type-<letter><nodes>`, for example `Type-C62`, built by `HullRating.FormatRating` (letter from `SmallestRarityHolding`). The tooltip chip uses `ShipTooltipCardBuilder.GetRefitCode` (`shipRarity` letter + `TotalPointsSpent`) inside `@ShipTooltipRefitCode` (`Type-{0}`). `HullRating.RollStartingPoints` (conquest fleets and garrisons) caps the roll at 85.
 
 #### Code: What nodes do
 
@@ -884,7 +913,7 @@ The path weights are built by `ShipUpgradeCalculator.BuildWeightedNpcPaths`. Per
 | Defense | +1% `ShieldHP`, `ArmorHP`, `HullHP` each |
 | Mining, Salvage | +2% `MiningPower` / `SalvagePower` |
 
-The node bonuses are additive in the node count (a ship with 30 combat nodes has `1 + 0.02 * 30 = x1.6`). Milestone bonuses at 10, 20 and 30 nodes in a path also exist (`IsMilestoneUnlocked`), but they need accumulated activity (kills or yield) on the ship, and a freshly generated NPC has none, so I did not count them. Whether long-lived conquest ships accrue progress was not verified.
+The node bonuses are additive in the node count (a ship with 30 combat nodes has `1 + 0.02 * 30 = x1.6`). Milestone bonuses at 10, 20 and 30 nodes in a path also exist (`IsMilestoneUnlocked`), but they need accumulated activity (kills or yield) on the ship, and a freshly generated NPC has none, so I did not count them. Whether long-lived conquest ships accrue progress was not verified. `PickWeightedPath` calls `RandomRange(0, totalWeight - 1)` and `SeededRandom.RandomRange(int, int)` excludes the upper bound, so the last path in the list (`GetNpcApplicablePaths` order: Combat, Defense, Mining or Salvage, Drones, Torpedo) is one slot short.
 
 Source: `ShipUpgradeCalculator.BuildWeightedNpcPaths`, `ShipUpgradeCalculator.GetPathAmountPerNode`, `ShipUpgradeCalculator.GetDefenseStatLines`, `ShipUpgradeCalculator.PointBudget`, `ShipUpgradeCalculator.IsMilestoneUnlocked`, `HullRating.ToRating`, `HullRating.FormatRating`
 
@@ -1017,7 +1046,7 @@ Source: `LootRarity.GetRarityChances`, `LootRarity.RollRarity`, `LootRarity.GetB
 
 #### Code: What a destroyed NPC ship drops
 
-`SpaceShipData.CreateLootTable` rolls each of the drops independently. The cargo item is worth up to `random(3, 10) * 100 * costMultiplier(level)`, ammo up to `random(1, 3) * 100 * costMultiplier(level)`, and the credit drop is `random(2.5, 3.25) * 100 * costMultiplier(level)`.
+`SpaceShipData.CreateLootTable` rolls each of the drops independently. The cargo item is worth up to `RandomRange(3, 10) * 100 * costMultiplier(level)` (integer range, so 3 to 9), ammo up to `RandomRange(1, 3) * 100 * costMultiplier(level)` (1 or 2), and the credit drop is `random(2.5, 3.25) * 100 * costMultiplier(level)`. The commendation tag block is an `if / else if`: in quadrant 2 a failed 20% roll falls through to the 10% system-level-10 roll. Station defense platforms use `CombatStationPartData.CreateLootTable` (40% weapon drop, `RandomBool(0.55f)` for the lowest-rarity filter).
 
 Credit drops, using `GetCreditsValue`:
 
@@ -1046,6 +1075,6 @@ Source: `GameMath.GetExperienceRewardValue`, `GameMath.ExperienceRewardScale`, `
 | What | Code |
 |---|---|
 | Player level step | `FleetLevelSteps`, one step per 5 levels from 10 |
-| Unit level of your ship | `HpBalanceMultiplier(level)` applies to your own ship HP, and `powerLevel(level)` scales your `Precision` into crit chance (`0.03 + 0.05 * Precision / powerLevel`, with a soft cap above 5%) |
+| Unit level of your ship | `HpBalanceMultiplier(level)` applies to your own ship HP, and `powerLevel(level)` scales your `Precision` into crit chance (`0.03 + GetPrecisionCrit()`, where the precision part is `0.05 * Precision / powerLevel` and anything above 0.05 is compressed by `0.05 + (1 + excess)^0.75 - 1`) |
 
 Source: `GameMath.ApplyItemLevelCap`, `FleetLevelSteps`, `AbstractUnit.ApplyHpBalanceBonus`, `AbstractUnit.GetPrecisionCrit`

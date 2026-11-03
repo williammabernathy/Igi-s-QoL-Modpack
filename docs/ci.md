@@ -52,6 +52,8 @@ Mechanics pages follow two layout rules. First, they sit in a stage folder under
 
 Each stage folder also has a `faq.md`, "Common questions": short answers to questions players ask, grouped under topic headings, one `###` question per answer so a forum post can link straight to it. Its answers only condense facts from the stage's own pages (or earlier stages), follow the same spoiler and heading rules, and end with `Details: [..](page.md#section)` pointing at the section with the full numbers. It has no code identifiers and no "In the game code" section, since the linked section already has the code notes. When a page's numbers change, update the matching answer.
 
+Diagrams are ` ```mermaid ` fences (`pymdownx.superfences.custom_fences` in `zensical.toml`; the theme loads Mermaid on pages that have one and colors it for light and dark mode, so diagrams set no `style` or `classDef`). They go in player sections only, use the page's own numbers with no code identifiers, and follow the spoiler rules like body text. Flowcharts use boxes ending in "?" for decisions instead of diamonds, which grow with their text. Mermaid wraps labels at 200 px, so a tall flowchart can set a wider wrap in a frontmatter block at the top of the fence (`config:` / `flowchart:` / `wrappingWidth: 320`); keep the result within the 900 px content column, or the theme scales it down and the text shrinks.
+
 To preview it, from the repo root:
 
 ```bash

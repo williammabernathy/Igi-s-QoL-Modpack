@@ -1,6 +1,6 @@
 # Faction economy and ship production
 
-This page covers where an NPC faction's money comes from, what it spends it on, how it builds economic outposts and Construction Yards, how warships are paid for, built and delivered, and which of your actions slow that down. NPC means non-player character: a faction the game controls. Every value is read from the decompiled game code of version 0.8.3.4, not measured in play. Ship point values come from the ship prefabs in the game files. This page belongs to the conquest stage, which opens at level 28 with the Sector Control missions. Battles, fleet orders, raids and captures are in [war](war.md); stations under attack in the war are in [war stations](war-stations.md), and attacking stations in general is in [stations](../basics/stations.md).
+This page covers where an NPC faction's money comes from, what it spends it on, how it builds economic outposts and Construction Yards, how warships are paid for, built and delivered, and which of your actions slow that down. NPC means non-player character: a faction the game controls. Every value is read from the decompiled game code of version 0.8.3.4, not measured in play. Ship point values come from the ship prefabs in the game files, which are not in the decompiled source, so they are `(not verified)` here. This page belongs to the conquest stage, which opens at level 28 with the Sector Control missions. Battles, fleet orders, raids and captures are in [war](war.md); stations under attack in the war are in [war stations](war-stations.md), and attacking stations in general is in [stations](../basics/stations.md).
 
 Terms and abbreviations are explained in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md). The code names behind the terms are in the last part of the page, [In the game code](#in-the-game-code).
 
@@ -8,7 +8,7 @@ A few terms used throughout:
 
 - Wealth, shown as "Economic Power" on the Faction overview, is a single number per faction. Ships cost wealth only, no materials, so cutting ore or goods supply does not slow warship production.
 - The war zone is the Conquest sector (Ara Martis). The Frontier, Staging and Darkspace regions are not part of it. The expansion sectors join it with Beyond the Front ([Your empire](../expansion/your-empire.md)).
-- An economic outpost is a station that produces something: Mining, Salvage, Refinery, Forge, Production, Trading, Recruitment or Construction Yard. The Faction overview shows them as "Economic Outposts". A system holds two. This page writes "yard" for a Construction Yard.
+- An economic outpost is a station that produces something: Mining, Salvage, Refinery, Forge, Production, Trading, Recruitment or Construction Yard. The Faction overview shows them as "Economic Outposts". A system holds two stations in total, and a Defense station takes one of the two. This page writes "yard" for a Construction Yard.
 - Points are a ship's fleet value. Fleet cards in the game call the total "strength"; this page writes "points".
 - The planner is the part of the game that decides what an NPC faction builds and where its fleets go.
 - A garrison is the warships an NPC Defense station holds.
@@ -22,7 +22,7 @@ The Factions tab of the galaxy map shows, for an NPC faction:
 |---|---|
 | Economic Power | The faction's current wealth, with the change against the previous hourly sample |
 | Combat Power | The faction's total fleet points over all its fleets, with the same change figure. This is not the Combat Power ship stat |
-| Economic Outposts | Economic outposts plus economic outposts under construction, over 2 x systems held ("slots used") |
+| Economic Outposts | Every station the faction owns (Defense stations included) plus every station under construction, over 2 x systems held ("slots used") |
 | Building | The first economic outpost under construction and its time remaining |
 | Power and Power History graphs | The last 24 hourly samples of wealth and fleet points |
 
@@ -57,11 +57,26 @@ NPC factions add each earning to their wealth directly. The ledger groups earnin
 | Your embassy missions | The wealth reward of your embassy missions, see below | When you complete one |
 | Raids | What a raid takes: wealth drained from the victim plus 10% of the value of the economic outposts' materials | When the faction's raid on an economic outpost completes |
 
-A faction that holds N systems outside the war zone and W systems in it earns 10,000 x N + 20,000 x W per hour on average from taxes. Unrest is the game's unnamed state for the first hours after a system changes owner. A captured system starts with a settling count of 6 that drops by one per conquest update (hourly). It pays no taxes while the count is above 4, so it pays nothing for the first two conquest updates after capture.
+A faction that holds N systems outside the war zone and W systems in it earns 10,000 x N + 20,000 x W per hour on average from taxes. Unrest is the game's unnamed state for the first hours after a system changes owner. A captured system starts with a settling count of 6 that drops by one per conquest update (hourly). It pays no taxes while the count is above 4, so the hourly tax payments made while the count is 6 and 5 are zero. That is one or two payments, because taxes are paid on the hourly economy tick, a separate timer from the conquest update. From the count of 4 it pays normally.
 
 Trade and sales only count for Production stations. A Production station gets its first route to the nearest Intertrade market within 10 jumps. If there is none it falls back to the nearest own-faction civilian station, preferring an embassy over any other even if the embassy is farther. Mining and Salvage stations route all materials to the nearest Refinery, and Refineries route canisters to the nearest Production station, each within 10 jumps. Those chain routes pay nothing themselves.
 
 The ledger also has a "Lost to your raids" line. NPC factions never use it: it is defined and labelled, but nothing in the game records it.
+
+```mermaid
+flowchart LR
+    T["Taxes<br/>5,000 to 15,000 per system per hour<br/>doubled in the war zone"] --> W
+    TD["Trade deliveries<br/>10% of cargo value, 14% at an embassy"] --> W
+    IS["Intertrade sales<br/>10% of the sale value"] --> W
+    HS["Home subsidy"] --> W
+    EM["Your embassy missions<br/>80,000 to 120,000 each"] --> W
+    R["Raids<br/>what a raid takes"] --> W
+    W(["Faction wealth"])
+    W --> S1["Stations<br/>50,000 per outpost, 100,000 per Defense station"]
+    W --> S2["Warships and work-bay ships<br/>price set by hull size"]
+    W --> S3["Great Gate fleets"]
+    W --> S4["Drained by raids on the faction"]
+```
 
 In the code: [where a faction's wealth comes from](#code-where-a-factions-wealth-comes-from).
 
@@ -91,8 +106,8 @@ In the code: [what factions spend wealth on](#code-what-factions-spend-wealth-on
 
 Each hourly economy tick the planner first makes sure the supply routes exist, then takes up to 2 actions. One action is either a new economic outpost or an upgrade:
 
-- If economic outposts plus those under construction are below 2 x systems held, it tries to build.
-- Otherwise it upgrades one economic outpost instead.
+- If the stations it owns (Defense stations included) plus those under construction are below 2 x systems held, it tries to build.
+- Otherwise it upgrades one station instead.
 
 A build is blocked unless wealth is at least 50,000 and a site exists. The type chosen:
 
@@ -105,6 +120,26 @@ Mindus Holdings and Steel Vultures are guild factions with restricted chains: th
 
 If a Construction Yard has no valid site, the planner builds an extractor instead.
 
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 260
+---
+flowchart TD
+    A["Hourly economy tick<br/>up to 2 actions"] --> B["Stations owned plus those under construction below 2 x systems held?"]
+    B -- No --> U["Upgrade the station with the fullest storage"]
+    B -- Yes --> C["Wealth at least 50,000 and a site exists?"]
+    C -- No --> X["No build"]
+    C -- Yes --> D["Any Mining or Salvage station?"]
+    D -- No --> M["Build a Mining station"]
+    D -- Yes --> E["Chain targets met?<br/>Refinery, Production, Construction Yard"]
+    E -- No --> R["Build the first missing stage<br/>Refinery and Production need the previous storage at least 3% full"]
+    E -- Yes --> F["Some extractor storage at least 3% full?"]
+    F -- Yes --> H["Build another extractor<br/>alternating Mining and Salvage"]
+    F -- No --> X
+```
+
 An economic outpost takes 3600 s (1 hour) to build.
 
 In the code: [order of builds](#code-order-of-builds).
@@ -114,8 +149,8 @@ In the code: [order of builds](#code-order-of-builds).
 A system is a valid site when all of these hold:
 
 - It belongs to the faction and is not a reserved slot.
-- It is in the Frontier or Conquest quadrant ("Quadrant" is the game's name for the large map regions).
-- It holds fewer than 2 economic outposts (counting those already under construction by that faction).
+- It is in the Frontier or Conquest quadrant, or in an expansion quadrant ("Quadrant" is the game's name for the large map regions).
+- It holds fewer than 2 stations of any kind (Defense stations and stations of other owners count, and so do this faction's builds already under construction there).
 - Pocket systems only accept economic outposts if they are a Motherlode or Derelict Fleet system.
 - A Construction Yard is never built in a war-zone system. Every yard sits in home space, meaning outside the war zone.
 
@@ -125,7 +160,7 @@ In the code: [where economic outposts go](#code-where-economic-outposts-go).
 
 ### Upgrades and the starting layout
 
-When economic outpost slots are full, the planner upgrades the economic outpost with the highest storage fullness among those below their maximum tier (5, or 4 for Production). It picks the target by fullness, not by type, so a Construction Yard is not preferred. It is never upgraded unless it happens to be the fullest.
+When station slots are full, the planner upgrades the station with the highest storage fullness among those below their maximum tier (5, or 4 for Production). Every station type is in that pool, Defense stations included. It picks the target by fullness, not by type, so a Construction Yard is not preferred. It is never upgraded unless it happens to be the fullest.
 
 New games and fresh war zones start pre-built: 80% of slots filled for each faction (100% in the war zone).
 
@@ -141,7 +176,7 @@ cap = the smaller of
       (frontline systems x 0.5, rounded up)
 ```
 
-The site is a frontline system (one of the faction's systems that touches an enemy or unowned war-zone system) with fewer than 2 economic outposts, preferring the one with the fewest of the faction's Defense stations already. A planner-built Defense station starts with an empty garrison; the warship queue fills it (see below).
+The site is a frontline system (one of the faction's systems that touches an enemy or unowned war-zone system) with fewer than 2 stations in total and no build already pending there, preferring the one with the fewest of the faction's Defense stations already. A planner-built Defense station starts with an empty garrison; the warship queue fills it (see below).
 
 In the code: [Defense stations](#code-defense-stations).
 
@@ -217,13 +252,13 @@ In the code: [the under-cap discount](#code-the-under-cap-discount).
 
 | Faction | Cap |
 |---|---|
-| Mindus Holdings, Steel Vultures, Stranded | 0 if no war-zone systems. Otherwise 3 below 1.5M embassy wealth, 4 from 2.25M, 5 at 3M |
+| Mindus Holdings, Steel Vultures, Stranded | 0 if no war-zone systems. Otherwise 3 below 2.25M embassy wealth, 4 from 2.25M, 5 from 3M |
 | Corsair Syndicate while holding no war-zone system | 2 |
 | Any faction outside the war-fielding list | 1 |
 | Darkspace Compact | 5 |
 | Kolyatov, Stellar, Luminate, Meridia's Chosen, Corsairs holding a war-zone system | The smaller of the territory cap and 5 + (war-zone systems held / 15, rounded down) |
 
-The territory cap is 8. The Darkspace Compact's cap changes once the expansion war opens, which comes with Beyond the Front ([Your empire](../expansion/your-empire.md)). With 0 to 14 war-zone systems the formula gives 5, with 15 to 29 it gives 6, and so on, up to the territory cap. For the three guild factions (Mindus Holdings, Steel Vultures, Stranded) the value that counts is the embassy wealth you deliver through embassy missions with that faction (see [Joining a faction's war](#joining-a-factions-war)).
+The territory cap is 8, except for Meridia's Chosen (6) and the Darkspace Compact (12) once the expansion war has opened. The Darkspace Compact's cap of 5 changes at the same point, which comes with Beyond the Front ([Your empire](../expansion/your-empire.md)). With 0 to 14 war-zone systems the formula gives 5, with 15 to 29 it gives 6, and so on, up to the territory cap. For the three guild factions (Mindus Holdings, Steel Vultures, Stranded) the value that counts is the embassy wealth you deliver through embassy missions with that faction (see [Joining a faction's war](#joining-a-factions-war)).
 
 In the code: [fleet caps](#code-fleet-caps).
 
@@ -238,6 +273,23 @@ For each yard with a free slot, the planner takes the first of these that applie
 
 Wealth must cover the price or nothing is queued. The ship type for items 2 to 4 is a weighted random pick of the faction's warships with a point value at or below the points needed (heavier hulls weigh more). The garrison pick is the biggest warship that fits the per-ship budget.
 
+```mermaid
+flowchart TD
+    A["Yard has a free slot"] --> B["A Defense station garrison is short?"]
+    B -- Yes --> G["1. Garrison ship for the biggest shortfall"]
+    B -- No --> C["A fleet below 35% of its target?"]
+    C -- Yes --> S["2. Ship for the fleet furthest below"]
+    C -- No --> D["Spare fleet slots?"]
+    D -- Yes --> F["3. Founding ship, up to 2000 points"]
+    D -- No --> T["4. Top-up for the fleet furthest below 100%"]
+    G --> P["Wealth covers the price?"]
+    S --> P
+    F --> P
+    T --> P
+    P -- Yes --> Q["Ship queued"]
+    P -- No --> X["Nothing queued"]
+```
+
 Defense station garrison size depends on the station's tier:
 
 | Station tier | Wanted ships | Total budget | Per-ship budget |
@@ -248,13 +300,13 @@ Defense station garrison size depends on the station's tier:
 | 4 | 6 | 720 | 120 |
 | 5 | 8 | 900 | 112 |
 
-A garrisoned ship is also refitted to the current NPC fleet level in 300 s per refit pass, unless the system is besieged. The refit only raises ship levels, it adds no ships. A separate way of refilling garrisons without a build exists, but it only receives anything from a system's combat strength, which the game never raises above 0, so in practice garrisons are refilled only by the yard queue.
+A garrisoned ship is also refitted to the current NPC fleet level, in one 300 s pass, once the garrison's point-weighted average level is 3 or more levels below the NPC fleet level. No refit runs while the system is besieged. The refit only raises ship levels, it adds no ships. A separate way of refilling garrisons without a build exists, but it only receives anything from a system's combat strength, which the game never raises above 0, so in practice garrisons are refilled only by the yard queue.
 
 In the code: [what gets queued, in priority order](#code-what-gets-queued-in-priority-order).
 
 ### New ship level
 
-A ship leaves the yard at the NPC fleet level, which is the galaxy level + 6 (at least 1). Fleets that fall behind that level are refitted at a yard for 300 s, up to 3 refits at once.
+A ship leaves the yard at the NPC fleet level, which is the galaxy level + 6 (at least 1). The galaxy level is your effective level (character level plus Vanguard level) or the highest conquest-system level, whichever is higher. A fleet whose point-weighted average level is 3 or more levels below that is sent to a yard of its faction within 4 jumps and refitted for 300 s, up to 3 fleets at once per faction.
 
 In the code: [new ship level](#code-new-ship-level).
 
@@ -266,13 +318,31 @@ A finished ship is dispatched to its target:
 travel time = 30 + 30 x jumps   (seconds)
 ```
 
-Zero jumps, or no route, means it joins immediately. The destination is the rendezvous system of the fleet: the fleet's destination if it is travelling, otherwise where it is. A garrison ship flies to its Defense station's system and joins only if that garrison is still short when it arrives. The Faction overview card lists "{hull} flying to its fleet at {system}" while it flies, but that card is editor-only.
+Zero jumps, or no route, means it joins immediately. The destination is the rendezvous system of the fleet: the fleet's destination if it is travelling, otherwise where it is. A garrison ship flies to its Defense station's system and joins only if that garrison is still short when it arrives. If its fleet is full or gone on arrival, it picks another fleet (see below) and flies a new leg from where it landed. The Faction overview card lists "{hull} flying to its fleet at {system}" while it flies, but that card is editor-only.
 
 If the ship's own fleet is gone or full when the build finishes or the delivery arrives, it goes to:
 
 1. The below-target fleet with the fewest points.
 2. A new fleet founded in that system, if the faction has fleet slots free under its cap.
 3. Otherwise it is scrapped ("scrapped, every fleet full"). The wealth is already spent.
+
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 320
+---
+flowchart TD
+    Q["Ship queued<br/>price paid, yard slot reserved"] --> B["Builds at the yard<br/>(300 + 1.2 x hull points) / speed"]
+    B --> F["Flies to its fleet<br/>30 + 30 x jumps seconds"]
+    F --> C["Own fleet still there and not full?"]
+    C -- Yes --> J["Joins its fleet"]
+    C -- No --> D["A fleet below target?"]
+    D -- Yes --> J2["Joins the one with the fewest points"]
+    D -- No --> E["Fleet slots free under the cap?"]
+    E -- Yes --> N["Founds a new fleet in that system"]
+    E -- No --> S["Scrapped<br/>the wealth is already spent"]
+```
 
 In the code: [delivery](#code-delivery).
 
@@ -297,7 +367,7 @@ Several rules push a weak faction back toward parity. They are the reason that m
 |---|---|---|
 | Under-cap build discount | Fewer fleet slots used than the fleet cap | Warships cost 50%, build 3 times faster |
 | Home subsidy | Kolyatov, Stellar, Luminate and Darkspace, while a war zone exists | 120,000 x (1 - war-zone share / (1/3)), never below 0, per hour (hourly economy tick) |
-| Great Gate reinforcement | Kolyatov, Stellar and Luminate, not sitting out, fleet slots used below half the fleet cap, cooldown over | A fleet of 1500 points appears at the war-zone system nearest the Great Gate; cooldown 12 hourly economy ticks |
+| Great Gate reinforcement | Kolyatov, Stellar and Luminate, not sitting out, fleet slots used below half the fleet cap, cooldown over | A fleet of 1500 points appears at the war-zone system nearest the Great Gate (or, if the faction holds no war-zone system, at the first usable system of the embassy staging sector); the cooldown is set to 12 and counts down one per hourly economy tick, and a fleet can only be sent on a tick where it is already 0, so sends are at least 13 hourly economy ticks apart |
 | Canisec home subsidy | A Frontier sector exists | 200,000 per hour (hourly economy tick) |
 | Darkspace starting top-up | New game | Darkspace wealth is raised to the average of the three Great Gate factions (Kolyatov, Stellar, Luminate) |
 
@@ -358,19 +428,27 @@ In the code: [intercepting deliveries and convoys](#code-intercepting-deliveries
 
 ## Raids and the economy
 
-A raid completes when a raiding fleet wins its raid battle at an economic outpost (any station that is not a Defense station). It targets an economic outpost of a faction. The Empire Log shows the result as "raid succeeded" to the raider and "outpost raided" to the victim. A completed raid then does four things:
+A raid completes when a raiding fleet wins its raid battle at a station that can be raided: any faction station or your station that is not a Defense station, not wrecked and not still on a raid cooldown. The Empire Log shows the result as "raid succeeded" to the raider and "outpost raided" to the victim. A completed raid then does four things:
 
 ```
 wealth drained   = the smaller of
                    the victim's wealth
                    1.5 x its average hourly income (not counting home subsidy)
-materials taken  = half of every stack in the station's storage (for an NPC raider)
+materials taken  = half of every stack in the station's storage (10% if the raider is you)
 production pause = 3600 s (1 hour)
 raid cooldown    = 14400 s (4 hours)
 raider earns     = wealth drained + 10% of the value of the materials taken
 ```
 
-The average hourly income is the sum of the last 24 closed hourly buckets plus the current hour, over all income kinds including trade and raids, divided by 24. The drain therefore equals one and a half average hours of income other than home subsidy, capped by the wealth the faction has.
+The average hourly income is the sum of the last 24 closed hourly buckets plus the current hour, over all income kinds including trade and raids, divided by 24. The drain therefore equals one and a half average hours of income other than home subsidy, capped by the wealth the faction has. Materials are taken per stack and rounded down, so a stack of one item loses nothing. The stolen materials vanish; only their value is counted as the raider's earnings.
+
+Who gains and who loses:
+
+| Victim | Raider | Result |
+|---|---|---|
+| NPC faction's station | NPC faction | The victim loses the drain and half of each stack. The raider's wealth rises by the drain plus 10% of the materials' value, booked as "Raids" |
+| NPC faction's station | Your empire fleet on a Raid order | The victim loses the drain and 10% of each stack (not half). You are paid credits: 10 credits per point of wealth gained, so (drain + 10% of the materials' value) x 10 |
+| Your station | NPC faction | No wealth is drained and no materials are taken, and the raider earns nothing. The pause and cooldown still apply to your station |
 
 The 3600 s pause stops the economic outpost's own jobs: production, work-bay and garrison refit, player construction jobs, prosperity growth, and every cargo route sourced there (so its runs, including trade deliveries that would pay income, stop advancing). The 14400 s cooldown means that economic outpost cannot be raided again until it ends.
 
@@ -393,9 +471,11 @@ Destroying a yard marks it wrecked, turns 10% of its storage into loot (the rest
 | Wary or better (reputation above -5,000) | -5,000 |
 | Hostile or worse (-5,000 or lower) | -1,000 |
 
-The wreck is removed when you leave the system. Until then the planner still counts it as a yard.
+The cost is waived while a Decoy Transponder is active.
 
-The ships already in the faction's queue are not cancelled. With the yard gone, each queue entry counts the yard as having 1 slot, so only one entry per destroyed yard progresses at a time. The build speed was fixed when the ship was queued and stays. When the entries finish, the ships are delivered as normal. The queue is only emptied when a system is captured or its yard system is purged. War-zone yards do not exist, so captures do not reach yards in practice.
+The wreck is removed when you leave the system or when a game is loaded. Until then the game still lists it as one of the faction's stations: the planner counts it as a yard and it takes a station slot.
+
+The ships already in the faction's queue are not cancelled. Once the wreck is removed, each queue entry counts the yard as having 1 slot, so only one entry per destroyed yard progresses at a time. The build speed was fixed when the ship was queued and stays. When the entries finish, the ships are delivered as normal. The queue is only emptied when a system is captured or its yard system is purged. War-zone yards do not exist, so captures do not reach yards in practice.
 
 With no yard, nothing is queued at that site. The planner replaces the yard on its next hourly economy tick if the faction's yard count is below the chain target and wealth is at least 50,000. The replacement takes 3600 s (1 hour) and starts at tier 1. A destroyed tier-5 yard comes back with 1 slot and 1.0 build time instead of 3 slots and 0.5, which is about a sixth of the throughput until it is upgraded again. The replacement site is chosen fresh and need not be the same system.
 
@@ -415,7 +495,7 @@ Ranked by how much production they remove per reputation spent. "Cut" is what th
 | 4 | Stop doing embassy missions for it | 0 | Each mission is +40,000 to +120,000 wealth to the faction | Avoids feeding wealth |
 | 5 | Kill cargo convoys of its Production stations | Same as rows 1 and 3 | The run's trade or sales income (10% of value, 14% for an embassy) | Next run goes out normally. Minor next to taxes |
 | 6 | Destroy Defense stations | Same as the yard | Garrison ships are lost with the station; the faction pays 100,000 and 3600 s for a replacement and then new garrison ships | Capped at one Defense station under construction at a time |
-| 7 | Capture war-zone systems (see [war](war.md)); the Empire Log shows "system captured" | Depends on the war | -20,000 wealth per hour for each system on average, and 0 taxes for 2 conquest updates after capture | A Great Gate faction (Kolyatov, Stellar, Luminate) below 1/3 of the war zone gets up to 120,000 per hour of home subsidy and, below 50% of its cap, a free or paid Great Gate reinforcement of 1500 points every 12 hours |
+| 7 | Capture war-zone systems (see [war](war.md)); the Empire Log shows "system captured" | Depends on the war | -20,000 wealth per hour for each system on average, and no taxes for the next one or two hourly tax payments after capture (while the system is in unrest) | A Great Gate faction (Kolyatov, Stellar, Luminate) below 1/3 of the war zone gets up to 120,000 per hour of home subsidy and, below 50% of its cap, a free or paid Great Gate reinforcement of 1500 points, at least 13 hours apart |
 
 In the code: [ways to slow a faction](#code-ways-to-slow-a-faction).
 
@@ -435,6 +515,7 @@ In the code: [ways to slow a faction](#code-ways-to-slow-a-faction).
 - One size-1 combat hull in the prefab data carries a point value of 2,500. Its identity was not looked up and it is left out of the size table.
 - Whether attacking one ship of an intercepted convoy flags the whole convoy as hostile, which would change the reputation cost per convoy.
 - Whether story time runs while the game is paused or on a menu. Build times are in story seconds.
+- Prefab data: every ship point value in the cost table, and the 2,500-point size-1 hull, comes from `SpaceShip.pointValue` in the game's asset files, which are not in the decompiled source.
 
 In the code: [not verified](#code-not-verified).
 
@@ -450,7 +531,7 @@ This part holds the code detail behind the player sections above: class and meth
 
 ### Code: What the Faction overview shows
 
-Combat Power is `totalPoints` summed over the faction's fleets. The Economic Outposts tile shows `economic outposts + economic outposts under construction` over `2 x systems held` ("slots used").
+Combat Power is `totalPoints` summed over the faction's fleets. The Economic Outposts tile shows `FactionStation.GetAllOwnedBy(faction).Count + economy.constructions.Count` (every `FactionStation`, Defense stations and wrecks included) over `economy.outpostSlots` (`2 x systems held`, "slots used").
 
 The card that lists the income and spending ledger, the Construction Yards count, active ship builds, deliveries and recent builds (`FactionOverviewContent.BuildShipyardSection`) exists in the code but is only enabled when running inside the Unity editor, so it does not appear in the released game. The ledger entries are therefore only visible indirectly, as movement in the Economic Power tile.
 
@@ -481,7 +562,7 @@ Each earning is booked under a `LedgerEntry` kind. NPC factions add the amount t
 | `PlayerSupport` | Your embassy missions |
 | `Raids` | Raids |
 
-In code, `isInUnrest` is true while `settlingTicks` is above 4. A captured system starts at 6 and loses one per conquest update (hourly), so it pays no taxes for the first two conquest updates after capture.
+In code, `isInUnrest` is true while `settlingTicks` is above 4. A captured system starts at 6 (`SettlingTicks`) and loses one per conquest update (hourly), so `RollSystemWealth` returns 0 for the hourly tax rolls made at counts 6 and 5.
 
 `PlayerRaids` ("Lost to your raids") is a ledger kind NPC factions never use: it is defined and labelled but nothing in the code records it.
 
@@ -509,7 +590,7 @@ Source: `FactionEconomicPlanner.TryBuildNext`, `FactionEconomicPlanner.TryUpgrad
 
 #### Code: Order of builds
 
-Each hourly economy tick `FactionEconomicPlanner.Tick` first makes sure chain routes exist, then takes up to 2 actions. One action is either a new economic outpost or an upgrade: if `economic outposts + economic outposts under construction` is below `2 x systems held`, it tries to build; otherwise it upgrades one economic outpost instead.
+Each hourly economy tick `FactionEconomicPlanner.Tick` first makes sure chain routes exist, then takes up to 2 actions (`TryTakeAction`). One action is either a new economic outpost or an upgrade: if `FactionStation.GetAllOwnedBy(faction).Count + economy.constructions.Count` (all `FactionStation` types, Defense stations included) is below `economy.outpostSlots` (`2 x systems held`), it tries to build (`TryBuildNext`); otherwise it upgrades one station (`TryUpgrade`).
 
 With E extractors (Mining plus Salvage), the chain target is `max(1, ceil(E / 6))` of each chain stage, built in the order Refinery, Production, Construction Yard.
 
@@ -517,7 +598,7 @@ Source: `FactionEconomicPlanner.ChooseNextStationType`, `FactionEconomicPlanner.
 
 #### Code: Where economic outposts go
 
-A Construction Yard is never built in a war-zone system. The one exception, `CanHostHeadquartersYard`, is never true because `ConquestWarTuning.HeadquartersYardFactions` is empty. Every yard sits in home space, meaning outside the war zone.
+A Construction Yard is never built in a war-zone system. The one exception, `CanHostHeadquartersYard`, is never true because `ConquestWarTuning.HeadquartersYardFactions` is empty. Every yard sits in home space, meaning outside the war zone. `IsValidSite` also requires `ConquestScope.AllowsStations` (not the Meridia sector), `IsInScopeQuadrant` (Frontier, Conquest or an expansion quadrant) and `FactionStation.CountIn(system) + CountPendingIn < 2`; `CountIn` counts every `FactionStation` in the system, whatever its type or owner.
 
 Source: `FactionEconomicPlanner.IsValidSite`, `FactionEconomicPlanner.CompareSites`, `FactionEconomicPlanner.IsInScopeQuadrant`, `FactionEconomicPlanner.CanHostHeadquartersYard`, `ConquestWarTuning.HeadquartersYardFactions`
 
@@ -581,13 +662,13 @@ Source: `ConquestFleetPlanner.TryQueueBuild`, `FactionEconomy.fleetSlotsUsed`, `
 
 | Faction | Cap (`MaxFleetsFor`) |
 |---|---|
-| Mindus Holdings, Steel Vultures, Stranded | 0 if no war-zone systems. Otherwise `3 + floor(InverseLerp(1.5M, 3M, embassy wealth) x 2)`: 3 below 1.5M embassy wealth, 4 from 2.25M, 5 at 3M |
+| Mindus Holdings, Steel Vultures, Stranded | 0 if no war-zone systems. Otherwise `3 + floor(InverseLerp(1.5M, 3M, embassy wealth) x 2)`: 3 below 2.25M embassy wealth, 4 from 2.25M, 5 from 3M |
 | Corsair Syndicate while holding no war-zone system | 2 |
 | Any faction outside the war-fielding list | 1 |
 | Darkspace Compact | 5 |
 | Kolyatov, Stellar, Luminate, Meridia's Chosen, Corsairs holding a war-zone system | `min(territoryCap, 5 + floor(warZoneSystems / 15))` |
 
-`territoryCap` is 8. For the three guild factions the value that counts is the embassy wealth you deliver through embassy missions with that faction; the code calls it contribution.
+`territoryCap` is 8 (`MaxTerritoryFleets`), except Meridia's Chosen (6, once `Faction.ExpansionWarOpen`) and the Darkspace Compact (12). Before the expansion war the Darkspace Compact is fixed at 5. For the three guild factions the value that counts is the embassy wealth you deliver through embassy missions with that faction; the code calls it contribution.
 
 Source: `ConquestFleetPlanner.MaxFleetsFor`, `ConquestFleetPlanner.MaxTerritoryFleets`, `ConquestJoin.GetContributionFleetCap`, `ConquestJoin.GetFleetCapForContribution`, `ConquestWarTuning.FleetFieldingFactions`, `ConquestWarTuning.ContributionFleetFactions`
 
@@ -606,7 +687,7 @@ Source: `ConquestFleetPlanner.ChooseBuildOrder`, `ConquestFleetPlanner.ChooseGar
 
 #### Code: New ship level
 
-A ship leaves the yard at `max(1, galaxyLevel + 6)` (`FleetLevels.GetNpcFleetLevel`). Fleets that fall behind that level are refitted at a yard for 300 s, up to 3 refits at once.
+A ship leaves the yard at `max(1, galaxyLevel + 6)` (`FleetLevels.GetNpcFleetLevel`; `galaxyLevel` is `max(effectiveLevel, Conquest.GetHighestSystemLevel)`). `ConquestFleetOrders.IsDueRefit` sends a fleet to a yard system within 4 jumps (`ChooseRefitYard`) when its point-weighted level is at or below the NPC fleet level minus 3 (`FleetLevels.IsDueRefit`); the refit takes 300 s (`BeginRefit`) and `AssignRefit` allows 3 at once. A garrison refit is due on the same 3-level rule (`FactionGarrison.IsDueRefit`), takes 300 s and is skipped while the system is besieged.
 
 Source: `FleetLevels.GetNpcFleetLevel`, `ConquestWarTuning.RefitSeconds`, `ConquestWarTuning.MaxConcurrentRefits`
 
@@ -636,7 +717,7 @@ Source: `CorsairRaids.Tick`, `CorsairRaids.TryRaiseFleet`, `YardlessFleetSupply.
 |---|---|---|
 | Under-cap build discount | `fleetSlotsUsed < MaxFleetsFor` | Warships cost 50%, build 3 times faster |
 | Home subsidy | Kolyatov, Stellar, Luminate and Darkspace, while a war zone exists | `120,000 x clamp01(1 - warZoneShare / (1/3))` per hour (hourly economy tick) |
-| Great Gate reinforcement | Kolyatov, Stellar and Luminate, not sitting out, `fleetSlotsUsed < 0.5 x MaxFleetsFor`, cooldown over | A fleet of 1500 points appears at the war-zone system nearest the Great Gate; cooldown 12 hourly economy ticks |
+| Great Gate reinforcement | Kolyatov, Stellar and Luminate, not sitting out, `fleetSlotsUsed < 0.5 x MaxFleetsFor`, cooldown over | A fleet of 1500 points appears at the war-zone system nearest the Great Gate (`ChooseEntrySystem`); with no war-zone system it appears in the first non-reserved system of the embassy staging sector; `greatGateCooldown` is set to 12 and decremented once per tick, and `Tick` sends only when it is 0, so sends are at least 13 hourly economy ticks apart |
 | Canisec home subsidy | A Frontier sector exists | 200,000 per hour (hourly economy tick) |
 | Darkspace starting top-up | New game | Darkspace wealth is raised to the average of the three Great Gate factions (Kolyatov, Stellar, Luminate) |
 
@@ -670,15 +751,15 @@ Source: `InterceptManager.TryIntercept`, `InterceptManager.LockOn`, `InterceptMa
 The result is logged as `BattleOutcome.Raided`. `StationRaid.ApplyRaid` then does four things:
 
 ```
-drain          = min(wealth, 1.5 * max(0, (income24h - subsidy24h) / 24))   // from an NPC owner
-materials      = floor(count * share) of every stack in the station's storage
-                 share = 0.5 for an NPC raider
+drain          = min(wealth, 1.5 * max(0, (income24h - subsidy24h) / 24))   // from an NPC owner; 0 if the owner is the player
+materials      = floor(count * share) of every stack in the station's storage   // 0 if the owner is the player
+                 share = 0.5 for an NPC raider, 0.1 for the player (GetMaterialShare)
 station.productionPausedFor = 3600 s
 station.raidCooldown        = 14400 s
-raider earns   = drain + 0.1 * (value of the materials taken)
+raider earns   = drain + 0.1 * (value of the materials taken)   // Earn(LedgerEntry.Raids)
 ```
 
-`income24h` is the sum of the last 24 closed hourly buckets plus the current hour, over all income kinds including trade and raids. Dividing by 24 gives an average hour.
+`income24h` is the sum of the last 24 closed hourly buckets plus the current hour, over all income kinds (the `IsIncome` set: taxes, trade, sales, subsidy, embassy missions, raids, trade bay) including trade and raids. Dividing by 24 gives an average hour. When the raider is the player faction, `FactionEconomy.Earn` pays credits through `EmpireIncome.ToCredits`, which is `wealth x 10`. Empire fleets can be given a Raid order on any `FactionStation` (`EmpireFleets`).
 
 The warship queue is in `FactionEconomy.shipConstructions`, not in the economic outpost. `CanRaid` is false until the cooldown ends.
 
@@ -686,9 +767,9 @@ Source: `StationRaid.ApplyRaid`, `StationRaid.DrainOwner`, `StationRaid.GetMater
 
 ### Code: What happens when you destroy a yard
 
-`FactionStationDestruction.OnDestroyedByPlayer` marks the yard wrecked, turns 10% of its storage into loot (the rest is cleared), refunds any player build jobs, and costs reputation.
+`FactionStationDestruction.OnDestroyedByPlayer` marks the yard wrecked, turns 10% of its storage into loot (the rest is cleared), refunds any player build jobs, and costs reputation (`ApplyDestroyReputation` charges nothing while `hasUmbralTransponder`, the Decoy Transponder, is active).
 
-With the yard gone, each queue entry looks up a slot count for a missing yard, which falls back to 1. The queue is only emptied when a system is captured or its yard system is purged (`SystemCaptureCleanup`, `PurgeStaleShipConstructions`).
+With the yard gone, each queue entry looks up a slot count for a missing yard, which falls back to 1. Until `CompleteWreck` swaps the wreck out (on leaving the system, or `CompleteAllWrecks` at load), the wrecked `FactionStation` is still returned by `GetAllOwnedBy` and `QueueWarshipBuilds` does not check `wrecked`. The queue is only emptied when a system is captured or its yard system is purged (`SystemCaptureCleanup`, `PurgeStaleShipConstructions`).
 
 With no yard, `QueueWarshipBuilds` queues nothing at that site.
 
@@ -704,3 +785,4 @@ Row 5 income is the `Trade` or `Sales` income of the run. The reputation cost of
 - One size-1 combat hull in the prefab data carries a point value of 2,500. Its identity was not looked up and it is left out of the size table.
 - Whether attacking one ship of an intercepted convoy flags the whole convoy as hostile, which would change the reputation cost per convoy.
 - Whether story time runs while the game is paused or on a menu. Build times are in story seconds.
+- Whether `SpaceShip.pointValue` of the ship prefabs matches the size table: prefab data is in the asset files, not the decompiled source.

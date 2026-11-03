@@ -7,8 +7,8 @@ Terms are in the [late-game glossary](glossary.md), the [basics glossary](../bas
 ## Spoiler: Gates
 
 - **The Umbral line.** The first mission of each faction's Conquest chain (Stellar, Kolyatov or Luminate, depending on your faction) pays 2,000,000 credits, 60 Vanguard Marks, XP, the second mission and the Umbral line. So the Umbral line is granted with the reward of your faction's first Conquest mission.
-- **The Darkspace line.** The second mission (the 30% sector-control mission) starts the next story mission of the Darkspace line. I did not find that mission defined in the code.
-- **Malcyte and Meridia.** In version 0.8.3.4 only the debug console wakes Malcyte or opens Meridia. I found no other caller. How either one happens in a normal game is "(not verified)".
+- **The Darkspace line.** The second mission (the 30% sector-control mission) pays 10,000,000 credits, 400 Vanguard Marks, 1 skill point, XP and the first mission of the Darkspace line. That mission is a single travel step to a point of interest in a Conquest staging system. It pays XP and 200 reputation with the Darkspace Compact, and starts the next Darkspace mission.
+- **Malcyte and Meridia.** In version 0.8.3.4 only the debug console wakes Malcyte or opens Meridia, and only once the expansion is unlocked. I found no other caller. How either one happens in a normal game is "(not verified)".
 
 In the code: [gates](#code-gates).
 
@@ -29,10 +29,10 @@ This part holds the code names behind the sections above. It comes from the deco
 
 ### Code: Gates
 
-The first mission of each faction's Conquest chain is `ConquestStellar1`, `ConquestKolyatov1` or `ConquestLuminate1`. Its reward is 2,000,000 credits, 60 Vanguard Marks, XP, the second mission and the Umbral line (`ConquestUmbral1`).
+The first mission of each faction's Conquest chain is `ConquestStellar1`, `ConquestKolyatov1` or `ConquestLuminate1`. Its reward is 2,000,000 credits, 60 Vanguard Marks, XP, the second mission and the Umbral line (`ConquestUmbral1`). The reward list is built in `ConquestMissions.AddHQIntroRewards`. `GamePatch.TryAddUmbralMission` adds the same reward to an already running first mission, or starts `ConquestUmbral1` if the first mission is already archived.
 
-The second mission (the 30% sector-control mission: `ConquestStellar2` and its siblings) starts the next story mission, `ConquestDarkspace1`, which I did not find defined in the code.
+The second mission (the 30% sector-control mission: `ConquestStellar2` and its siblings) pays 10,000,000 credits, 400 Vanguard Marks, 1 skill point, XP and `ConquestDarkspace1` (`ConquestMissions.AddConquestProgressRewards`; `GamePatch.TryAddDarkspaceMission` does the same catch-up for saves in progress). `ConquestDarkspace1` is defined in `UmbralMissions.ConquestDarkspace1`: one `TravelToPOI` step to a combat point of interest in a random conquest staging system, with rewards of XP, a `Reputation` reward of 200 and `ConquestDarkspace2`. The reputation reward names no faction, so `Reputation.OnComplete` applies it to the mission's source faction, `darkspacers`.
 
-`Conquest.WakeMalcyte` and `Conquest.OpenMeridia` are only called from the debug console in 0.8.3.4. The commands are `wmc` (wake Malcyte) and `omr` (open Meridia), in `Behaviour.UI.DebugScreen/ConsoleScreen.cs`. How either one happens in a normal game is `(not verified)`.
+`Conquest.WakeMalcyte` and `Conquest.OpenMeridia` are only called from the debug console in 0.8.3.4, and the console refuses both until `expansionUnlocked` is true. The commands are `wmc` (wake Malcyte) and `omr` (open Meridia), in `Behaviour.UI.DebugScreen/ConsoleScreen.cs`. How either one happens in a normal game is `(not verified)`.
 
-Source: `Conquest.WakeMalcyte`, `Conquest.OpenMeridia`, `Behaviour.UI.DebugScreen/ConsoleScreen.cs`.
+Source: `ConquestMissions.AddHQIntroRewards`, `ConquestMissions.AddConquestProgressRewards`, `GamePatch.TryAddUmbralMission`, `GamePatch.TryAddDarkspaceMission`, `UmbralMissions.ConquestDarkspace1`, `Conquest.WakeMalcyte`, `Conquest.OpenMeridia`, `Behaviour.UI.DebugScreen/ConsoleScreen.cs`.

@@ -13,8 +13,8 @@ Pages: [The control story line](control-story.md), [The closed sector story line
 | war zone (Darkspace) | none | The Darkspace region is not part of the war zone. |
 | Automated Outpost | "Automated Outpost" (map location type) | An Umbral Reach station. Not the same as an economic outpost. |
 | puppeteers' station | none | The 6-part station in quadrant 2. Not an economic outpost or an outpost system. |
-| Meridia (sector) | "There is nothing to besiege here" when you order an attack | The sector that allows no stations. Malcyte hold it without hubs. |
-| Meridia (quadrant) | none | While closed, open only to Malcyte, Meridia's Chosen and, outside the Meridia sector, Darkspace Compact. Jump gates into it are closed. |
+| Meridia (sector) | "There is nothing to besiege here" when you order an attack | The sector that allows no stations. Malcyte hold it without hubs, so fleets cannot attack it. |
+| Meridia (quadrant) | "closed" when you claim a system or order a fleet or raid there | While closed, open only to Malcyte, Meridia's Chosen and, outside the Meridia sector, Darkspace Compact. You are refused. The game also treats jump gates into it as closed. |
 
 Collisions in this group:
 
@@ -27,9 +27,9 @@ In the code: [places and stations](#code-places-and-stations).
 | Term used here | What the game shows | Meaning |
 |---|---|---|
 | Umbral Reach control | "Umbral Reach control" row | How far the Umbral Reach has spread into a system, as a percentage. |
-| conquest update (Umbral spread) | "Conquest Update" card | The hourly conquest update also spreads the Umbral Reach. |
-| Umbral Hacking Tool | none | Starts Umbral Reach infection in a system by setting its control to 0.05 (0.7 for the "uber" variant). |
-| Umbral transponder | none | Skips several reputation costs for entering, boarding, killing parts and destroying stations. The list is on [the control story line](control-story.md#spoiler-what-the-transponder-changes). |
+| conquest update (Umbral spread) | "Conquest Update" card | The hourly conquest update also spreads the Umbral Reach: one 50% roll per update, at most one new system. |
+| Umbral Hacking Tool | none | Starts Umbral Reach infection in a system by setting its control to 0.05 (0.7 for the "uber" variant). Use it at the system's hub, friendly, with no control yet; unless "uber", a neighboring hub must be above 0.19. |
+| Umbral transponder | "Decoy Transponder" (item) | Prevents reputation loss and gains from combat until you next dock. Skips the reputation cost of entering a facility or boarding a ship, of every kill (parts and ships), and of destroying a faction station or yard. The list is on [the control story line](control-story.md#spoiler-what-the-transponder-changes). |
 
 In the code: [conquest map](#code-conquest-map).
 
@@ -37,7 +37,7 @@ In the code: [conquest map](#code-conquest-map).
 
 | Term used here | What the game shows | Meaning |
 |---|---|---|
-| Malcyte | none | The dormant, yardless raider faction. A hard-boarding faction. See [the closed sector story line](closed-sector-story.md). |
+| Malcyte | none | The dormant, yardless raider faction. Dormant, it earns no taxes, fields no fleets and has a fleet cap of 0. A hard-boarding faction. See [the closed sector story line](closed-sector-story.md). |
 
 In the code: [factions](#code-factions).
 
@@ -66,7 +66,7 @@ This part maps the terms above to their names in the decompiled source of versio
 | Umbral Reach control | `umbralControlLevel` |
 | conquest update (Umbral spread) | `Conquest.DoConquestTick` |
 | Umbral Hacking Tool | `UmbralHackingTool`, `UmbralHackingBot` |
-| Umbral transponder | `hasUmbralTransponder` |
+| Umbral transponder | `hasUmbralTransponder`, `UmbralTransponderItem` (the item's translation key is `UmbralTransponder`) |
 
 ### Code: Factions
 

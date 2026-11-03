@@ -16,7 +16,7 @@ Pages: [combat damage](combat-damage.md), [scaling](scaling.md), [stations](stat
 | sector | "Subsector" (map label); "Quadrant" for the big map regions | A group of systems. The pages say "sector" for the game's "Subsector". |
 | Defense platform | "Defense Platform" | A turret-carrying part inside a combat station. It is what gives a station its firepower. |
 | combat station | "Combat Station" (map location type) | Any station built from destroyable parts: mission stations, pirate stations and others. [Stations](stations.md) is about these. |
-| Industrial Outpost | "Industrial Outpost" (map location type) | A separate, boardable neutral location. |
+| Industrial Outpost | "Industrial Outpost" (map location type) | A separate, neutral location: a small station you defend against waves, with repair, ammo and turret packs. Not the same as a faction's economic outposts. See [stations](stations.md#industrial-outpost-stations). |
 | location | none | Anything you can fly to inside a system: a station, gate, asteroid field. The pages write "location" instead of "point of interest". |
 
 In the code: [places and stations](#code-places-and-stations).
@@ -36,7 +36,7 @@ In the code: [fleets and battles](#code-fleets-and-battles).
 | ECHO | "ECHO" | Your ship's AI companion. |
 | escalation | "Escalation" (button), "Enemy toughness / damage / forces" | A difficulty setting you choose that scales enemies up and rewards with them. |
 | ship rank | "Rookie", "Regular", "Veteran", "Elite", "Champion", "Commander", "Legendary" (badge on a ship tooltip) | An enemy ship's strength tier. Distinct from rarity. |
-| rarity | Standard, Enhanced, High Grade, Exotic, Legendary (item colors; High Grade is blue) | An item's quality tier. Legendary appears at level 60 or higher. |
+| rarity | Standard, Enhanced, High Grade, Exotic, Legendary (item colors; High Grade is blue) | An item's quality tier. Legendary loot-box gear appears at level 60 or higher; enemy gear can carry it a few levels earlier. |
 
 In the code: [missions and standing](#code-missions-and-standing).
 
@@ -77,7 +77,7 @@ In the code: [reputation](#code-reputation).
 | DoT | none | Damage over time: damage applied across several seconds, for example Heat damage from an aspect. |
 | Damage Reduction, resistance | "Damage Reduction", "Kinetic Resistance" and so on | See [combat damage](combat-damage.md). |
 | EMP | "EMP Output" | Electromagnetic pulse. EMP weapons raise the chance that a damaged ship becomes boardable. |
-| AP ammo | "Armor Piercing" rounds | Boarding ammunition that does well against armored crew. |
+| AP ammo | "Armor Piercing" rounds | Boarding ammunition that deals 1.2x damage to Marines and Gunners. |
 | DT Chaingun | "DT Chaingun" | A large kinetic weapon. "DT" is part of its name. |
 
 In the code: [stats and combat abbreviations](#code-stats-and-combat-abbreviations).

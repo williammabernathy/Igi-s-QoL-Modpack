@@ -10,13 +10,13 @@ These rows extend the kinds-of-system table in [war](../conquest/war.md#the-war-
 
 | Kind | System card title or hint | What it means |
 |---|---|---|
-| Meridia | "There is nothing to besiege here" when you order an attack | The Meridia sector allows no stations, so Malcyte hold it without hubs. There is nothing to besiege, and fleets cannot attack it. |
+| Meridia | "There is nothing to besiege here - the Malcyte hold this system without stations." when you order an attack | The Meridia sector allows no stations, so Malcyte hold it without hubs. There is nothing to besiege, and fleets cannot attack it. |
 
 In the code: [the closed sector in the kinds of system](#code-the-closed-sector-in-the-kinds-of-system).
 
 ### The closed quadrant
 
-While Meridia is closed, systems in the Meridia quadrant are open only to Malcyte, their war ally Meridia's Chosen, and (outside the Meridia sector itself) Darkspace Compact. That includes you. Jump gates into the quadrant, and into the Meridia sector from outside it, are closed. Nothing outside the debug console opens it, so how it opens in a normal game is "(not verified)".
+While Meridia is closed, the quadrant is open only to Malcyte, their war ally Meridia's Chosen, and (outside the Meridia sector itself) Darkspace Compact. You are not on that list: claiming a system there, or ordering an Empire Fleet or raid there, is refused as "closed". The game also treats jump gates into the quadrant, and into the Meridia sector from outside it, as closed, and sells no Jumpgate Pass for them. Whether those gates physically stop your travel is "(not verified)", because the gate open state is saved data, not set in the code. Nothing outside the debug console opens the quadrant, so how it opens in a normal game is "(not verified)".
 
 In the code: [the closed quadrant](#code-the-closed-quadrant).
 
@@ -32,7 +32,7 @@ This extends the "You still cannot" table of the "above level 60" scenario in [E
 
 ### Dormant until awake
 
-Dormant factions earn nothing and have a fleet cap of 0. Malcyte is dormant until it is awake.
+Dormant factions earn no system taxes, field no fleets and have a fleet cap of 0. Malcyte is dormant until it is awake.
 
 In the code: [dormant until awake](#code-dormant-until-awake).
 
@@ -54,6 +54,21 @@ These rows extend the [fleet cap table](../conquest/faction-economy.md#fleet-cap
 In the code: [fleet cap](#code-fleet-cap).
 
 ### Yardless fleets
+
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 260
+---
+flowchart TD
+    A["Malcyte dormant<br/>(earns nothing, fleet cap 0)"] -->|"Awake: debug console only,<br/>normal game not verified"| B["Hourly economy tick"]
+    B --> C["Idle or retreating fleet at<br/>one of its own systems"]
+    C --> D["Topped up at full price<br/>from wealth"]
+    B --> E["Fleet slots under the cap?"]
+    E -->|"Yes"| F["New 2000-point fleet at its<br/>first owned system, full price"]
+    E -->|"No"| G["No new fleet"]
+```
 
 Malcyte builds no ships at yards, like Corsair Syndicate while it holds no war-zone system (see [Factions without yards](../conquest/faction-economy.md#factions-without-yards)). Each hourly economy tick it tops up every idle or retreating fleet that is at one of its own systems, composing the missing points as a roster and paying at full price from wealth. If fleet slots are under the cap, it raises a new 2000-point fleet at its first owned system, which for Malcyte is a Meridia system, also at full price.
 
@@ -77,7 +92,7 @@ In the code: [the dormant faction's war ally](#code-the-dormant-factions-war-all
 
 ### Hard boarding
 
-The Malcyte is a "hard boarding" faction, like Meridia's Chosen, Canisec and The Radiant. Its ships are simulated at the higher of the ship's own level and your effective level + 10, unless the boarding comes from a capture mission. That alone puts the defenders at least 10 levels above you, which sets their HP multiplier to about 2.8 (see [Level scaling of defenders](../basics/boarding.md#level-scaling-of-defenders) and [Hard-boarding factions](../basics/boarding.md#hard-boarding-factions)).
+The Malcyte is a "hard boarding" faction, like Meridia's Chosen, Canisec and The Radiant. Its ships are simulated at the higher of the ship's own level and your effective level + 10, unless the boarding comes from a capture mission. That alone puts the defenders at least 10 levels above you, which sets their HP multiplier to at least about 2.8 (see [Level scaling of defenders](../basics/boarding.md#level-scaling-of-defenders) and [Hard-boarding factions](../basics/boarding.md#hard-boarding-factions)).
 
 In the code: [hard boarding](#code-hard-boarding).
 
@@ -111,17 +126,17 @@ The Meridia sector allows no stations (`AllowsStations` false).
 
 #### Code: The closed quadrant
 
-Nothing in the decompiled code outside the debug console calls `Conquest.OpenMeridia`, so how it opens in a normal game is `(not verified)`. `Conquest.WakeMalcyte` and `Conquest.OpenMeridia` are only called from the debug console in 0.8.3.4 (see the [late-game gates](README.md#code-gates)).
+`ConquestScope.IsOpenTo` is `false` for the player in the closed quadrant (`IsMalcyteSide` or, outside the Meridia sector, `darkspacers`, are the only admitted factions), and `SystemClaim` and `EmpireFleets` answer `@SystemClaimRefusalClosed` when it is false. `ConquestScope.IsClosedMeridiaGate` marks the gates; its only caller in 0.8.3.4 is the Jumpgate Pass shop in `SpaceStation`, which skips closed gates. Whether the gates stop travel is `(not verified)`. Nothing in the decompiled code outside the debug console calls `Conquest.OpenMeridia`, so how it opens in a normal game is `(not verified)`. `Conquest.WakeMalcyte` and `Conquest.OpenMeridia` are only called from the debug console in 0.8.3.4 (see the [late-game gates](README.md#code-gates)).
 
-Source: `ConquestScope.IsClosedMeridiaGate`, `ConquestScope.IsOpenTo`
+Source: `ConquestScope.IsClosedMeridiaGate`, `ConquestScope.IsOpenTo`, `SystemClaim`, `EmpireFleets`, `SpaceStation`
 
 ### Code: The dormant raider faction
 
 #### Code: Dormant until awake
 
-Malcyte (`amalgam`) is dormant until `Faction.MalcyteAwake`.
+Malcyte (`amalgam`) is a homeland raider (`ConquestWarTuning.HomelandRaiderFactions`), and `ConquestJoin.IsDormant` is true for it until `Faction.MalcyteAwake`. A dormant faction gets no system taxes (`FactionEconomicPlanner.GrowWealth` returns early), a fleet cap of 0 and no fleet planning (`ConquestFleetPlanner.Tick` only disbands its uncommitted fleets).
 
-Source: `FactionEconomicPlanner.GrowWealth`
+Source: `ConquestJoin.IsDormant`, `FactionEconomicPlanner.GrowWealth`, `ConquestFleetPlanner.MaxFleetsFor`, `ConquestFleetPlanner.Tick`
 
 #### Code: As a raider
 
@@ -140,7 +155,7 @@ Source: `ConquestFleetPlanner.MaxFleetsFor`, `ConquestWarTuning.FleetFieldingFac
 
 #### Code: Yardless fleets
 
-Each hourly economy tick `CorsairRaids.Tick` tops up every idle or retreating fleet that is at one of its own systems. If fleet slots are under the cap, it raises a new 2000-point fleet at its first owned system. Malcyte earns wealth from taxes on systems it holds and from `Raids`.
+Each hourly economy tick `CorsairRaids.Tick` tops up every idle or retreating fleet that is at one of its own systems and below its target points. If fleet slots are under the cap, it raises a new 2000-point fleet at `FindHome`, the first system the faction owns; for a homeland raider that must be a Meridia system. Both pay `FactionShipPricing.GetRosterCost` from wealth (`YardlessFleetSupply.TryPay`, no 50% discount, nothing happens if wealth is short). Malcyte earns wealth from taxes on systems it holds (`GrowWealth`) and from `Raids` (`StationRaid`).
 
 Source: `CorsairRaids.Tick`, `CorsairRaids.TryRaiseFleet`, `YardlessFleetSupply.TryTopUp`, `YardlessFleetSupply.TryRaise`, `ConquestJoin.IsRaider`
 
@@ -158,7 +173,7 @@ Source: `ConquestScope.IsOpenTo`
 
 #### Code: Hard boarding
 
-The Malcyte (`amalgam`) is flagged `isHardBoardingFaction`, like Meridia's Chosen, Canisec and The Radiant. Its ships are simulated at level `max(shipLevel, yourEffectiveLevel + 10)` unless the boarding comes from a capture mission.
+The Malcyte (`amalgam`) is flagged `isHardBoardingFaction`, like Meridia's Chosen, Canisec and The Radiant. Its ships are simulated at level `max(shipLevel, yourEffectiveLevel + 10)` unless the boarding comes from a capture mission. The HP multiplier is `sqrt(2^(1 + clamp(gap, 0, 15) / 5) * lerp(0.5, 1, clamp01(gap / 10)))` for a level gap `gap`, which is 2.83 at a gap of 10 and 4 at 15 or more (`DungeonSimulation.ComputeLevelDifficultyMod`, `ApplyLevelScaling`).
 
 Source: `Faction.isHardBoardingFaction`, `DungeonSimulation.ComputeCombatLevel`.
 
@@ -172,6 +187,6 @@ Source: `FactionBoardingProfile.Build`.
 
 #### Code: Scuttle rate
 
-The ship scuttle rule is `0.08 * canScuttleReactor` per second. The Malcyte's rate is 0.08 per second, the same as Meridia's Chosen (0.016 for the Corsair Syndicate).
+The ship scuttle rule is `0.08 * canScuttleReactor` per second. The Malcyte's rate is 0.08 per second, the same as Meridia's Chosen (0.016 for the Corsair Syndicate). A ship flagged `shipNoScuttle` has its `canScuttleReactor` set to 0 and never scuttles.
 
 Source: `DungeonSimulation.TryScuttle`, `DungeonSimulation.FireScuttleOutcome`.

@@ -56,9 +56,9 @@ In-game names come from the game's text. Four stats have no name in the text and
 
 | In-game name | What it does |
 |---|---|
-| Hull HP | Last layer. Station parts get a base of their hull scale x 150 |
-| Armor HP | Armor layer capacity. Base is the unit's base armor if it has an armor module (unless the module overrides it), and 0 without one |
-| Shield HP | Shield layer capacity, same rule with the shield generator module |
+| Hull HP | Last layer. Base is the unit's hull scale x 150 (ships and station parts alike) |
+| Armor HP | Armor layer capacity. Base is the unit's armor scale x 300 if it has an armor module (unless the module overrides it), and 0 without one |
+| Shield HP | Shield layer capacity, same rule with the shield generator module (scale x 300) |
 | Hull Regeneration | Flat HP per second. Only while out of combat and below max |
 | Armor Regeneration | Flat armor per second |
 | Shield Regeneration | Flat shield per second, always on, even during the recharge delay. Base is 0.1% of max shield per second (set when the ship spawns) |
@@ -108,7 +108,7 @@ Damage and the seven type damage stats (Kinetic, Energy, Radiation, Heat, Cold, 
 damage multiplier = 1 + (type damage stat) + Damage
 ```
 
-Damage never rolls on items in 0.8.3.4. None of the 131 equipment builders lists it as a roll, and neither the type damage stats, the damage-versus-shield and damage-versus-armor bonuses, Critical Chance nor Damage Reduction. These stats come from aspects, skills, hull badges, mastery, hull upgrade milestones and officers. See [where bonuses come from](#where-bonuses-come-from).
+Neither Damage nor any type damage stat rolls on items in 0.8.3.4: none of the 131 equipment builders lists them, nor the damage-versus-shield and damage-versus-armor bonuses, Critical Chance or Damage Reduction. The rest of the game data adds nothing to them either. The only lines on Damage are the boss aspects Overcharge (x1.25) and Siege Mode (x1.2), which are multipliers, and a multiplier on a stat whose flat sum is 0 stays 0. So in 0.8.3.4 the damage multiplier above is 1, and those two aspects add no damage despite their text. This is read from the formulas and the game data, not observed in play. The stats that do have sources (damage versus shield and armor, Critical Chance, Damage Reduction) are listed in [where bonuses come from](#where-bonuses-come-from).
 
 In the code: [what the Damage stat is](#code-what-the-damage-stat-is).
 
@@ -117,7 +117,7 @@ In the code: [what the Damage stat is](#code-what-the-damage-stat-is).
 A weapon item carries a main power line (Combat Power for guns, Torpedo Power for torpedo bays). The ship pools all the Combat Power it has and hands each active combat turret a share:
 
 ```
-turret power = (weapon's own power x M  +  (ship power - own power of all active combat turrets x M) / N x turret rating) x weapon power multiplier
+turret power = (weapon's own power x M  +  max(0, ship power - own power of all active combat turrets x M) / N x turret rating) x weapon power multiplier
 
 ship power = the ship's Combat Power stat, with its multiplier M already applied
 M          = the product of the Combat Power multipliers
@@ -127,15 +127,54 @@ rating     = Tiny 0.45, Small 1, Medium 2, Large 3
 
 So the weapon's own number is multiplied by M and stays with that weapon. Everything else that adds Combat Power (optional rolls on any item, flat skill amounts, crew, hull upgrades) goes into one pool split in proportion to turret size. A Large turret gets three times the pooled share of a Small one. A disabled turret (manually, or converted to drones) leaves the pool. Multipliers on Combat Power (skills, hull badge, hull upgrades, reactor bonus, crew) multiply the whole pool and every main line.
 
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 420
+---
+flowchart TD
+    A["Weapon's own power × Combat Power multipliers<br/>stays with that weapon"]
+    B["Everything else that adds Combat Power<br/>goes into one shared pool"]
+    C["Pool split by turret size<br/>Tiny 0.45, Small 1, Medium 2, Large 3"]
+    D["Turret's share of the pool"]
+    E["Own power + share"]
+    F["× weapon power multiplier<br/>0.9 to 1.15"]
+    G["Turret power"]
+    B --> C --> D --> E
+    A --> E
+    E --> F --> G
+```
+
 The per-turret power multiplier is a weapon value (0.9 to 1.15, listed in the [weapon table](#typical-weapon-numbers)).
 
-Average damage per second (DPS) from one turret is turret power / 5 x 1.025, before crits and bonuses. The 1.025 is the mean of the 0.8 to 1.25 roll. The game's own expected-DPS display uses these exact constants.
+Average damage per second (DPS) from one turret is turret power / 5 x 1.025, before crits and bonuses. The 1.025 is the mean of the 0.8 to 1.25 roll. The game's own expected-DPS display uses these exact constants. That figure holds for weapons that fire shots. A beam (Plasma Beam, Cryo Lance) deals power / 5 only while its beam is on, which is 2 s at a time, and then reloads for its full reload time, so with the 2 s reload in the weapon table a beam averages about half of that.
 
 In the code: [where a turret's damage comes from](#code-where-a-turrets-damage-comes-from).
 
 ## The path of a hit
 
 The numbered steps run in this order for every damage event, whether it comes from a bullet, a beam tick, a missile or an explosion.
+
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 420
+---
+flowchart TD
+    A["1. Roll<br/>turret power / 5 × random 0.8 to 1.25<br/>÷ shots per second (beams: per second of firing)"]
+    B["2. Crits<br/>× (2 + Critical Damage) for each crit"]
+    C["3. Bonuses<br/>× (1 + type damage + Damage)"]
+    D["4. Resistance<br/>× max(0.2, 1 − Damage Reduction − type resist)<br/>at most 80% removed"]
+    E["5. Incoming damage cap<br/>hit limited to 20% of max total HP<br/>only a ship with the third Defense milestone"]
+    F["6. Shield<br/>× (1 + damage versus shield)<br/>shield absorbs up to what it has left"]
+    G["7. Armor<br/>× (1 + damage versus armor)<br/>× 1.25 if weak, else × 0.85 (0.95 painted)<br/>armor absorbs up to what it has left"]
+    H["8. Hull<br/>takes what is left<br/>at 0 hull the unit is destroyed"]
+    A --> B --> C --> D --> E --> F
+    F -->|"what shield could not absorb"| G
+    G -->|"what armor could not absorb"| H
+```
 
 In the code: [the path of a hit](#code-the-path-of-a-hit).
 
@@ -147,7 +186,7 @@ base = turret power / 5  x  random(0.8, 1.25)  /  shots per second
 
 "Shots per second" here is worked out from the weapon's own unmodified fire delay, reload, magazine and burst, which is the "Shots/s" column in the [weapon table](#typical-weapon-numbers). Because it ignores your Attack Speed, Reload Speed and Magazine Size bonuses, those stats raise the number of shots without shrinking each shot. Each one speeds up part of the firing cycle, so its gain depends on how much of the cycle that part takes: Attack Speed shortens the time between shots, Reload Speed the reload, Magazine Size cuts the number of reloads.
 
-Beams skip the division: each 0.2 s tick carries power x tick length instead, so a beam deals power / 5 per second of firing.
+Beams skip the division: each 0.2 s tick carries power x tick length instead, so a beam deals power / 5 per second of firing. A beam stays on for 2 s, then the turret reloads for its full reload time before the beam can come on again.
 
 In the code: [1. the shot is rolled](#code-1-the-shot-is-rolled).
 
@@ -173,13 +212,13 @@ shot = shot x max(0.2, 1 - Damage Reduction - resistance to the shot's type)
 
 This happens before any layer. The floor of 0.2 is the resist cap: Damage Reduction and the type resistance together can remove at most 80% of a hit. Past that total, extra resistance does nothing. Both stats can also go negative (the painter below, the escalation debuff on player ships), which raises the multiplier above 1 with no upper limit.
 
-While the player's ship is in a warp travel, damage it takes is multiplied by 0.1 after this step.
+While a warp or jumpgate transit is active, damage taken by any ship (yours included) is multiplied by 0.1 after this step.
 
 In the code: [4. target resistance](#code-4-target-resistance).
 
 ### 5. Incoming damage cap
 
-A player ship with the third milestone of the Defense hull upgrade path caps every single hit at 20% of its maximum total HP (hull + armor + shield), after step 4:
+A ship with the third milestone of the Defense hull upgrade path caps every single hit at 20% of its maximum total HP (hull + armor + shield), after step 4. The milestone is earned by absorbing damage over a ship's lifetime, which is how your own ship gets it (not verified for NPC ships):
 
 ```
 shot = min(shot, 0.2 x max total HP)
@@ -210,7 +249,7 @@ absorbed = min(shot, current armor);  armor -= absorbed;  shot -= absorbed
 
 The only armor type in 0.8.3.4 is Armor Plating (every armor has the same values): 15% resistance, weak to Corrosion with +25% damage taken. Armor resistance and weakness are exclusive: a weak type gets the +25% and not the -15%. Because resistance is applied before absorption, 100 armor HP lasts for 100 / 0.85, about 118, points of ordinary shot damage, and 100 / 1.25 = 80 points of Corrosion.
 
-The painter (a laser painter turret or drone) sets the paint strip, the number of armor resistance points it strips, to 0.10 for 6 seconds, which takes Armor Plating from 15% to 5% resistance. It also adds -0.05 Damage Reduction to the target for the same 6 seconds.
+The painter (the Painter Drone, the only painter in the game data) sets the paint strip, the number of armor resistance points it strips, to 0.10 for 6 seconds, which takes Armor Plating from 15% to 5% resistance. It also adds -0.05 Damage Reduction to the target for the same 6 seconds.
 
 In the code: [7. armor](#code-7-armor).
 
@@ -234,7 +273,7 @@ resistFactor = max(0.2, 1 - Damage Reduction - resistance), VsShield and VsArmor
 
 ### A worked example
 
-Illustrative inputs, computed from the formulas above: a level 30 Standard Medium Autocannon rolls a main Combat Power of 400 to 420 (the Medium roll of 2.0 to 2.1 times a power level of 200, see [weapon power](#weapon-power-by-level)). Say 410. The firing ship has +10% Kinetic Damage and +5% Damage, and no crits. Its shots against a target with Damage Reduction 10%, Kinetic Resistance 20%, a shield of 1000 and 500 Armor Plating:
+Illustrative inputs, computed from the formulas above: a level 30 Standard Medium Autocannon rolls a main Combat Power of 400 to 420 (the Medium roll of 2.0 to 2.1 times a power level of 200, see [weapon power](#weapon-power-by-level)). Say 410. The firing ship has +10% Kinetic Damage and +5% Damage, and no crits. (Nothing in 0.8.3.4 grants those two bonuses, see [what the Damage stat is](#what-the-damage-stat-is); they stand in for any bonus of that kind.) Its shots against a target with Damage Reduction 10%, Kinetic Resistance 20%, a shield of 1000 and 500 Armor Plating:
 
 | Step | Value |
 |---|---|
@@ -263,7 +302,7 @@ crit chance from Precision = raw                                  if raw is 5% o
                            = 5% + (raw - 5% + 1)^0.75 - 1        if raw is above 5%   (computed with raw as a fraction, so 5% is 0.05)
 ```
 
-The power level is 50 at level 10, 100 at 20, 200 at 30, 400 at 40, 800 at 50, 25 600 at 100. Precision equal to one power level gives +5% crit chance. Past +5% the gain is damped: raw 10% becomes 8.7%, raw 20% becomes 16.1%, raw 50% becomes 37.2%.
+The power level is 50 at level 10, 100 at 20, 200 at 30, 400 at 40, 800 at 50, 25 600 at 100. Precision equal to one power level gives +5% crit chance. Past +5% the gain is damped: raw 10% becomes 8.7%, raw 20% becomes 16.1%, raw 50% becomes 37.1%.
 
 Crits chain like this:
 
@@ -273,7 +312,7 @@ stop after the roll that fails, or when crits is above your Critical Recursion r
 crit multiplier = (2 + Critical Damage) ^ crits
 ```
 
-Without ranks in Critical Recursion at most one crit happens per hit. With r ranks a hit can crit up to r + 1 times, each extra chance halved, and each crit multiplies. The crit multiplier is applied to the shot before type bonuses.
+Without ranks in Critical Recursion at most one crit happens per hit. With r ranks (the skill has 3) a hit can crit up to r + 1 times, each extra chance halved, and each crit multiplies. The rank count comes from your skill tree plus any copies your officers have unlocked, and the game reads it on every crit roll, so enemy shots chain too once you have ranks. The crit multiplier is applied to the shot before type bonuses.
 
 Crits are rolled per hit and per beam tick, so a continuous beam rolls five times a second. Burst and tick weapons smooth out the variance.
 
@@ -287,7 +326,7 @@ Seven types: Kinetic, Energy, Radiation, Heat, Cold, Corrosion, Explosive. The t
 |---|---|---|
 | Kinetic | Autocannon, Twin and Triple Autocannon, Gatling, Double Gatling, DT Chaingun ("DT" is part of the weapon's name), Railgun, Burst Railgun | Rail shots pierce, up to 6 targets |
 | Energy | Lasers, Laser Repeater, Laser Shotgun, Plasma Cannon, Plasma Repeater, Plasma Battery, Plasma Beam, Microcell Swarm Launcher | |
-| Radiation | Rad Cannon | Applies an irradiated effect (weapon data, not read) |
+| Radiation | Rad Cannon | Applies an Irradiated effect on hit (3 s). Its data line halves the target's Precision, but no code that applies that line was found (not verified) |
 | Heat | none directly | Torpedoes, Cannon splash, and Firestarter-type extra damage |
 | Cold | Cryo Lance | |
 | Corrosion | Corropult | Armor Plating is weak to it. Leaves a damaging cloud |
@@ -299,7 +338,7 @@ In the code: [damage types](#code-damage-types).
 
 Range is a plain distance check from the firing point to the nearest point of the target's hull outline, at most your range, with range = base x (1 + Weapon Range). There is no damage falloff with distance for direct hits.
 
-A turret fires when it has a target in range, is aimed within its firing angle of the target and is off cooldown. Turrets that cannot rotate fire whenever the target is in range. Rotation speed is degrees per second (base x (1 + Turret Rotation Speed)). Most guns use a 1 degree firing window; lasers use 0.25, and the plasma cannons 0.01, so a slow turret on a fast target can fail to fire at all. Missile turrets use 360.
+A turret fires when it has a target in range, is aimed within its firing angle of the target and is off cooldown. Turrets that cannot rotate fire whenever the target is in range. Rotation speed is degrees per second (base x (1 + Turret Rotation Speed)). Most guns use a 1 degree firing window; lasers use 0.25, and the plasma cannons 0.01, so a slow turret on a fast target can fail to fire at all. Missile launchers and the Hailfire use 360. Beams ignore the firing window.
 
 How each weapon family then hits:
 
@@ -309,12 +348,12 @@ How each weapon family then hits:
 | Laser Repeater, Gatling, Chaingun, Shotgun (hitscan) | A line cast with random scatter of the weapon's accuracy angle x distance x 0.015 units either way. Hits only the current target |
 | Railgun | Instant ray. Damages every enemy on the line, each hit after the first at 0.5^n of the power, up to 6 hits |
 | Plasma Beam, Cryo Lance (beams) | Instant while in range. Damage ticks every 0.2 s for up to 2 s, then a reload |
-| Autocannon, Plasma, Corropult, Rad Cannon | A projectile flies at its speed with a random heading spread of +-accuracy angle degrees (4 to 5.5 for autocannons) and a lifetime of 5 s. It hits the first enemy it overlaps, not necessarily the target |
-| Missiles, Microcell | Homing. A missile steers to a predicted intercept point with limited thrust and turn rate; it expires with its lifetime |
+| Autocannon, Plasma, Corropult, Rad Cannon, Cannon | A projectile flies at its speed with a random heading spread of +-accuracy angle degrees (4 to 5.5 for autocannons) and a lifetime of 5 s (7 s for the Cannon shell). It hits the first enemy it overlaps, not necessarily the target |
+| Missiles, Hailfire, Microcell | Homing. A missile steers to a predicted intercept point with limited thrust and turn rate; it expires with its lifetime (16 s for missiles and Microcell, 8 s for Hailfire) |
 
 The aim point leads a moving target: target position plus target velocity times (1 + cos) x distance / projectile speed, where cos is the dot product of the target's heading with the line to it. Slow projectiles at long range against fast, turning ships miss more. Raising Projectile Speed shortens the lead.
 
-Reload takes the full reload time. An instant reload skill can skip it on the player's ship. A weapon with an ammo type spends cargo ammo per shot (Gatling-class weapons spend one ammo per four shots); with an empty hold the magazine refills to zero and the weapon cannot fire.
+Reload takes the full reload time. The Instant Reload skill gives your ship's turrets a chance on each reload to skip it (2% per rank, up to 3 ranks). A weapon with an ammo type spends cargo ammo per shot (Gatling-class weapons spend one ammo per four shots); with an empty hold the magazine refills to zero and the weapon cannot fire.
 
 In the code: [hitting: range, tracking and projectiles](#code-hitting-range-tracking-and-projectiles).
 
@@ -335,7 +374,7 @@ usage = sum of connected equipment energy draw / reactor Energy capacity
 | up to 150% | x0.50 |
 | above 150% | x0.25 |
 
-The multiplier applies to the ship's overall Combat Power, so it scales every turret and the pooled flat power together. It does not touch Drone Power or Torpedo Power. The rule runs for player-owned ships only; NPC ships and drones ignore the reactor. The skill "Divert Power" adds to the Combat Power multiplier of the 50%-or-less bracket. The only draw modifier in the game is the efficient-drilling effect (x0.25, mining).
+The multiplier applies to the ship's overall Combat Power, so it scales every turret and the pooled flat power together. It does not touch Drone Power or Torpedo Power themselves, but torpedoes and drones add a share of Combat Power, so they feel it through that share. The rule runs for player-owned ships only; NPC ships and drones ignore the reactor. The skill "Divert Power" adds 5% per rank (2 ranks) to the Combat Power multiplier of the 50%-or-less bracket. The only draw modifier in the game is the efficient-drilling effect (x0.25, mining).
 
 Reactor capacity comes from the reactor item's main roll, a flat amount of (1.35 to 1.4 for Base; 1.5 to 1.6 Small; 3.4 to 3.5 Medium; 4.5 to 4.8 Large) x power level x the square root of the rarity multiplier. Weapon draws are fixed numbers, so a higher-level reactor carries more weapons.
 
@@ -347,6 +386,19 @@ In the code: [energy and the reactor](#code-energy-and-the-reactor).
 recharge delay = 5 s on every shield generator, reset by every hit
 every 0.25 s after the delay:  shield += max shield x 0.005 x recharge rate
 recharge rate  = generator rate x (1 + Shield Recharge Rate stat)
+```
+
+```mermaid
+stateDiagram-v2
+    state "Shield up<br/>no recharge needed" as Up
+    state "Waiting<br/>5 s timer" as Wait
+    state "Recharging<br/>4% of max shield per second, no bonuses" as Charge
+    [*] --> Up
+    Up --> Wait: any hit
+    Wait --> Wait: any hit restarts the 5 s
+    Wait --> Charge: 5 s without a hit
+    Charge --> Wait: any hit
+    Charge --> Up: shield full
 ```
 
 The stat read here is the full ship stat, which already includes the generator's base rate of 1.0. With no bonuses the recharge rate is 1 x (1 + 1) = 2, so a recharge tick restores 1% of max shield and the shield refills at 4% of max per second, 25 s from empty after the 5 s delay. A bonus of +0.10 on Shield Recharge Rate makes the rate 2.1, which is 5% faster recharge, not 10%. This is a direct reading of the code; the value was not observed in game.
@@ -369,10 +421,10 @@ Everything below goes back through the full pipeline (steps 4 to 8) on every tic
 |---|---|
 | Damage over time (DoT) | A fixed total (the effect's damage) divided into equal ticks at a fixed interval. Each tick is a fresh hit of that size, with no new crit roll. A second application merges: both remaining totals add and the ticks reset to the full count. Tick count and delay are weapon data (not extracted) |
 | Per-weapon aspects | After a hit by that weapon, a second hit of a percentage of the hit's total damage in another type, either instant or as a DoT. Examples from the game text: Punch Through +10% Kinetic, Firestarter +15% Heat over 6 s, Frozen Core +10% Cold. The trigger event, and whether the total is taken before or after the target's resistance, were not traced |
-| Corropult cloud | Impact hit, then a cloud of radius 6 for 5 ticks 1 s apart. Each tick hits every enemy inside for impact damage x 0.5 / 5 (defaults in the code; weapon overrides not checked) |
-| Cannon explosion | Large Cannon shot explodes in radius 6. Each enemy in range takes 20% of what the shot had left after the target's defenses, as Heat, with distance falloff. The link from the Cannon item to this projectile was not traced |
+| Corropult cloud | Impact hit, then a cloud of radius 2 for 3 ticks 1 s apart. Each tick hits every enemy inside for the impact shot's damage (before the target's defenses) x 0.5 / 3 |
+| Cannon explosion | The Large Cannon shell explodes in radius 6. Each ship hostile to the player in range, the target included, takes 20% of what the shot had left after the target's defenses, as Heat, with distance falloff |
 | Area falloff | Explosions scale the hit by max(1 - distance / radius, 0.1) |
-| Radiation Cannon | Applies an irradiated effect from weapon data (not read) |
+| Radiation Cannon | Applies an Irradiated effect on hit (3 s); its data line halves the target's Precision, but no code that applies that line was found (not verified) |
 | Cryo / cold slow, Cold Snap and similar | Weapon effects (not read) |
 
 The area effect copies the damage left over after the first target's defenses, so splash damage is whatever the direct hit did not use up. Against a shielded ship that soaked the whole direct hit, the splash does nothing.
@@ -381,7 +433,7 @@ In the code: [damage over time and area effects](#code-damage-over-time-and-area
 
 ### Temporary effects
 
-Buffs and debuffs are stat boosts with a duration. Two effects with the same name merge into one: stacks add and the duration refreshes to the longer of the two. A stat boost's amount times its stack count is what the stat sees. The Defense skill "Threat Reducer" (a ship skill, not a station) gives +2% resistance per stack to the type of the hit that triggered it, for 10 s, 20% of the time.
+Buffs and debuffs are stat boosts with a duration. Two effects with the same name merge into one: stacks add (up to the effect's own stack limit, if it has one) and the duration refreshes to the longer of the two. A stat boost's amount times its stack count is what the stat sees. The Defense skill "Threat Reducer" (a ship skill, not a station) has a 20% chance, when you take damage, to give +2% resistance per stack to the damage type of that hit for 10 s (cooldown 20 s).
 
 In the code: [temporary effects](#code-temporary-effects).
 
@@ -389,7 +441,7 @@ In the code: [temporary effects](#code-temporary-effects).
 
 | Unit | Damage |
 |---|---|
-| Drones | Same turret rules. A drone weapon's power is its own main power x your Combat Power multiplier + your normalized Combat Power x its rating + your Drone Power / base drone count. A drone also reads your percentage stats directly (Damage, type bonuses, Critical Damage, range, attack speed, resists) but not Critical Chance, which it works out from its own Precision. The Drone Defense skill and the second Drones hull milestone add Damage Reduction to drones |
+| Drones | Same turret rules. A drone weapon's power is its own main power x your Combat Power multiplier + your normalized Combat Power x its rating + your Drone Power / base drone count. A drone also reads your percentage stats directly (Damage, type bonuses, Critical Damage, range, attack speed, resists) but not Critical Chance, which it works out from its own Precision (the drone's own Precision plus your Precision divided across your drones). The skill Composite Drone Armor and the second Drones hull milestone add Damage Reduction to drones |
 | Torpedoes | Always Heat. Power = Torpedo Power + normalized Combat Power, rolled as power / 5 x random(0.8, 1.25) with **no** division by shots per second. Crits, Damage and Heat Damage read from the launching ship. Explodes in radius 6 on impact with falloff (minimum 10%) on every enemy in range, the target included, using the damage left after the direct hit. Bay timing: Small bay 8 s between launches and 4 s reload, Medium bay 1 s and 3 s |
 | Fighters | Hangar-bay fighters are ships with their own turrets and use the ship rules (not traced further). Their repair and rebuild speed is Hangar Build Speed |
 
@@ -399,7 +451,7 @@ In the code: [drones, torpedoes, fighters](#code-drones-torpedoes-fighters).
 
 ## Where bonuses come from
 
-None of the stats in the [Damage stat section](#what-the-damage-stat-is) roll on gear. This is what grants them.
+Of the stats in the [Damage stat section](#what-the-damage-stat-is), only damage versus shield, damage versus armor, Critical Chance and Damage Reduction have a source in 0.8.3.4, and none of them rolls on gear. This is what grants them.
 
 | Source | Combat-relevant bonuses |
 |---|---|
@@ -408,22 +460,22 @@ None of the stats in the [Damage stat section](#what-the-damage-stat-is) roll on
 | Hull upgrades | See below |
 | Commander skill nodes | Per-rank stat boosts. Examples: +1% Critical Chance, +5% Weapon Range, +5% Critical Damage, +3% Attack Speed, +12% Attack Speed (Tier 3), +2% Critical Chance and +5% Critical Damage, +4 to 5% Turret Rotation. Combat Power nodes have both a x1.01 and a +3 flat line per rank (how the "minimum of +3" wording maps to them was not traced). Other nodes add abilities: Critical Recursion, Instant Reload, Divert Power, Lone Gun, Redline and others |
 | Mastery | Offense mastery: Combat Power x(1 + 0.005 x mastery level). Defense mastery: +0.1% Damage Reduction per mastery level. Mastery experience points (XP) come from shield and armor damage taken (Defense) |
-| Officers | One chosen stat from Combat Power, Critical Chance, Attack Speed (Engineering officers: Drone Power or Shield HP). Combat Power and Shield HP apply as multipliers, the others as flat amounts at 0.8 of the officer's bonus |
+| Officers | One chosen stat from Combat Power, Critical Chance, Attack Speed (Engineering officers: Drone Power or Shield HP). Combat Power, Drone Power and Shield HP apply as multipliers, Critical Chance and Attack Speed as flat amounts at 0.8 of the officer's bonus |
 | Item aspects | Common and rare slots on weapons and modules: Reload Subroutine +25% reload, Critical Attenuation +25% critical damage, Weakpoint Scan +5% crit chance, Rangefinder +25% weapon range, Hardened Exterior +5% Damage Reduction, Hardened Plating, Extremophile and Gamma Ward +2 to 5% resists, Operational Reserves x1.02 Power |
-| Boss aspects | Overcharge (no crits, +25% damage), Shield Slapper (+10% to shields), Armor Breaker (+10% to armor, +5% critical damage), Quick Quick Quick (+40% reload, +10% fire rate), Siege Mode, Opening Blow (+40% to targets above 90% HP), Volatile Plasma and others, as described in their in-game text. Which of these use the damage-versus-shield and damage-versus-armor bonuses was not traced; those two stats are only read in steps 6 and 7 above |
+| Boss aspects | Overcharge (no crits; its text says +25% damage, but see [what the Damage stat is](#what-the-damage-stat-is)), Shield Slapper (+10% to shields), Armor Breaker (+10% to armor, +5% critical damage), Quick Quick Quick (+40% reload, +10% fire rate), Siege Mode (only fires below a speed threshold; its text says +20% damage, same caveat), Opening Blow (+40% to targets above 90% HP), Volatile Plasma and others, as described in their in-game text. Shield Slapper is the only source of damage versus shield and Armor Breaker the only source of damage versus armor; those two stats are only read in steps 6 and 7 above |
 
 In the code: [where bonuses come from](#code-where-bonuses-come-from).
 
 ### Hull upgrades
 
-Paths grow per node (kits spent): Combat +2% Combat Power each, Torpedo +2% Torpedo Power each, Drones +2% Drone Power each, Defense +1% hull, armor and shield each. Milestones sit at node 10, 20 and 30 and also need a lifetime count (kills for Combat and Torpedo, damage absorbed for Defense), scaled by ship size:
+Paths grow per node (kits spent): Combat +2% Combat Power each, Torpedo +2% Torpedo Power each, Drones +2% Drone Power each, Defense +1% hull, armor and shield each. Milestones sit at node 10, 20 and 30 and also need a lifetime count. The first Combat and Torpedo milestone counts combat missions completed, the other two count kills; Defense counts damage absorbed and Drones counts drone activity. Each threshold is multiplied by a ship-size factor of 0.2 plus 0.2 per size above 1 (x1.0 at size 5, x1.6 at size 8). The table lists the base counts:
 
 | Path | Milestone 1 | Milestone 2 | Milestone 3 |
 |---|---|---|---|
-| Combat (100, 1000, 5000 kills) | +5% Weapon Range, +15% Critical Damage | Combat Power x1.1 | Combat Power x1.2 |
-| Torpedo (same kills) | Torpedo Power x1.05 | x1.10 | x1.20 |
+| Combat (100 combat missions, 1000 kills, 5000 kills) | +5% Weapon Range, +15% Critical Damage | Combat Power x1.1 | Combat Power x1.2 |
+| Torpedo (same counts) | Torpedo Power x1.05 | x1.10 | x1.20 |
 | Defense (1 M, 50 M, 1 B damage absorbed) | +2% Damage Reduction | Shield, Armor, Hull HP x1.1 | HP x1.2 and the 20% single-hit cap |
-| Drones (5 M, 250 M, 5 B drone activity) | not traced | +15% drone Damage Reduction | not traced |
+| Drones (5 M, 250 M, 5 B drone activity) | +1 drone | +15% drone Damage Reduction | +2 drones |
 
 In the code: [hull upgrades](#code-hull-upgrades).
 
@@ -475,7 +527,7 @@ Weapon stats are fixed per weapon, not rolled. "Shots/s" is the weapon's shots p
 | Rad Cannon | Medium | Radiation | 14 | 0.17 | 1/3s | 10 | 1.0 | 22 |
 | Rad Cannon | Large | Radiation | 18 | 0.17 | 1/3s | 10 | 1.0 | 22 |
 
-Shots per second tells you how fine-grained the damage is, not how much there is. Damage per second is turret power / 5 whatever the weapon family; the reload downtime is already inside "Shots/s". Apart from the power multiplier, what separates two weapons is range, projectile behaviour, damage type and size (which sets the main power roll and the pool share), not their listed rate of fire.
+Shots per second tells you how fine-grained the damage is, not how much there is. Damage per second is turret power / 5 for every weapon that fires shots (beams only while the beam is on, see above); the reload downtime is already inside "Shots/s". Apart from the power multiplier, what separates two weapons is range, projectile behaviour, damage type and size (which sets the main power roll and the pool share), not their listed rate of fire.
 
 In the code: [typical weapon numbers](#code-typical-weapon-numbers).
 
@@ -498,7 +550,7 @@ Rarity multiplier: Standard 1.0, Enhanced 1.1, High Grade 1.2, Exotic 1.35, Lege
 | Medium | 2.0 to 2.1 |
 | Large | 3.0 to 3.15 |
 
-Torpedo bays use the same numbers for Torpedo Power (Small 1.0 to 1.05, Medium 2.0 to 2.1). Weapons also roll optional stats, count by rarity (Standard 0, Enhanced 1, High Grade 2, Exotic 3, Legendary 3), with these ranges for guns (before level and rarity scaling, the first four scaled by power level): Combat Power 0.20 to 0.25, Precision 0.20 to 0.25, Power 0.12 to 0.18, Drone Power 0.20 to 0.25, Critical Damage 0.02 to 0.025, Weapon Range 0.04 to 0.045 (rarer), Attack Speed 0.01 to 0.012, Reload Speed 0.01 to 0.012, Magazine Size 0.01 to 0.012, Turret Rotation 0.04 to 0.045 (rarer), Projectile Speed 0.04 to 0.05 (missiles). A rolled Precision of 0.2 to 0.25 power levels is worth about +1% to +1.25% crit chance. Armor, shield and hull items roll their main HP stat as a multiplier, 1 + (0.013 to 0.014) x power level x rarity, so HP grows with item level (see [scaling](scaling.md)).
+Torpedo bays use the same numbers for Torpedo Power (Small 1.0 to 1.05, Medium 2.0 to 2.1). Weapons also roll optional stats, count by rarity (Standard 0, Enhanced 1, High Grade 2, Exotic 3, Legendary 3), with these ranges for guns (before level and rarity scaling; the first four are scaled by power level, and the flat power-type rolls, including Armor, Shield, Hull, Mining Power, Salvage Power and Torpedo Power at 0.20 to 0.25, also get x1.5 on a Medium and x2.25 on a Large weapon): Combat Power 0.20 to 0.25, Precision 0.20 to 0.25, Power 0.12 to 0.18, Drone Power 0.20 to 0.25, Critical Damage 0.02 to 0.025, Weapon Range 0.04 to 0.045 (rarer), Attack Speed 0.01 to 0.012, Reload Speed 0.01 to 0.012, Magazine Size 0.01 to 0.012, Turret Rotation 0.04 to 0.045 (rarer), Projectile Speed 0.04 to 0.05 (missiles). A rolled Precision of 0.2 to 0.25 power levels on a Small weapon is worth about +1% to +1.25% crit chance. Armor, shield and hull items roll their main HP stat as a multiplier, 1 + (0.013 to 0.014, hull 0.010 to 0.014) x power level x rarity x the same size factor (Medium x1.5, Large x2.25), so HP grows with item level (see [scaling](scaling.md)).
 
 In the code: [weapon power by level](#code-weapon-power-by-level).
 
@@ -522,7 +574,7 @@ Raw damage wins. Shields ignore damage type and have no resistance of their own,
 
 ### Against armor
 
-Armor takes the leftover damage after shields. Plating resists 15% of everything except Corrosion, which it takes at +25%. Corrosion hits armor for 1.25 against 0.85 for any other type, about 47% more damage per point of damage. Armor and shield do not share a resist stat, so a ship with a shield strong against your type can still be weak at the armor stage. A painter drone or painter turret removes 10 points of armor resistance (15% to 5%) and 5 points of Damage Reduction from a target for 6 seconds; it is a fleet-wide benefit and worth bringing against heavily armored targets. The damage-versus-armor bonus multiplies on top of all of that.
+Armor takes the leftover damage after shields. Plating resists 15% of everything except Corrosion, which it takes at +25%. Corrosion hits armor for 1.25 against 0.85 for any other type, about 47% more damage per point of damage. Armor and shield do not share a resist stat, so a ship with a shield strong against your type can still be weak at the armor stage. A painter drone removes 10 points of armor resistance (15% to 5%) and 5 points of Damage Reduction from a target for 6 seconds; it is a fleet-wide benefit and worth bringing against heavily armored targets. The damage-versus-armor bonus multiplies on top of all of that.
 
 ### Against hull
 
@@ -553,7 +605,7 @@ Per percentage point, in relative gain:
 
 Critical Damage only helps in proportion to the chance. At the base 3% crit chance a point of Critical Damage is worth about 0.03 points of damage, while a point of Critical Chance is worth about 1. Critical Chance gives a larger gain per point than Critical Damage whenever the chance is below 1 + d, which in practice is always. So raise chance first, and add Critical Damage once the chance is high. The game's own skill pairs (Target Weak Spots, Targeting Specialist) combine both. Critical Recursion adds extra rolls at half the chance each, which makes chance worth more still.
 
-Plain Damage and type bonuses have diminishing value as they stack, since they add into one 1 + D term. Combat Power multipliers do not diminish. Attack Speed, Reload Speed and Magazine Size are real damage as shown above.
+Plain Damage and type bonuses have diminishing value as they stack, since they add into one 1 + D term; in 0.8.3.4 nothing grants them, so D is 0 in practice. Combat Power multipliers do not diminish. Attack Speed, Reload Speed and Magazine Size are real damage as shown above.
 
 ### Energy
 
@@ -615,9 +667,9 @@ Four stats have no translation string in `resources.assets` (marked "no string")
 
 | Id | `EquipStat` | In-game name | What it does in code |
 |---|---|---|---|
-| 1 | `HullHP` | Hull HP | Last layer. Base from the unit definition (`hullHPScale x 150` for station parts) |
-| 2 | `ArmorHP` | Armor HP | Armor layer capacity. Base is the unit's base armor if it has an armor module (unless the module overrides it), and 0 without one |
-| 3 | `ShieldHP` | Shield HP | Shield layer capacity, same rule with the shield generator module |
+| 1 | `HullHP` | Hull HP | Last layer. Base from the unit definition (`baseHullHP` = `hullHPScale x 150`, for ships and station parts alike) |
+| 2 | `ArmorHP` | Armor HP | Armor layer capacity. Base is the unit's base armor (`armorHPScale x 300`) if it has an armor module (unless the module overrides it), and 0 without one |
+| 3 | `ShieldHP` | Shield HP | Shield layer capacity, same rule with the shield generator module (`shieldHPScale x 300`) |
 | 10 | `HullRegen` | Hull Regeneration | Flat HP per second. Only while out of combat and below max |
 | 11 | `ArmorRegen` | Armor Regeneration | Flat armor per second |
 | 12 | `ShieldRegen` | Shield Regeneration | Flat shield per second, always on, even during the recharge delay. Base is 0.1% of max shield per second (set when the ship spawns) |
@@ -667,14 +719,14 @@ Source: `EquipStat`, `EquipStatExtensions.IsPercentageStat`, `EquipStatExtension
 damage multiplier = 1 + (type damage stat) + Damage
 ```
 
-`Damage` never rolls on items in 0.8.3.4: none of the 131 equipment builders lists it, or any type damage stat, `DamageVsShield`, `DamageVsArmor`, `CriticalChance` or `DamageReduction`, as a roll.
+`Damage` never rolls on items in 0.8.3.4: none of the 131 equipment builders lists it, or any type damage stat, `DamageVsShield`, `DamageVsArmor`, `CriticalChance` or `DamageReduction`, as a roll. No `BoostStat` in the prefab data (skills, aspects, hull badges, mastery, milestones) adds a flat amount to `Damage` or to a type damage stat; the only `Damage` lines are `BossOvercharge` (multiplier 1.25) and `BossSiegeMode` (multiplier 1.2). `AbstractUnit.GetStatRaw` computes `(base + flat) x multiplier`, so with a flat sum of 0 those multipliers give 0. `DamageVsShield` comes only from `BossShieldDamage` (+0.1) and `DamageVsArmor` only from `BossArmorbreaker` (+0.1).
 
 ### Code: Where a turret's damage comes from
 
 A weapon item carries a main power line (`CombatPower` for guns, `TorpedoPower` for torpedo bays). The ship pools all `CombatPower` it has and hands each active combat turret a share:
 
 ```
-turret power = (main x M  +  (Ship - Mains x M) / N x rating) x power multiplier
+turret power = (main x M  +  max(0, Ship - Mains x M) / N x rating) x power multiplier
 
 Ship  = stat CombatPower, with its multiplier M already applied
 Mains = sum of the main power lines of all active combat turrets
@@ -685,7 +737,7 @@ rating = Tiny 0.45, Small 1, Medium 2, Large 3
 
 The per-turret power multiplier is a prefab value (0.9 to 1.15, listed in the [weapon table](#typical-weapon-numbers)).
 
-Average damage per second (DPS) from one turret is `power / 5 x 1.025`, before crits and bonuses. The 1.025 is the mean of the 0.8 to 1.25 roll. The game's own expected-DPS function uses these exact constants.
+Average damage per second (DPS) from one turret is `power / 5 x 1.025`, before crits and bonuses. The 1.025 is the mean of the 0.8 to 1.25 roll. The game's own expected-DPS function uses these exact constants. For beams, `AbstractCombatBeamTurret.TickBeam` stops the beam after `maxBeamDuration` (2 s on every beam prefab) with a forced reload of the full `reloadDelay`.
 
 Source: `AbstractTurret.CalculateAttackPower`, `AbstractTurret.CalculatePooledPower`, `AbstractTurret.turretEquivalentRating`, `AbstractTurret.GetExpectedDps`, `AbstractUnit.UpdateEquivalentTurretCounts`, `AbstractUnit.GetEquivalentTurretsCount`, `DamageData.PowerPerDamage`.
 
@@ -712,7 +764,7 @@ aps0  = magazine / ( ceil(magazine / burst) x cycle + reloadDelay )
 
 Because `aps0` ignores your Attack Speed, Reload Speed and Magazine Size bonuses, those stats raise the number of shots without shrinking each shot.
 
-Beams skip the `/ aps0` part: each 0.2 s tick carries `power x dt` instead, so a beam deals `power / 5` per second of firing.
+Beams skip the `/ aps0` part: each 0.2 s tick carries `power x dt` instead (`ApplyDamageTick` multiplies by `defaultAttacksPerSecond`, which `CalculateDamage` then divides out), so a beam deals `power / 5` per second of firing.
 
 #### Code: 3. Damage bonuses
 
@@ -726,7 +778,7 @@ The stats are read from the firing turret (ship value plus that turret's own boo
 shot = shot x max(0.2, 1 - DamageReduction - Resist(type))
 ```
 
-The floor of 0.2 is the resist cap. While the player's ship is in a warp travel (`TravelManager.TravelActive`), damage it takes is multiplied by 0.1 after this step.
+The floor of 0.2 is the resist cap. While a travel is active (`TravelManager.TravelActive`: a warp or a jumpgate transit), damage taken by any unit is multiplied by 0.1 after this step.
 
 #### Code: 7. Armor
 
@@ -737,7 +789,7 @@ else:                                              shot = shot x (1 - max(0, res
 absorbed = min(shot, current armor);  armor -= absorbed;  shot -= absorbed
 ```
 
-Armor Plating is the only armor type; every armor prefab has the same values (`ArmorModule.weakTypes` is prefab data). The painter (`LaserPainterTurret`) sets `paintStrip` to 0.10 for 6 seconds. It also adds -0.05 `DamageReduction` to the target for the same 6 seconds.
+Armor Plating is the only armor type; every armor prefab has the same values (`ArmorModule.weakTypes` is prefab data: Corrosion only, `resistAmount` 0.15, `weakAmount` 0.25). `LaserPainterTurret` exists only on the Painter Drone prefab (internal name Utility Drone Painter); it sets `paintStrip` to 0.10 for 6 seconds. It also adds -0.05 `DamageReduction` to the target for the same 6 seconds. The target's "Marked" effect (`PainterEffect`, 3 s) lists -0.15 `DamageReduction`, but `TemporaryEffect.ApplyStatBoosts` is not called on that path (no caller found), so only the -0.05 line applies.
 
 Steps 2, 5, 6 and 8 carry no code-only detail beyond the method list above: 2 is the crit roll in `DamageData.CalculateDamage`, 5 is `AbstractUnit.ApplyIncomingDamageCap`, 6 is `ShieldGeneratorModule.TakeDamage` with the bonus from `AbstractUnit.ApplyVsLayerBonus`, 8 is the last write in `AbstractUnit.TakeDamage`.
 
@@ -762,7 +814,7 @@ stop after the roll that fails, or when crits > Critical Recursion ranks
 crit multiplier = (2 + CriticalDamage) ^ crits
 ```
 
-The crit multiplier is applied to the shot before type bonuses. The rank count comes from `SkilltreeNode.combatMegaCrit`. With `r` ranks a hit can crit up to `r + 1` times.
+The crit multiplier is applied to the shot before type bonuses. The rank count comes from `SkilltreeNode.combatMegaCrit.currentPoints` (3 ranks; your points plus officers' unlocked copies) and is read for every `DamageData`, enemy shots included. With `r` ranks a hit can crit up to `r + 1` times.
 
 Source: `AbstractUnit.GetBaseCritChance`, `AbstractUnit.GetPrecisionCrit`, `AbstractUnit.GetStatRaw`, `DamageData.CalculateDamage`, `GameMath.DamageMultiplier`, `SkilltreeNode.combatMegaCrit`.
 
@@ -780,7 +832,7 @@ A turret fires when it has a target in range, is aimed within `maxFiringAngle` o
 
 Hitscan scatter is `accuracyAngle x distance x 0.015` units either way. Projectile weapons spread their heading by `+-accuracyAngle` degrees. Railgun hits after the first deal `0.5^n` of the power. The lead is `target position + target velocity x (1 + cos) x distance / projectile speed`, where the lead factor is `(1 + cos) x distance / projectile speed`, `cos` is the dot product of the target's heading with the line to it, and `ProjectileSpeed` shortens it.
 
-Reload takes the full `reloadDelay`. An instant reload skill (`SkilltreeNode.combatInstantReload`) can skip it on the player's ship.
+Reload takes the full `reloadDelay` (the magazine refills at 80% of it, but the turret cannot fire until the whole delay has run). `AbstractTurret.Reload` skips it with probability `SkilltreeNode.combatInstantReload.currentIncrease` (0.02 per rank, 3 ranks) when the turret is the player's.
 
 Source: `AbstractTurret.Update`, `AbstractTurret.HandleFire`, `AbstractTurret.RefreshTargetInRange`, `AbstractTurret.ApplyProjectileLead`, `AbstractTurret.RotateTurret`, `AbstractTurret.Reload`, `AbstractTurret.ReloadCoroutine`, `AbstractTurret.RecordShotFired`, `AbstractProjectile.Update`, `AbstractProjectile.ProcessHit`, `AutoCannonTurret.FireInternal`, `GatlingTurret.GetScatteredAimPoint`, `RailCannonTurret.TryApplyRailgunHit`, `LaserTurret.FireForEffect`, `AbstractCombatBeamTurret.TickBeam`, `Missile.FixedUpdate`, `SkilltreeNode.combatInstantReload`.
 
@@ -792,7 +844,7 @@ Every piece of equipment has an energy draw (`capacityCost`, listed per weapon i
 usage = sum of connected equipment energy draw / EnergyCapacity
 ```
 
-The multiplier table in part 1 applies to `Power`, `CombatPower`, `MiningPower` and `SalvagePower` and is applied to the ship's overall `CombatPower`. It does not touch `DronePower` or `TorpedoPower`. The only draw modifier in the code is the efficient-drilling effect (x0.25, mining). The Divert Power skill is `SkilltreeNode.combatReactorOutputCP`.
+The multiplier table in part 1 applies to `Power`, `CombatPower`, `MiningPower` and `SalvagePower` and is applied to the ship's overall `CombatPower`. It does not touch `DronePower` or `TorpedoPower` themselves. The only draw modifier in the code is the efficient-drilling effect (x0.25, mining). The Divert Power skill is `SkilltreeNode.combatReactorOutputCP` (0.05 per rank, 2 ranks), added to the 1.2 of the 50% bracket in `ApplyReactorModifier`.
 
 Reactor capacity comes from the reactor item's main roll, a flat amount of `(1.35 to 1.4, Base; 1.5 to 1.6 Small; 3.4 to 3.5 Medium; 4.5 to 4.8 Large) x powerLevel x rarityMultiplier^0.5`.
 
@@ -824,10 +876,10 @@ Everything in the part 1 table goes back through the full pipeline (steps 4 to 8
 |---|---|
 | Damage over time, DoT (`DamageOverTime`) | A fixed total (the template's damage) divided into `tickCount` equal ticks every `tickDelay`. Each tick is a fresh hit of that size, with no new crit roll. A second application merges: both remaining totals add and the ticks reset to the full count. Tick count and delay are prefab values (not extracted) |
 | Per-weapon aspects (`PayloadTurretExtraDamage`) | After a hit by that weapon, a second hit of `percentage x the hit's total damage` in another type, either instant or as a DoT. The trigger event, and whether the total is taken before or after the target's resistance, were not traced |
-| Corropult cloud | Impact hit, then a cloud of radius 6 for 5 ticks 1 s apart. Each tick hits every enemy inside for `impact damage x 0.5 / 5` (code defaults; prefab overrides not checked) |
-| Cannon explosion | Large Cannon shot (`CannonProjectile`) explodes in radius 6. The prefab link from the Cannon item to this projectile was not traced |
+| Corropult cloud | Impact hit, then a cloud (`CorrosiveCloudAOE`; prefab values radius 2, 3 ticks 1 s apart, 0.5; code defaults 6, 5, 1 s, 0.5). Each tick hits every enemy inside for `impact totalDamageAmount x 0.5 / tickCount` |
+| Cannon explosion | Large Cannon shell (`CannonProjectile`: prefab lifetime 7 s, radius 6, `damagePercentage` 0.2). `Explode` damages every `AbstractUnit` with `IsPlayerEnemy()` in the radius, as Heat, with `damageAmount x 0.2` of what was left after the direct hit. The Large Cannon prefab uses this projectile |
 | Area falloff | Explosions scale the hit by `max(1 - distance / radius, 0.1)` |
-| Radiation Cannon | Applies an irradiated effect from prefab data (not read) |
+| Radiation Cannon | `RadiationCannonProjectile` attaches the Irradiated effect (prefab: 3 s, `Precision` multiplier 0.5), but `ApplyStatBoosts` is not called on that path (not verified) |
 | Cryo / cold slow, Cold Snap and similar | Prefab effects (not read) |
 
 The area helper copies the damage left over after the first target's defenses, so splash damage is whatever the direct hit did not use up.
@@ -836,7 +888,7 @@ Source: `DamageOverTime.Tick`, `DamageOverTime.Add`, `DamageOverTime.CalculateDa
 
 #### Code: Temporary effects
 
-`TemporaryEffect` buffs and debuffs are stat boosts with a duration. Two effects with the same object name merge into one: stacks add and the duration refreshes to the longer of the two. A stat boost's amount times its stack count is what the stat sees.
+`TemporaryEffect` buffs and debuffs are stat boosts with a duration. Two effects with the same object name merge into one: stacks add (up to `maxStackSize` when set) and the duration refreshes to the longer of the two. A stat boost's amount times its stack count is what the stat sees. Threat Reducer is `AddTemporaryResist` (0.02 per stack; the 20% chance, 10 s and 20 s cooldown are from the skill text).
 
 Source: `TemporaryEffect.CheckStackability`, `TemporaryEffect.AddStack`, `StatBoostEntry.AddStack`, `AddTemporaryResist`.
 
@@ -844,7 +896,7 @@ Source: `TemporaryEffect.CheckStackability`, `TemporaryEffect.AddStack`, `StatBo
 
 | Unit | Code rule |
 |---|---|
-| Drones | A drone weapon's power is `main x commander's Combat Power multiplier + commander's normalized Combat Power x rating + commander's Drone Power / base drone count`. The drone reads the commander's percentage stats directly, but not Critical Chance, which it works out from its own Precision |
+| Drones | A drone weapon's power is `main x commander's Combat Power multiplier + commander's normalized Combat Power x rating + commander's Drone Power / base drone count`. The drone reads the commander's percentage stats directly, but not Critical Chance, which it works out from its own Precision (`Drone.IsDroneStat`: Precision is a flat stat, so the drone's own Precision plus the commander's divided by the drone count) |
 | Torpedoes | `power = TorpedoPower + normalized Combat Power`, rolled as `power / 5 x random(0.8, 1.25)` with **no** division by shots per second. Bay timing is prefab data: Small bay 8 s between launches and 4 s reload, Medium bay 1 s and 3 s |
 | Fighters | Hangar-bay fighters are ships with their own turrets and use the ship pipeline (not traced further). Their repair and rebuild speed is `HangarBayRepairRate` |
 
@@ -852,13 +904,13 @@ Source: `Drone.GetStat`, `Drone.ApplyCommanderPowerBonuses`, `Drone.ApplyPlayerC
 
 ### Code: Where bonuses come from
 
-Skill node bonus values, hull badge values, aspect values and the strings quoted in the part 1 table are prefab data. Examples noted from prefabs: commander skill node boosts; Combat Power nodes have both a x1.01 and a +3 flat line per rank. Which aspects use `DamageVsShield` and `DamageVsArmor` was not traced; those two stats are only read in step 6 and 7 above. Mastery experience comes from shield and armor damage taken (Defense).
+Skill node bonus values, hull badge values, aspect values and the strings quoted in the part 1 table are prefab data. Examples noted from prefabs: commander skill node boosts; Combat Power nodes have both a x1.01 and a +3 flat line per rank. `DamageVsShield` comes only from `BossShieldDamage` and `DamageVsArmor` only from `BossArmorbreaker`; those two stats are only read in step 6 and 7 above. Mastery experience comes from shield and armor damage taken (Defense). Officer bonuses: `OfficerData.GetBonusForStat` returns 0.8 of the bonus for `CriticalChance` and `AttackSpeed`; `SpaceShipData.ApplyOfficerBonuses` applies `IsPowerStat` stats (Combat, Drone Power) and `ShieldHP` as multipliers and the rest as flat amounts.
 
 Source: `SpaceShipData.AddHullAndRangeStatBoosts`, `SpaceShipRoleType.GetShipRangeBonus`, `SpaceShipData.AddCommanderTreeStatBoosts`, `SpaceShipData.AddMasteryStatBoosts`, `SpaceShipData.ApplyOfficerBonuses`, `OfficerData.GetBonusPool`, `OfficerData.GetBonusForStat`, `SpaceShipData.ComputeCrewBonuses`, `ShipUpgradeCalculator.GetPathStatLines`, `ShipUpgradeCalculator.GetMilestoneThreshold`, `ShipUpgradeCalculator.IsMilestoneUnlocked`, `AbstractUnit.AddSkillNodeStatBoosts`; hull badge, aspect and skill values are prefab data.
 
 #### Code: Hull upgrades
 
-The upgrade path stat lines come from `ShipUpgradeCalculator.GetPathStatLines`; milestone thresholds from `GetMilestoneThreshold` and `IsMilestoneUnlocked`; the Defense incoming-damage cap from `GetDefenseStatLines` (see [step 5](#code-the-path-of-a-hit)).
+The upgrade path stat lines come from `ShipUpgradeCalculator.GetPathStatLines`; milestone thresholds from `GetMilestoneThreshold` and `IsMilestoneUnlocked`. `GetMilestoneProgress` counts `combatMissionsCompleted` for milestone 1 of Combat and Torpedo and `combatKills` for milestones 2 and 3; thresholds are multiplied by `XpMilestoneSizeMultiplier` = `clamp(0.2 + (size - 1) x 0.2, 0.05, 3)`. The Defense incoming-damage cap comes from `ApplyIncomingDamageCap` (see [step 5](#code-the-path-of-a-hit)). Drones milestones 1 and 3 add +1 and +2 drones (`DroneBayModule`).
 
 ### Code: Typical weapon numbers
 
@@ -874,7 +926,7 @@ power level = round(25 x 2^(level / 10))               up to level 100
 main power  = random(min, max) x power level x rarity multiplier
 ```
 
-The rarity multiplier is `GetPowerMultiplier`. Torpedo bays use the same numbers for `TorpedoPower`. Armor, shield and hull items roll their main HP stat as a multiplier, `1 + (0.013 to 0.014) x power level x rarity`.
+The rarity multiplier is `GetPowerMultiplier`. Torpedo bays use the same numbers for `TorpedoPower`. Armor, shield and hull items roll their main HP stat as a multiplier, `1 + (0.013 to 0.014; hull 0.010 to 0.014) x power level x rarity x size factor`. `EquipmentBuilder.AutoScaleBySize` multiplies every non-percentage stat except Energy, thrust and the main Combat, Mining and Salvage Power by 1.5 (Medium) or 2.25 (Large).
 
 Source: `EquipmentBuilder.SetupItem`, `EquipmentBuilder.BuildInitialStats`, `EquipmentBuilder.ApplyStatScaling`, `GameMath.DamageMultiplier`, `RarityExtensions.GetPowerMultiplier`, `RarityExtensions.GetStatCount`; builder stat ranges and weapon bodies are prefab data (`EquipmentBuilderStat`, `AbstractTurret` serialized fields).
 

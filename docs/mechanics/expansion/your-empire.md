@@ -22,11 +22,11 @@ In the code: [the expanded war zone](#code-the-expanded-war-zone).
 
 ## Spoiler: Level cap and other changes
 
-Accepting the mission raises the level cap to 100, the loot box skill point cap from 10 to 30 and the reputation cap to Exalted. All of the unlock effects are in the [gate table](README.md#spoiler-what-level-60-and-beyond-the-front-gate). How the war itself changes for your level and for NPC fleets above level 60 is in [what you face](empire-fleets.md#what-you-face).
+Accepting the mission raises the level cap to 100, the loot box skill point cap from 10 to 30, the cap on bonus skill points from 61 to 101 and the reputation cap to Exalted. All of the unlock effects are in the [gate table](README.md#spoiler-what-level-60-and-beyond-the-front-gate). How the war itself changes for your level and for NPC fleets above level 60 is in [what you face](empire-fleets.md#what-you-face).
 
 ## Buying systems in the player sector
 
-Price in credits is 10,000,000 x 1.5^n, where n is the number of systems you have bought. The Vanguard Marks price is the credit price divided by 5000. You must be in the system. The first one becomes your capital. First purchase prices:
+Price in credits is 10,000,000 x 1.5^n, where n is the number of systems you have bought. The Vanguard Marks price is the credit price divided by 5000, rounded. You pay both, you must be in the system, and the system must be unowned and still for sale at its hub. A system you bought before and lost is priced one step lower (n - 1, never below 0). The first one you hold becomes your capital. First purchase prices:
 
 | n | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|---|
@@ -40,6 +40,18 @@ In the code: [buying systems in the player sector](#code-buying-systems-in-the-p
 ## Claiming systems
 
 The arrival rule in [war](../conquest/war.md#unowned-and-abandoned-systems) (a fleet that arrives at an unowned system claims it) has two more exceptions: the system is for sale in the player sector, or the fleet is yours and the system is free territory.
+
+```mermaid
+flowchart TD
+    A["A system you want"] --> B["Where is it?"]
+    B -->|"Player sector, for sale"| C["Buy it at its hub<br/>(you must be in the system)"]
+    B -->|"Unowned, not free territory"| D["Claim it: flagship or an idle<br/>Empire Fleet in the system"]
+    B -->|"Held by another faction"| E["Capture it by siege"]
+    C --> F["The first system you hold<br/>becomes your capital"]
+    D -->|"Abandoned by a faction"| G["Reputation with that faction<br/>drops to Hostile"]
+    D -->|"Nobody abandoned it"| H["No reputation drop"]
+    E --> I["Reputation with the former owner<br/>drops to Hostile (-5000)"]
+```
 
 You can claim an unowned war-zone system yourself when: claiming is unlocked (the "Beyond the Front" milestone), the system is open to you, it is not a player-sector system or free territory, and your flagship or an idle Empire Fleet is in the system. An abandoned system you claim drops your reputation with the faction that abandoned it to Hostile, as a capture does.
 
@@ -69,15 +81,21 @@ Holding systems costs nothing up to your Empire Level's capacity:
 |---|---|---|---|---|---|---|---|---|---|---|
 | Systems without upkeep | 10 | 14 | 19 | 25 | 32 | 41 | 52 | 65 | 81 | 101 |
 
+| Empire Level | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Systems without upkeep | 125 | 155 | 191 | 235 | 289 | 355 | 436 | 534 | 654 | 800 |
+
+Empire Level 20 is the maximum.
+
 Past capacity the upkeep is charged every hour, in credits:
 
 ```
-upkeep per hour = 2,000,000 x 2^(systems over capacity - 1) x cost multiplier at your level / cost multiplier at level 60
+upkeep per hour = 2,000,000 x 2^(systems over capacity - 1) x cost multiplier at your effective level / cost multiplier at level 60
 ```
 
-The cost multiplier is the same level-based price multiplier the game uses for item values; it rises with level, so the level-60 value is the baseline.
+The cost multiplier is the same level-based price multiplier the game uses for item values; it rises with level, so the level-60 value is the baseline. Your effective level (level plus Vanguard level) is used, not the plain level. The upkeep is charged only while you hold more systems than capacity, and every system you hold counts, the capital included.
 
-If you cannot pay for 6 hours the newest system revolts. Each Empire Level needs 1000 x 1.65^(level - 1) Empire XP (experience points). Gaining a system gives 250, building a station 50, each hour 3 per station tier, and winning a battle 5 per enemy ship killed.
+If you cannot pay for 6 hours in a row, the newest system you gained revolts and goes independent. The capital never revolts: if it is the newest, or the newest system is under siege or has a station that cannot be removed, nothing revolts that hour. Paying, or dropping to capacity, resets the count. Each Empire Level needs 1000 x 1.65^(level - 1) Empire XP (experience points). Gaining a system gives 250 and building a station 50 (each system and station pays once), each hour gives 3 per station tier, and winning a battle gives 5 per enemy ship killed. Smaller sources: 1 per work-bay trip, 3 per trade run, and 0.5 per route delivery once you have a capital.
 
 In the code: [Empire Level and upkeep](#code-empire-level-and-upkeep).
 
@@ -93,7 +111,7 @@ A station you build has no facilities, so it uses a Small layout. Nothing in the
 - The economic outposts you own are your own kind of station, separate from the NPC kind listed in the economic outpost row on [Combat stations](../basics/stations.md#which-station-is-which).
 - Economic outposts stake mining and salvage claims in their system, with 300 to 180 second re-stake cooldowns by tier. This has no link to combat stations.
 - When a system you hold falls, your stations are handed over: build jobs are cancelled, serving ships are released, routes end, and the captor gets a faction station holding the stock. 75% of the stock goes to your refund station and the rest stays with the captor. If you are at the station, the handover waits until you leave. The other direction, economic outposts you capture becoming yours one tier lower with 10% of their stock, is described under capture above.
-- Removing a station on your request leaves a "Remains of {station}" salvage site for 3600 seconds (1 hour).
+- Removing a station on your request leaves a "Remains of {station}" salvage site for 3600 seconds (1 hour) only if the station held materials, crew, build jobs or cargo in transit; an empty station leaves nothing.
 - A Defense station you own counts toward the siege profile of a system whose conquest owner is you.
 - Your stations cannot be force-attacked (see [Reputation and force attacks](../basics/stations.md#reputation-and-force-attacks)).
 
@@ -131,13 +149,13 @@ In the code: [where economic outposts go](#code-where-economic-outposts-go).
 
 ### Starting layout in expansion systems
 
-New games and fresh war zones start pre-built ([Upgrades and the starting layout](../conquest/faction-economy.md#upgrades-and-the-starting-layout)). Expansion systems are seeded with 40% of slots filled, where the tier follows planned level: 1 below level 60 up to 3 at level 100. Expansion gate fortresses are Defense stations at tier 5. A Construction Yard's tier rises only by the planner upgrade ([Construction Yards](../conquest/faction-economy.md#construction-yards)) and by this seeding.
+New games and fresh war zones start pre-built ([Upgrades and the starting layout](../conquest/faction-economy.md#upgrades-and-the-starting-layout)). Expansion systems are seeded with 40% of slots filled (2 slots per system), and each war faction there also gets its seeded Defense stations. The tier of a seeded economic outpost follows the planned level of its system: tier 1 up to about level 73, tier 2 from about 74 and tier 3 from about 87 (level 60 to 100 is split in thirds). Every Darkspace Compact system with a gate leading toward Meridia's quadrant gets a Defense station at tier 5 (the "gate fortress") if it has a free slot. A Construction Yard's tier rises only by the planner upgrade ([Construction Yards](../conquest/faction-economy.md#construction-yards)) and by this seeding.
 
 In the code: [starting layout in expansion systems](#code-starting-layout-in-expansion-systems).
 
 ### Fleet caps once the expansion war is open
 
-The territory cap in the [fleet cap formula](../conquest/faction-economy.md#fleet-caps) is 8. Once the expansion war is open it is 12 for Darkspace and 6 for Meridia's Chosen. Darkspace Compact stops using the flat cap of 5 at that point: it moves to the same formula as the other war factions, the smaller of the territory cap and 5 + (war-zone systems / 15, rounded down).
+The territory cap in the [fleet cap formula](../conquest/faction-economy.md#fleet-caps) is 8. Once the expansion war is open it is 12 for Darkspace and 6 for Meridia's Chosen, so Meridia's Chosen lose room (8 to 6) while Darkspace gains it. Darkspace Compact stops using the flat cap of 5 at that point: it moves to the same formula as the other war factions, the smaller of the territory cap and 5 + (war-zone systems / 15, rounded down).
 
 In the code: [fleet caps once the expansion war is open](#code-fleet-caps-once-the-expansion-war-is-open).
 
@@ -201,9 +219,9 @@ Source: `SystemClaim.ApplyReputationRule`, `PlayerStationCapture`
 |---|---|
 | Empire Level | `EmpireLevel` |
 
-Holding systems costs nothing up to your Empire Level's capacity (10 systems at Empire Level 1, 14 at 2, 19 at 3, 25 at 4, 32 at 5, 41 at 6, 52 at 7, 65 at 8, 81 at 9, 101 at 10).
+Holding systems costs nothing up to your Empire Level's capacity (10 systems at Empire Level 1, 14 at 2, 19 at 3, 25 at 4, 32 at 5, 41 at 6, 52 at 7, 65 at 8, 81 at 9, 101 at 10, 125 at 11, 155 at 12, 191 at 13, 235 at 14, 289 at 15, 355 at 16, 436 at 17, 534 at 18, 654 at 19, 800 at 20; `EmpireLevel.SystemCapacityByLevel`, `MaxLevel` 20).
 
-Past capacity the hourly upkeep is `2,000,000 * 2^(over - 1) * CostMultiplier(level) / CostMultiplier(60)` credits. Empire Level needs `1000 * 1.65^(level - 1)` Empire XP.
+Past capacity the hourly upkeep is `2,000,000 * 2^(over - 1) * CostMultiplier(effectiveLevel) / CostMultiplier(60)` credits (`EmpireUpkeep.GetHourly`; `effectiveLevel` is commander level plus Vanguard level). Revolt happens at `unpaidHours >= 6` (`EmpireUpkeep.RevoltNewest`, which does nothing when `EmpireSystems.GetNewest` is the capital or `EmpireSystemRelease.GetRefusal` is set). Empire Level needs `1000 * 1.65^(level - 1)` Empire XP. XP sources in `EmpireExperience`: system gained 250 and station built 50 (once per guid), 3 per station tier per hour, 5 per enemy ship in a won battle, work-bay trip 1, trade run 3, route delivery 0.5 (with a capital).
 
 Source: `EmpireLevel`, `EmpireExperience`, `EmpireUpkeep`
 
@@ -219,7 +237,7 @@ A player-owned station is a `PlayerStation` built with no facilities, so it uses
 - An economic outpost you own is a `PlayerStation`, not a `FactionStation`, so the code name in the economic outpost row on [Combat stations](../basics/stations.md#which-station-is-which) (`FactionStation` that is not a Defense station) is the NPC kind.
 - `StationClaim` is about mining and salvage claims that economic outposts stake in their system, with 300 to 180 second re-stake cooldowns by tier. It has no link to combat stations.
 - `PlayerStationCapture` hands your stations over when the system you hold falls: build jobs are cancelled, serving ships are released, routes end, and a faction station is created for the captor holding the stock. 75% of the stock goes to your refund station and the rest stays with the captor. If you are at the station, the handover waits until you leave. The same file converts economic outposts you own into player stations (tier drops by 1, 10% of their storage moves over).
-- `StationDecommission` removes a station on your request and leaves a "Remains of {station}" salvage site for 3600 seconds.
+- `StationDecommission` removes a station on your request; it leaves a "Remains of {station}" salvage site for 3600 seconds (`RemainsLifetimeSeconds`) only when the preview's `leavesRemains` holds (material storage not empty, crew aboard, jobs queued, or cargo carried by a route or ship).
 - Player stations cannot be force-attacked (`PlayerStation` is a `SpaceStation`; see [Reputation and force attacks](../basics/stations.md#reputation-and-force-attacks)).
 
 Source: `StationSiteRules.GetRefusal`, `StationClaim.GetCooldownSeconds`, `PlayerStationCapture.HandOver`, `PlayerStationCapture.HandOverStation`, `PlayerStationCapture.TakeOver`, `PlayerStationCapture.GetTakeoverTier`, `StationDecommission`, `StationDefense.IsDefenseStation`
@@ -246,7 +264,7 @@ Source: `ExpansionEconomySeeder.SeedExpansion`, `ExpansionEconomySeeder.TierForP
 
 #### Code: Fleet caps once the expansion war is open
 
-`territoryCap` in the [fleet cap formula](../conquest/faction-economy.md#fleet-caps) is 8. Once the expansion war is open it is 12 for Darkspace and 6 for Meridia's Chosen. Darkspace Compact stops using the flat cap of 5 at that point: it moves to the same formula as the other war factions, `min(territoryCap, 5 + floor(warZoneSystems / 15))`.
+`territoryCap` in the [fleet cap formula](../conquest/faction-economy.md#fleet-caps) is 8 (`MaxTerritoryFleets`). Once the expansion war is open it is 12 for Darkspace and, for Meridia's Chosen (`Faction.fanatics`), 6. Darkspace Compact stops using the flat cap of 5 at that point: it moves to the same formula as the other war factions, `min(territoryCap, 5 + floor(warZoneSystems / 15))`.
 
 Source: `ConquestFleetPlanner.MaxFleetsFor`, `ConquestFleetPlanner.MaxTerritoryFleets`
 

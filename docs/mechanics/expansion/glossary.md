@@ -46,7 +46,7 @@ In the code: [conquest map](#code-conquest-map).
 | Empire Fleet | "Empire Fleets" (button and window), "Fleets" tab | Your own fleets on the Conquest Map. Their ships are your real ships. |
 | patrol fleet | "Patrol fleets" (station window), "Patrol strength" | Ships you assign to one of your Defense stations to guard its system. They count toward Defense and are lost for good if destroyed. |
 | defense stance | "Defend system", "Defend sector", "Not defending" | Whether an idle Empire Fleet joins defense of its system, or of any of your systems in its sector. |
-| fleet mix | "Fleet mix {x} off-screen strength ({n} ship sizes)" | A bonus for Empire Fleets with two or more ship sizes, applied in simulated battles only. |
+| fleet mix | "Fleet mix {x} off-screen strength ({n} ship sizes)" | A bonus for Empire Fleets with two or more ship sizes, applied in simulated battles and the Defense number, not in live combat. |
 | retreat setting | "RETREAT AT", "Never" (hidden in this version) | The strength at which an Empire Fleet leaves a battle. Hidden, and 0, so your fleets never retreat on their own. |
 | refit | "Refitting at a construction yard", "Refit due" | Visiting a Construction Yard to raise ship levels. |
 
@@ -57,7 +57,7 @@ In the code: [fleets and battles](#code-fleets-and-battles).
 | Term used here | What the game shows | Meaning |
 |---|---|---|
 | wealth (your empire) | "Economic Power" tile | For your own empire the same tile reads "Income / Hour". |
-| upkeep | "Upkeep" (your empire and faction ledger) | Hourly credits you pay for holding more systems than your Empire Level allows. |
+| upkeep | "Upkeep" (your empire and faction ledger) | Hourly credits you pay for holding more systems than your Empire Level allows. Uses your effective level; after 6 unpaid hours in a row the newest system (never the capital) revolts. |
 
 In the code: [faction economy](#code-faction-economy).
 
@@ -65,8 +65,8 @@ In the code: [faction economy](#code-faction-economy).
 
 | Term used here | What the game shows | Meaning |
 |---|---|---|
-| Vanguard Marks (systems) | "Vanguard Marks" | Marks also buy systems. |
-| Empire Level | "Empire Level {n} - you can now hold {m} systems without upkeep" | Your empire's level. It sets how many systems you may hold without paying upkeep. |
+| Vanguard Marks (systems) | "Vanguard Marks" | Buying a system in your player sector costs Marks as well as credits. |
+| Empire Level | "Empire Level {n} - you can now hold {m} systems without upkeep" | Your empire's level, 1 to 20. It sets how many systems you may hold without paying upkeep. |
 | Empire XP | "Empire XP" | Experience your empire earns from systems, stations, trade and battles. |
 | Beyond the Front | "Beyond the Front" | The story mission that unlocks the expansion and, when finished, claiming. |
 
