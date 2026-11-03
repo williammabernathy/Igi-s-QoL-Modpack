@@ -8,11 +8,14 @@ The modpack, the tools and the template were developed and tested on Linux only,
 
 ## Documentation
 
+The player-facing pages (game mechanics, the modpack's features and settings, BepInEx setup) are also published as a website: <https://williammabernathy.github.io/Igi-s-QoL-Modpack/>.
+
 | If you want to | Read |
 |---|---|
 | Install and use the modpack | [docs/modpack/README.md](docs/modpack/README.md) |
 | See what each feature does | [Window and HUD](docs/modpack/features/interface.md), [ECHO](docs/modpack/features/echo.md), [Fleet and combat](docs/modpack/features/fleet-combat.md), [Loot and cargo](docs/modpack/features/loot-and-cargo.md), [Stations, loadouts and crafting](docs/modpack/features/stations.md), [Logs, reference and other mods](docs/modpack/features/logs-and-reference.md) |
 | Look up a setting | [docs/modpack/settings.md](docs/modpack/settings.md) |
+| Understand how game systems work (damage, scaling, boarding, conquest, faction economies), ordered by when the game opens them | [docs/index.md](docs/index.md) |
 | Get BepInEx running on Windows or under Proton, find logs and saves | [docs/setup.md](docs/setup.md) |
 | Build the mods, or update them after a game patch | [docs/building.md](docs/building.md) |
 | Find which game method to patch for something | [docs/modding-reference.md](docs/modding-reference.md) |
@@ -20,7 +23,7 @@ The modpack, the tools and the template were developed and tested on Linux only,
 | Run the in-game self-checks, dump game data, profile | [docs/modpack/dev-harness.md](docs/modpack/dev-harness.md) |
 | Compare two game versions for broken patches | [tools/VersionDiff/README.md](tools/VersionDiff/README.md) |
 | Start a new mod in its own repo | [docs/template.md](docs/template.md) |
-| Understand the pipeline and releases | [docs/ci.md](docs/ci.md) |
+| Understand the pipeline, releases and the documentation site | [docs/ci.md](docs/ci.md) |
 
 ## What's here
 
@@ -32,6 +35,7 @@ The modpack, the tools and the template were developed and tested on Linux only,
 | `templates/VgMod/` | `dotnet new` template for a mod in its own repo |
 | `Directory.Build.props` | Shared build setup: game references, publicizer, deploy to the game, game-version snapshots |
 | `.github/workflows/ci.yml` | Build, patch check and releases, on a runner on this PC |
+| `.github/workflows/pages.yml`, `zensical.toml`, `tools/site/` | Builds `docs/` into the documentation site and publishes it to GitHub Pages |
 | `docs/` | The documentation above; `docs/images/` holds the screenshots |
 | `decompiled/`, `game-versions/` | The decompiled game and copies of its DLLs per version. Gitignored: they're the game's copyrighted code |
 

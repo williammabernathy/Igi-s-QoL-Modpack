@@ -11,3 +11,5 @@ game-versions/
 FEATURELIST.md
 # Local planning doc for the sandbox test harness; not ready to publish.
 docs/modpack/sandbox-harness.md
+# Documentation site build output (zensical.toml).
+/site/

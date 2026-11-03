@@ -54,6 +54,6 @@ The Mods tab ([Other mods](features/logs-and-reference.md#other-mods)) shows whi
 
 ## For developers
 
-- [developing.md](developing.md): how the code is laid out, the conventions every feature follows, and how to add a feature.
-- [dev-harness.md](dev-harness.md): the in-game test harness, self-checks, data dumps and profiling.
-- [../building.md](../building.md) and [../ci.md](../ci.md): building, game updates, CI and releases.
+- [developing.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/modpack/developing.md): how the code is laid out, the conventions every feature follows, and how to add a feature.
+- [dev-harness.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/modpack/dev-harness.md): the in-game test harness, self-checks, data dumps and profiling.
+- [building.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/building.md) and [ci.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/ci.md): building, game updates, CI and releases.

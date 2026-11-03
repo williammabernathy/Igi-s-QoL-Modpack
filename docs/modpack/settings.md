@@ -4,7 +4,7 @@ Every setting of Igi's QoL Modpack is in `BepInEx/config/igi.qol.cfg`, one secti
 
 `Enabled` ("Feature on" in the window) is in every section, defaults to `true` and applies at the next game start. Per-ship overrides from the ship settings popup are saved in the save game, not in this file.
 
-The `[Dev]` section is the developer harness, off by default; it's documented in [dev-harness.md](dev-harness.md).
+The `[Dev]` section is the developer harness, off by default; it's documented in [dev-harness.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/modpack/dev-harness.md).
 
 ## Window and HUD
 
