@@ -19,6 +19,7 @@ nav = [
   { "Home" = "index.md" },
   { "Basics" = [
     "mechanics/basics/README.md",
+    "mechanics/basics/faq.md",
     "mechanics/basics/glossary.md",
     "mechanics/basics/combat-damage.md",
     "mechanics/basics/scaling.md",
@@ -27,6 +28,7 @@ nav = [
   ] },
   { "Conquest (Level 28+ Spoilers)" = [
     "mechanics/conquest/README.md",
+    "mechanics/conquest/faq.md",
     "mechanics/conquest/glossary.md",
     "mechanics/conquest/war.md",
     "mechanics/conquest/sector-control.md",
@@ -35,12 +37,14 @@ nav = [
   ] },
   { "Beyond the Front (Level 60+ Spoilers)" = [
     "mechanics/expansion/README.md",
+    "mechanics/expansion/faq.md",
     "mechanics/expansion/glossary.md",
     "mechanics/expansion/your-empire.md",
     "mechanics/expansion/empire-fleets.md",
   ] },
   { "Late game (Spoilers)" = [
     "mechanics/late-game/README.md",
+    "mechanics/late-game/faq.md",
     "mechanics/late-game/glossary.md",
     "mechanics/late-game/control-story.md",
     "mechanics/late-game/closed-sector-story.md",

@@ -16,6 +16,7 @@ In the code: [gates](#code-gates).
 
 | Page | What it covers |
 |---|---|
+| [Common questions](faq.md) | Short answers to questions players ask about the story lines, each linked to the section with the full numbers. |
 | [The control story line](control-story.md) | The Umbral Reach control row and its spread, the Umbral Hacking Tool, the puppeteers' station, and every rule the Umbral transponder changes. |
 | [The closed sector story line](closed-sector-story.md) | The closed Meridia sector and quadrant, Malcyte as a dormant, yardless raider, its fleet cap, boarding it, and its alliance with Meridia's Chosen. |
 | [Glossary](glossary.md) | Terms for this stage. |

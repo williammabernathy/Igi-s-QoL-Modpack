@@ -33,6 +33,7 @@ In the code: [what level 60 and "Beyond the Front" gate](#code-what-level-60-and
 
 ## Pages
 
+- [Common questions](faq.md): short answers to questions players ask about your empire and Empire Fleets, each linked to the section with the full numbers.
 - [Glossary](glossary.md): terms and abbreviations used in the Beyond the Front pages.
 - [Your empire](your-empire.md): the expansion sectors, buying and claiming systems, the capital, Empire Level and upkeep, your stations, reputation from capture and claim, and the economy once the expansion war is open.
 - [Empire fleets](empire-fleets.md): fleet slots and size, orders, stances, the outmatched warning, map labels, your fleets in the Defense number, and what changes above level 60.

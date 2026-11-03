@@ -13,6 +13,8 @@ The pages are grouped by when the game opens each system, so you can read up to 
 | [Beyond the Front](mechanics/expansion/README.md) | Level 60, after finishing a 30% sector-control mission | [Your empire](mechanics/expansion/your-empire.md) (buying and claiming systems, your stations), [Empire Fleets](mechanics/expansion/empire-fleets.md), and a [glossary](mechanics/expansion/glossary.md) |
 | [Late game](mechanics/late-game/README.md) | Story lines that run through and after conquest | Story spoilers. Open it only if you want them |
 
+Each stage also has a "Common questions" page with short answers to the questions players ask most, such as how damage is calculated or how to finish the 30% mission. Every answer links to the section that has the full numbers: [Basics](mechanics/basics/faq.md), [Conquest](mechanics/conquest/faq.md), [Beyond the Front](mechanics/expansion/faq.md) and [Late game](mechanics/late-game/faq.md) (spoilers).
+
 A game update can change any of these numbers. The pages say which version they were checked against.
 
 These pages were written alongside [Igi's QoL Modpack](modpack/README.md), a BepInEx plugin for the game. You don't need the modpack to use anything here.

@@ -4,6 +4,7 @@ Systems you meet from a new game: how a shot turns into damage, how enemies, gea
 
 | Page | Answers |
 |---|---|
+| [Common questions](faq.md) | Short answers to questions players often ask about this stage, each linked to the section with the full numbers |
 | [Glossary](glossary.md) | What each term and abbreviation on these pages means and the exact text the game shows for it |
 | [Combat damage](combat-damage.md) | How a shot becomes hull damage: stats, damage types, crits, shields, armor and resistances |
 | [Scaling](scaling.md) | How enemy HP and damage grow with level, ship rank and Escalation, and what loot rarity to expect at a level |
