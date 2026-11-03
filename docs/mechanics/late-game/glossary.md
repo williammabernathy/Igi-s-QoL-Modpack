@@ -4,7 +4,7 @@ This page covers the terms from the story lines that run behind the war (spoiler
 
 Wording is read from the game's translation strings and the decompiled interface code of version 0.8.3.4, not from play. The table columns are explained in the basics glossary. Code names are in the last section.
 
-Pages: [Umbral Reach](umbral-reach.md), [Malcyte and Meridia](malcyte-and-meridia.md).
+Pages: [The control story line](control-story.md), [The closed sector story line](closed-sector-story.md).
 
 ## Places and stations
 
@@ -29,7 +29,7 @@ In the code: [places and stations](#code-places-and-stations).
 | Umbral Reach control | "Umbral Reach control" row | How far the Umbral Reach has spread into a system, as a percentage. |
 | conquest update (Umbral spread) | "Conquest Update" card | The hourly conquest update also spreads the Umbral Reach. |
 | Umbral Hacking Tool | none | Starts Umbral Reach infection in a system by setting its control to 0.05 (0.7 for the "uber" variant). |
-| Umbral transponder | none | Skips several reputation costs for entering, boarding, killing parts and destroying stations. The list is on [Umbral Reach](umbral-reach.md#what-the-umbral-transponder-changes). |
+| Umbral transponder | none | Skips several reputation costs for entering, boarding, killing parts and destroying stations. The list is on [the control story line](control-story.md#spoiler-what-the-transponder-changes). |
 
 In the code: [conquest map](#code-conquest-map).
 
@@ -37,7 +37,7 @@ In the code: [conquest map](#code-conquest-map).
 
 | Term used here | What the game shows | Meaning |
 |---|---|---|
-| Malcyte | none | The dormant, yardless raider faction. A hard-boarding faction. See [Malcyte and Meridia](malcyte-and-meridia.md). |
+| Malcyte | none | The dormant, yardless raider faction. A hard-boarding faction. See [the closed sector story line](closed-sector-story.md). |
 
 In the code: [factions](#code-factions).
 

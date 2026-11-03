@@ -4,7 +4,7 @@ This stage covers what opens once you accept the "Beyond the Front" mission: the
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md).
 
-## What level 60 and "Beyond the Front" gate
+## Spoiler: What level 60 and "Beyond the Front" gate
 
 Level 60 is a real gate, but it works through the level cap. The game does not check your level when you take conquest actions.
 

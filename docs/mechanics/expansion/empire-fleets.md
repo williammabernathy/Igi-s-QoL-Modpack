@@ -149,7 +149,7 @@ These two rows extend the levers table in [war](../conquest/war.md#ways-to-lower
 
 ## Above level 60, after "Beyond the Front"
 
-What you could do before, at level 60 or below, is in [sector control](../conquest/sector-control.md#level-60-or-below-before-your-first-system). This section applies once you have accepted "Beyond the Front" ([gate](README.md)).
+What you could do before, at level 60 or below, is in [sector control](../conquest/sector-control.md#level-60-or-below). This section applies once you have accepted "Beyond the Front" ([gate](README.md)).
 
 In the code: [above level 60](#code-above-level-60-after-beyond-the-front).
 

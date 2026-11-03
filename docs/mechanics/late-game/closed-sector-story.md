@@ -1,10 +1,10 @@
-# Malcyte and Meridia
+# The closed sector story line
 
-This page covers the Meridia sector and the quadrant around it, Malcyte as a dormant and yardless raider, its fleet cap, how boarding it differs, and its alliance with Meridia's Chosen. It is a spoiler for the Malcyte story. In version 0.8.3.4 only the debug console wakes Malcyte or opens Meridia (see the [late-game gates](README.md#gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). Anything not confirmed in code is marked "(not verified)".
+This page covers the Meridia sector and the quadrant around it, Malcyte as a dormant and yardless raider, its fleet cap, how boarding it differs, and its alliance with Meridia's Chosen. It is a spoiler for the Malcyte story. In version 0.8.3.4 only the debug console wakes Malcyte or opens Meridia (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). Anything not confirmed in code is marked "(not verified)".
 
 Terms are in the [late-game glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
-## Meridia in the kinds of system
+## Spoiler: The closed sector in the kinds of system
 
 These rows extend the kinds-of-system table in [war](../conquest/war.md#the-war-zone-and-the-kinds-of-system).
 
@@ -12,7 +12,7 @@ These rows extend the kinds-of-system table in [war](../conquest/war.md#the-war-
 |---|---|---|
 | Meridia | "There is nothing to besiege here" when you order an attack | The Meridia sector allows no stations, so Malcyte hold it without hubs. There is nothing to besiege, and fleets cannot attack it. |
 
-In the code: [Meridia in the kinds of system](#code-meridia-in-the-kinds-of-system).
+In the code: [the closed sector in the kinds of system](#code-the-closed-sector-in-the-kinds-of-system).
 
 ### The closed quadrant
 
@@ -20,7 +20,7 @@ While Meridia is closed, systems in the Meridia quadrant are open only to Malcyt
 
 In the code: [the closed quadrant](#code-the-closed-quadrant).
 
-### Your options in Meridia
+### Your options in the closed sector
 
 This extends the "You still cannot" table of the "above level 60" scenario in [Empire fleets](../expansion/empire-fleets.md#what-you-can-and-cannot-do).
 
@@ -28,7 +28,7 @@ This extends the "You still cannot" table of the "above level 60" scenario in [E
 |---|---|
 | Touch Meridia | No stations to besiege. Closed to you while Meridia is closed. |
 
-## Malcyte
+## Spoiler: The dormant raider faction
 
 ### Dormant until awake
 
@@ -61,19 +61,19 @@ None of this waits for yard time, so a wealthy Malcyte rebuilds a whole fleet in
 
 In the code: [yardless fleets](#code-yardless-fleets).
 
-### No economic outposts in Meridia
+### No economic outposts in the closed sector
 
 A Meridia system is not a valid site for an economic outpost, so no faction builds one there (see [Where economic outposts go](../conquest/faction-economy.md#where-economic-outposts-go)). A Meridia system cannot hold an economic outpost, so Meridia's Chosen and Malcyte yards cannot be in Meridia.
 
-In the code: [no economic outposts in Meridia](#code-no-economic-outposts-in-meridia).
+In the code: [no economic outposts in the closed sector](#code-no-economic-outposts-in-the-closed-sector).
 
-## Meridia's Chosen as Malcyte's war ally
+## Spoiler: The dormant faction's war ally
 
 Meridia's Chosen is Malcyte's war ally, and both are admitted to the Meridia quadrant while it is closed (see [The closed quadrant](#the-closed-quadrant)). Meridia's Chosen is an ordinary faction in the earlier stages; only this tie belongs to the story.
 
-In the code: [Meridia's Chosen as Malcyte's war ally](#code-meridias-chosen-as-malcytes-war-ally).
+In the code: [the dormant faction's war ally](#code-the-dormant-factions-war-ally).
 
-## Boarding the Malcyte
+## Spoiler: Boarding the dormant faction
 
 ### Hard boarding
 
@@ -105,7 +105,7 @@ In the code: [scuttle rate](#code-scuttle-rate).
 
 This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4. To check a claim, search the decompiled source for the method or field named here.
 
-### Code: Meridia in the kinds of system
+### Code: The closed sector in the kinds of system
 
 The Meridia sector allows no stations (`AllowsStations` false).
 
@@ -115,7 +115,7 @@ Nothing in the decompiled code outside the debug console calls `Conquest.OpenMer
 
 Source: `ConquestScope.IsClosedMeridiaGate`, `ConquestScope.IsOpenTo`
 
-### Code: Malcyte
+### Code: The dormant raider faction
 
 #### Code: Dormant until awake
 
@@ -144,17 +144,17 @@ Each hourly economy tick `CorsairRaids.Tick` tops up every idle or retreating fl
 
 Source: `CorsairRaids.Tick`, `CorsairRaids.TryRaiseFleet`, `YardlessFleetSupply.TryTopUp`, `YardlessFleetSupply.TryRaise`, `ConquestJoin.IsRaider`
 
-#### Code: No economic outposts in Meridia
+#### Code: No economic outposts in the closed sector
 
 A Meridia system is not a valid site for an economic outpost (`ConquestScope.AllowsStations`).
 
 Source: `FactionEconomicPlanner.IsValidSite`, `ConquestScope.AllowsStations`
 
-### Code: Meridia's Chosen as Malcyte's war ally
+### Code: The dormant faction's war ally
 
 Source: `ConquestScope.IsOpenTo`
 
-### Code: Boarding the Malcyte
+### Code: Boarding the dormant faction
 
 #### Code: Hard boarding
 

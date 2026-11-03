@@ -18,7 +18,7 @@ Some terms before the details. The war zone is every system where factions fight
 
 In the code: [the 30% sector-control mission](#code-the-30-sector-control-mission).
 
-### Getting the mission
+### Spoiler: Getting the mission
 
 1. The story mission "Sector Control" asks you to find the three embassies (each faction's neutral station in the Staging sector, outside the war zone) and talk to their representatives. Its description says "The choice of faction is not permanent".
 2. Talking to a representative offers to align you with that faction. The offer is refused if the faction is your enemy, and refused while the faction has no headquarters. The game counts a faction as your enemy when you are at war with it or your reputation with it is below -500. Reputation is a number that the game shows as a level name; below -500 means the Wary level (except exactly -500) or any worse level, while Neutral covers -499 to 1,499 (all bands are in the [glossary](../basics/glossary.md#reputation)). Otherwise you are asked to confirm and the faction's first mission ("Internship" for Stellar, "For the Collective!" for Kolyatov, "Alignment" for Luminate) is added.
@@ -147,7 +147,7 @@ Not verified: how fast the three majors actually grow on their own (no rate exis
 
 In the code: [a step-by-step plan](#code-a-step-by-step-plan).
 
-## Level 60 or below, before your first system
+## Level 60 or below
 
 This section applies until you accept "Beyond the Front" ([gate](../expansion/README.md)).
 
@@ -276,7 +276,7 @@ Source: `ConquestOwnership.Abandon`, `ConquestOwnership.Claim`, `ConquestOwnersh
 
 The systems the second mission needs are `ceil(0.3 x total)`.
 
-### Code: Level 60 or below, before your first system
+### Code: Level 60 or below
 
 #### Code: What you can and cannot do
 

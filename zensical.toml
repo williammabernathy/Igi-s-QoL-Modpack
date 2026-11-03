@@ -25,7 +25,7 @@ nav = [
     "mechanics/basics/stations.md",
     "mechanics/basics/boarding.md",
   ] },
-  { "Conquest" = [
+  { "Conquest (Level 28+ Spoilers)" = [
     "mechanics/conquest/README.md",
     "mechanics/conquest/glossary.md",
     "mechanics/conquest/war.md",
@@ -33,17 +33,17 @@ nav = [
     "mechanics/conquest/war-stations.md",
     "mechanics/conquest/faction-economy.md",
   ] },
-  { "Beyond the Front" = [
+  { "Beyond the Front (Level 60+ Spoilers)" = [
     "mechanics/expansion/README.md",
     "mechanics/expansion/glossary.md",
     "mechanics/expansion/your-empire.md",
     "mechanics/expansion/empire-fleets.md",
   ] },
-  { "Late game (spoilers)" = [
+  { "Late game (Spoilers)" = [
     "mechanics/late-game/README.md",
     "mechanics/late-game/glossary.md",
-    "mechanics/late-game/umbral-reach.md",
-    "mechanics/late-game/malcyte-and-meridia.md",
+    "mechanics/late-game/control-story.md",
+    "mechanics/late-game/closed-sector-story.md",
   ] },
   { "Modpack" = [
     "modpack/README.md",
