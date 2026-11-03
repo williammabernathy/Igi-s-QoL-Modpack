@@ -13,6 +13,7 @@ The modpack, the tools and the template were developed and tested on Linux only,
 | Install and use the modpack | [docs/modpack/README.md](docs/modpack/README.md) |
 | See what each feature does | [Window and HUD](docs/modpack/features/interface.md), [ECHO](docs/modpack/features/echo.md), [Fleet and combat](docs/modpack/features/fleet-combat.md), [Loot and cargo](docs/modpack/features/loot-and-cargo.md), [Stations, loadouts and crafting](docs/modpack/features/stations.md), [Logs, reference and other mods](docs/modpack/features/logs-and-reference.md) |
 | Look up a setting | [docs/modpack/settings.md](docs/modpack/settings.md) |
+| Understand how game systems work: conquest, faction economies, stations, damage, scaling, boarding | [docs/mechanics/README.md](docs/mechanics/README.md) |
 | Get BepInEx running on Windows or under Proton, find logs and saves | [docs/setup.md](docs/setup.md) |
 | Build the mods, or update them after a game patch | [docs/building.md](docs/building.md) |
 | Find which game method to patch for something | [docs/modding-reference.md](docs/modding-reference.md) |
