@@ -4,7 +4,7 @@ This stage covers the story lines that run behind the war: the Umbral Reach and 
 
 Terms are in the [late-game glossary](glossary.md), the [basics glossary](../basics/glossary.md) and the [Conquest glossary](../conquest/glossary.md).
 
-## Gates
+## Spoiler: Gates
 
 - **The Umbral line.** The first mission of each faction's Conquest chain (Stellar, Kolyatov or Luminate, depending on your faction) pays 2,000,000 credits, 60 Vanguard Marks, XP, the second mission and the Umbral line. So the Umbral line is granted with the reward of your faction's first Conquest mission.
 - **The Darkspace line.** The second mission (the 30% sector-control mission) starts the next story mission of the Darkspace line. I did not find that mission defined in the code.
@@ -16,8 +16,8 @@ In the code: [gates](#code-gates).
 
 | Page | What it covers |
 |---|---|
-| [Umbral Reach](umbral-reach.md) | The Umbral Reach control row and its spread, the Umbral Hacking Tool, the puppeteers' station, and every rule the Umbral transponder changes. |
-| [Malcyte and Meridia](malcyte-and-meridia.md) | The closed Meridia sector and quadrant, Malcyte as a dormant, yardless raider, its fleet cap, boarding it, and its alliance with Meridia's Chosen. |
+| [The control story line](control-story.md) | The Umbral Reach control row and its spread, the Umbral Hacking Tool, the puppeteers' station, and every rule the Umbral transponder changes. |
+| [The closed sector story line](closed-sector-story.md) | The closed Meridia sector and quadrant, Malcyte as a dormant, yardless raider, its fleet cap, boarding it, and its alliance with Meridia's Chosen. |
 | [Glossary](glossary.md) | Terms for this stage. |
 
 The pages that come before this stage: [Basics](../basics/README.md), [Conquest](../conquest/README.md) and [Beyond the Front](../expansion/README.md).

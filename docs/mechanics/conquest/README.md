@@ -2,7 +2,7 @@
 
 This stage covers the faction war in the Conquest sector (Ara Martis): the embassies, aligning with a faction, the war itself, and the 30% sector-control mission. It opens at player level 28. Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). Anything not confirmed in code is marked `(not verified)`. The last section, "In the game code", has the mission ids and conditions behind the plain-language steps.
 
-## How you get here
+## Spoiler: How you get here
 
 The stage opens at level 28. At that level the story step that sends you into the Conquest sector (Ara Martis) becomes available.
 

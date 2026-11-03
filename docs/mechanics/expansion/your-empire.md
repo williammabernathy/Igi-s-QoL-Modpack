@@ -4,7 +4,7 @@ This page covers what changes for the war zone and for you once you accept "Beyo
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md). Your fleets are in [empire fleets](empire-fleets.md).
 
-## The expanded war zone
+## Spoiler: The expanded war zone
 
 The war zone is the Conquest sector (Ara Martis) plus the expansion sectors once you unlock them by accepting the "Beyond the Front" mission. The Frontier, Staging and Darkspace regions are not part of it. (The [Faction economy](../conquest/faction-economy.md) page defines the war zone as the Conquest sector only; this is the extension.)
 
@@ -20,9 +20,9 @@ In the free territory row of that table, you cannot claim it ("you can only take
 
 In the code: [the expanded war zone](#code-the-expanded-war-zone).
 
-## Level cap and other changes
+## Spoiler: Level cap and other changes
 
-Accepting the mission raises the level cap to 100, the loot box skill point cap from 10 to 30 and the reputation cap to Exalted. All of the unlock effects are in the [gate table](README.md#what-level-60-and-beyond-the-front-gate). How the war itself changes for your level and for NPC fleets above level 60 is in [what you face](empire-fleets.md#what-you-face).
+Accepting the mission raises the level cap to 100, the loot box skill point cap from 10 to 30 and the reputation cap to Exalted. All of the unlock effects are in the [gate table](README.md#spoiler-what-level-60-and-beyond-the-front-gate). How the war itself changes for your level and for NPC fleets above level 60 is in [what you face](empire-fleets.md#what-you-face).
 
 ## Buying systems in the player sector
 

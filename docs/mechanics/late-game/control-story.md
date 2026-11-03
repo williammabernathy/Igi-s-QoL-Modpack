@@ -1,10 +1,10 @@
-# Umbral Reach
+# The control story line
 
-This page covers the Umbral Reach: its control row and how it spreads, the Umbral Hacking Tool, the puppeteers' station, and every exception the Umbral transponder makes to the early rules. It is a spoiler for the Umbral story line, which opens as part of the reward for your faction's first Conquest mission (see the [late-game gates](README.md#gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). Anything not confirmed in code is marked "(not verified)".
+This page covers the Umbral Reach: its control row and how it spreads, the Umbral Hacking Tool, the puppeteers' station, and every exception the Umbral transponder makes to the early rules. It is a spoiler for the Umbral story line, which opens as part of the reward for your faction's first Conquest mission (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). Anything not confirmed in code is marked "(not verified)".
 
 Terms are in the [late-game glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
-## Umbral Reach control
+## Spoiler: The control row and its spread
 
 The "Umbral Reach control" row shows how far the Umbral Reach has spread into a system, as a percentage. It appears only above 0.
 
@@ -15,7 +15,7 @@ The "Umbral Reach control" row shows how far the Umbral Reach has spread into a 
 
 This page does not cover what Umbral control does beyond those thresholds.
 
-In the code: [Umbral Reach control](#code-umbral-reach-control).
+In the code: [the control row and its spread](#code-the-control-row-and-its-spread).
 
 ### On the system tooltip and in system data
 
@@ -29,7 +29,7 @@ The hourly conquest update also spreads the Umbral Reach. The [faction economy](
 
 In the code: [the conquest update](#code-the-conquest-update).
 
-## The puppeteers' station
+## Spoiler: The story faction's station
 
 The puppeteers' station in quadrant 2 is not an economic outpost or an outpost system. It has 6 parts.
 
@@ -48,7 +48,7 @@ Off-screen siege numbers (scoring as in [War stations](../conquest/war-stations.
 | S2 (below level 45) | 440 | 160 |
 | both M2 or both L1 | 470 to 500 | 240 to 320 |
 
-In the code: [the puppeteers' station](#code-the-puppeteers-station).
+In the code: [the story faction's station](#code-the-story-factions-station).
 
 ## Stations with no reputation loss
 
@@ -56,7 +56,7 @@ Several mission stations and Umbral stations are flagged so that killing their p
 
 In the code: [stations with no reputation loss](#code-stations-with-no-reputation-loss).
 
-## What the Umbral transponder changes
+## Spoiler: What the transponder changes
 
 With the Umbral transponder, several reputation costs from the early pages are skipped. Each section below names the rule it changes and links to it.
 
@@ -96,7 +96,7 @@ Changes [Ways to slow a faction](../conquest/faction-economy.md#ways-to-slow-a-f
 
 This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4. To check a claim, search the decompiled source for the method or field named here. Anything not confirmed in code is marked `(not verified)`.
 
-### Code: Umbral Reach control
+### Code: The control row and its spread
 
 The row shows `umbralControlLevel` as a percentage and appears only above 0. Each conquest update (every 3600 s) a system already above 0 rises by a random 0.05 to 0.1, clamped at 1. A system at 1.0 can seed one adjacent system at 0.05, but only with a 50% roll each update and at most one new system per update. The Umbral Hacking Tool starts infection by setting a system to 0.05 (0.7 for the "uber" variant); it needs a friendly station and an infected neighbor above 0.19 unless it is the uber variant. Missions at an Umbral station unlock at 5% station control and shops at 50%. This page does not cover what umbral control does beyond those thresholds.
 
@@ -114,7 +114,7 @@ Every war-zone system's `ConquestSystem` also stores umbral control, next to who
 
 Source: `Conquest.DoConquestTick`
 
-### Code: The puppeteers' station
+### Code: The story faction's station
 
 The puppeteers' station in quadrant 2 is built by `CreateUmbralOutpost`. "Umbral outpost" is the code builder name for it. It is not an economic outpost or an outpost system. It has 6 parts.
 
@@ -144,7 +144,7 @@ The flag is `noReputationLoss`. Killing their parts costs no reputation with the
 
 Source: `LootManager.HandleKillReputation`, `LootManager.DropLoot`.
 
-### Code: What the Umbral transponder changes
+### Code: What the transponder changes
 
 The transponder is the `hasUmbralTransponder` flag.
 
