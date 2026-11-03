@@ -42,9 +42,26 @@ dotnet run --project tools/VersionDiff -c Release -- patches --new "$G/VanguardG
 
 `build` runs `dotnet build` with `-warnaserror`, so it passes only with no warnings at all; `patch-check` passes when VersionDiff exits 0. The zip lands in `artifacts/` (gitignored). The `release` job needs the workflow's GitHub token and only makes sense in CI.
 
+## Documentation site
+
+`.github/workflows/pages.yml` builds `docs/` with [Zensical](https://zensical.org/) (`zensical.toml`) and publishes it to GitHub Pages at <https://williammabernathy.github.io/Igi-s-QoL-Modpack/>. It runs on pushes to `main` that change `docs/`, `zensical.toml`, `tools/site/` or the workflow, and by hand from the Actions tab. It needs nothing from the game, so it runs on a GitHub-hosted runner. The build is `--strict`: a link to a page the site doesn't have fails it.
+
+The site has the mechanics pages, the modpack's user pages and `setup.md`. The developer pages under `exclude_docs` in `zensical.toml` stay on GitHub only, so a site page that links to one uses its full GitHub URL. A new page goes in `nav` in `zensical.toml` or under `exclude_docs`.
+
+Mechanics pages follow two layout rules. First, they sit in a stage folder under `docs/mechanics/` (`basics`, `conquest`, `expansion`, `late-game`) by when the game opens the system. A page names a later stage only as a pointer to its gate, and late-game names stay inside `late-game/`. Second, each page has two parts. The player explanation comes first, with no code identifiers or `Source:` lines. A final `## In the game code` section follows, with one `Code: <heading>` subsection per section it backs (one heading level deeper). Each player section that has code notes ends with `In the code: [..](#code-...)`.
+
+To preview it, from the repo root:
+
+```bash
+python -m venv /tmp/site-venv && /tmp/site-venv/bin/pip install -r tools/site/requirements.txt
+/tmp/site-venv/bin/zensical serve
+```
+
+It serves at `http://localhost:8000` and rebuilds on save. `zensical build` writes to `site/` (gitignored).
+
 ## The runner
 
-The game's DLLs are copyrighted and can't go to GitHub, so jobs run only on a self-hosted runner on this PC, labeled `vanguard-galaxy`. Runs wait as queued while it is off.
+The game's DLLs are copyrighted and can't go to GitHub, so `ci.yml`'s jobs run only on a self-hosted runner on this PC, labeled `vanguard-galaxy`. Runs wait as queued while it is off.
 
 - Install: `~/.local/share/actions-runner` (the `actions/runner` release for linux-x64). `.runner` and `.credentials*` there hold its registration, keep them private.
 - Service: `systemctl --user {status,restart} github-runner`, a user unit in `~/.config/systemd/user/`. It starts at login, not at boot.

@@ -50,7 +50,7 @@ A save without rules is seeded once from `BepInEx/config/IgiQoL/item-rules.json`
 - `keepAmount`: N for `SellAbove`.
 - Categories: `Ore`, `Ammo`, `Turret`, `Module`, `Booster`, `Junk`, `Drone`, `RefinedProduct`, `Torpedo`, `JumpgatePass`, `TradeGoods`, `Usable`, `DefensiveTurret`, `Salvage`, `Currency`, `Crystal`, `Data`, `Blueprint`, `BossSignal`, `SignalFragment`.
 - Rarities: `Standard`, `Enhanced`, `HighGrade`, `Exotic`, `Legendary`. A `categoryUpTo` or `rarityUpTo` key names the highest rarity the rule covers.
-- Item keys are the game's item identifier (`CanisterOxide`, not the display name "Oxide Canister"). A key without `@level` covers every level of the item. With `@level` it covers that level only and wins over the bare key. `[Dev] DumpGameData` lists every identifier in `InventoryItemType.allItems.txt` ([dev-harness.md](../dev-harness.md#data-dumps)).
+- Item keys are the game's item identifier (`CanisterOxide`, not the display name "Oxide Canister"). A key without `@level` covers every level of the item. With `@level` it covers that level only and wins over the bare key. `[Dev] DumpGameData` lists every identifier in `InventoryItemType.allItems.txt` ([dev-harness.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/modpack/dev-harness.md#data-dumps)).
 
 An entry with an unknown category or rarity is skipped with a warning in `LogOutput.log`. Fields you leave out take the vanilla value (0, `Default`, 0), and an unknown `dockAction` reads as `Default`. When the file seeds a save, `LogOutput.log` says "imported N rules from item-rules.json into this save". A file that can't be read is logged as an error and the save starts without rules.
 
