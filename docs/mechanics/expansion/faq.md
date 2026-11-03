@@ -14,7 +14,7 @@ Details: [What level 60 and "Beyond the Front" gate](README.md#spoiler-what-leve
 
 ### Spoiler: What does accepting "Beyond the Front" change?
 
-Accepting it generates the new sectors and raises three caps: the player level cap to 100, the loot box skill point cap from 10 to 30, and the reputation cap from Distinguished to Exalted. It also widens the fleet caps of two NPC factions.
+Accepting it generates the new sectors and raises four caps: the player level cap to 100, the loot box skill point cap from 10 to 30, the bonus skill point cap from 61 to 101, and the reputation cap from Distinguished to Exalted. It also changes the fleet caps of two NPC factions: the Darkspace Compact goes from a flat 5 to up to 12, and Meridia's Chosen goes down, from up to 8 to up to 6.
 
 Claiming and buying systems come later, when you complete the mission. Finishing it starts a follow-up mission that asks you to buy your first system.
 
@@ -42,14 +42,14 @@ Details: [What you face](empire-fleets.md#what-you-face).
 
 ### How do I buy a system, and what does it cost?
 
-You buy unowned systems in your player sector at their hub, and you must be in the system. The price is 10,000,000 credits x 1.5^n, where n is the number of systems you have already bought. In Vanguard Marks, divide the credit price by 5000.
+You buy unowned systems for sale in your player sector at their hub, and you must be in the system. You pay both prices: 10,000,000 credits x 1.5^n, where n is the number of systems you have already bought, and Vanguard Marks equal to the credit price divided by 5000 (rounded).
 
 | Systems already bought | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|---|
 | Credits | 10,000,000 | 15,000,000 | 22,500,000 | 33,750,000 | 50,625,000 | 75,937,500 |
 | Vanguard Marks | 2,000 | 3,000 | 4,500 | 6,750 | 10,125 | 15,188 |
 
-The first system you hold becomes your capital.
+The first system you hold becomes your capital. A system you bought before and lost is priced one step lower (n - 1, never below 0).
 
 Details: [Buying systems in the player sector](your-empire.md#buying-systems-in-the-player-sector).
 
@@ -87,7 +87,7 @@ Details: [When a system changes hands](your-empire.md#when-a-system-changes-hand
 
 ### What is Empire Level and what does it do?
 
-Empire Level is your empire's own level. It is separate from your player level. It sets how many systems you can hold without paying upkeep, and it sets the fleet mix bonus on your Empire Fleets.
+Empire Level is your empire's own level. It is separate from your player level, and the maximum is 20. It sets how many systems you can hold without paying upkeep, and it sets the fleet mix bonus on your Empire Fleets.
 
 Details: [Empire Level and upkeep](your-empire.md#empire-level-and-upkeep).
 
@@ -97,6 +97,10 @@ Details: [Empire Level and upkeep](your-empire.md#empire-level-and-upkeep).
 |---|---|---|---|---|---|---|---|---|---|---|
 | Systems without upkeep | 10 | 14 | 19 | 25 | 32 | 41 | 52 | 65 | 81 | 101 |
 
+| Empire Level | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Systems without upkeep | 125 | 155 | 191 | 235 | 289 | 355 | 436 | 534 | 654 | 800 |
+
 Details: [Empire Level and upkeep](your-empire.md#empire-level-and-upkeep).
 
 ### How much is upkeep, and what if I can't pay it?
@@ -104,16 +108,16 @@ Details: [Empire Level and upkeep](your-empire.md#empire-level-and-upkeep).
 Past your capacity you pay every hour, in credits:
 
 ```
-upkeep per hour = 2,000,000 x 2^(systems over capacity - 1) x cost multiplier at your level / cost multiplier at level 60
+upkeep per hour = 2,000,000 x 2^(systems over capacity - 1) x cost multiplier at your effective level / cost multiplier at level 60
 ```
 
-The cost multiplier is the one the game uses for item values, so it rises with your level and the level-60 value is the baseline. At level 60 that is 2,000,000 for one system over capacity and 4,000,000 for two. If you can't pay for 6 hours, the newest system revolts.
+The cost multiplier is the one the game uses for item values, so it rises with level and the level-60 value is the baseline. Your effective level (level plus Vanguard level) is used, not the plain level. Every system you hold counts toward capacity, the capital included. At level 60 the upkeep is 2,000,000 for one system over capacity and 4,000,000 for two. If you can't pay for 6 hours in a row, the newest system revolts and goes independent. The capital never revolts: if it is the newest, or the newest system is under siege or has a station that can't be removed, nothing revolts that hour. Paying, or dropping to capacity, resets the count.
 
 Details: [Empire Level and upkeep](your-empire.md#empire-level-and-upkeep).
 
 ### How do I raise my Empire Level?
 
-Earn Empire XP. Each Empire Level needs 1000 x 1.65^(level - 1) XP. You gain 250 for a new system, 50 for building a station, 3 per station tier every hour, and 5 per enemy ship killed in a battle.
+Earn Empire XP. Each Empire Level needs 1000 x 1.65^(level - 1) XP. You gain 250 for a new system and 50 for building a station (each system and station pays once), 3 per station tier every hour, and 5 per enemy ship killed in a battle you win. Smaller sources are 1 per work-bay trip, 3 per trade run and 0.5 per route delivery once you have a capital.
 
 Details: [Empire Level and upkeep](your-empire.md#empire-level-and-upkeep).
 
@@ -121,7 +125,7 @@ Details: [Empire Level and upkeep](your-empire.md#empire-level-and-upkeep).
 
 Economic outposts, Defense stations and patrols, and only in a system you own. A station you build has no facilities and uses a Small layout. A Defense station holds patrol fleets and fires on enemies. Each system has 2 station slots, and captured economic outposts use them too. Economic outposts also stake mining and salvage claims in their system. Your stations can't be force-attacked.
 
-Removing a station leaves a "Remains of {station}" salvage site for 1 hour.
+Removing a station leaves a "Remains of {station}" salvage site for 1 hour, but only if the station held materials, crew, build jobs or cargo in transit. An empty station leaves nothing.
 
 Details: [Player stations](your-empire.md#player-stations).
 
@@ -218,7 +222,7 @@ Details: [Taking a system with Empire Fleets](empire-fleets.md#taking-a-system-w
 ### Any tips for sieging a system?
 
 - Attack right after a system changes hands. Its station firepower is halved for 5 to 6 hours and it pays no taxes for 1 to 2 hours.
-- Station structure only takes damage after every defender ship is dead, so clear the fleets first. You can also intercept reinforcements while they are still traveling.
+- Station structure only takes damage after every defender ship is dead, so clear the fleets first (a siege gets at most 29 rounds). You can also intercept reinforcements while they are still traveling.
 - A Defense station has to be won first. Each stage is its own battle with a 600 s minimum.
 - Missions against the owner, done next to the target, lower its station firepower by up to half.
 - Destroying a system's hub live abandons it and offers you the claim, with the reputation drop to Hostile.
@@ -244,7 +248,7 @@ Details: [Your fleets and patrols in the Defense number](empire-fleets.md#your-f
 - Keep the Defense number above about 1740. NPC fleets attack at 1.15 times the weakest-station strength, and a lone NPC fleet is 2000 points. Assaults combine 2 or more fleets and can exceed that.
 - A defending fleet or patrol stops a raid from running unopposed.
 - A flagship or fleet of yours in the system turns the battle live, and the fight then depends on the ships alone.
-- War effort missions may help, but whether they apply to systems you hold is (not verified).
+- War effort missions for the owner's faction would add 250 to 700 Defense at most, but whether they apply to systems you hold is (not verified).
 
 Details: [Defending a system you hold](empire-fleets.md#defending-a-system-you-hold).
 

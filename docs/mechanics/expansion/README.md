@@ -13,8 +13,22 @@ Level 60 is a real gate, but it works through the level cap. The game does not c
 | Level 10 | Player level 10 and a system you hold | Empire Fleet budgets exist from level 10, but without a held system you can't field one. |
 | Level cap 60 | You have not accepted "Beyond the Front" | You cannot pass level 60 until the expansion is unlocked. |
 | "Beyond the Front" offered | Level 60, one finished 30% sector-control mission for your faction (the [30% sector-control missions](../conquest/sector-control.md#the-30-sector-control-mission)), and the expansion not yet unlocked | The mission only appears once you are at the cap and have finished your faction's 30% sector-control mission. |
-| Expansion unlock | Accept the mission from the questgiver | Generates the expansion sectors, raises the level cap to 100, raises the loot box skill point cap from 10 to 30 and the reputation cap from Distinguished to Exalted, and widens the Darkspace Compact and Meridia's Chosen fleet caps. |
+| Expansion unlock | Accept the mission from the questgiver | Generates the expansion sectors and raises the level cap to 100. Raises the loot box skill point cap from 10 to 30, the cap on bonus skill points (the kind the Vanguard Marks shop sells) from 61 to 101, and the reputation cap from Distinguished to Exalted. Changes the fleet caps of the Darkspace Compact (a flat 5 becomes up to 12) and Meridia's Chosen (up to 8 becomes up to 6). |
 | Claim unlock | Complete the mission | Claiming systems, buying player-sector systems and the Empire level tab. Empire Fleets, Defense stations and patrol fleets also need a held system. |
+
+```mermaid
+---
+config:
+  flowchart:
+    wrappingWidth: 320
+---
+flowchart TD
+    A["Level cap 60<br/>(expansion not unlocked)"] --> B["Finish your faction's<br/>30% sector-control mission"]
+    B --> C["At level 60: the mission<br/>'Beyond the Front' is offered"]
+    C -->|"Accept"| D["Expansion sectors generated<br/>Level cap 100"]
+    D -->|"Complete the mission<br/>(3 travel steps)"| E["Claiming, buying player-sector<br/>systems and Empire level tab unlock"]
+    E --> F["Follow-up mission:<br/>buy your first system"]
+```
 
 The mission has three travel steps (the Penumbra gate, the player sector gate, the home hub) and pays 1 skill point and +300 reputation with Darkspace Compact. It then starts a follow-up mission that asks you to buy the first system.
 
@@ -53,7 +67,7 @@ Level 60 is a real code gate, but it works through the level cap, not through a 
 | Level 10 | `FleetLevelSteps.UnlockLevel` | Empire Fleet budgets exist from level 10, but you also need a held system (see the Claim unlock row). |
 | Level cap 60 | `Conquest.maxPlayerLevel` is 60 while `expansionUnlocked` is false, 100 after | You cannot pass level 60 until the expansion is unlocked. |
 | "Beyond the Front" offered | `ExpansionMissions.IsGoToExpansionAvailable`: `player.level >= 60`, and one of `ConquestStellar2`, `ConquestKolyatov2` or `ConquestLuminate2` completed (the [30% sector-control missions](../conquest/sector-control.md#the-30-sector-control-mission)), and the expansion not yet unlocked | The mission only appears once you are at the cap and have finished your faction's 30% sector-control mission. |
-| Expansion unlock | Creating the mission (when you accept it from the questgiver) calls `Conquest.UnlockExpansion()` | Generates the expansion sectors, raises the level cap to 100, raises the loot box skill point cap from 10 to 30 and the reputation cap from Distinguished to Exalted, and widens the Darkspace Compact and Meridia's Chosen fleet caps (`Faction.ExpansionWarOpen`). |
+| Expansion unlock | Creating the mission (when you accept it from the questgiver) calls `Conquest.UnlockExpansion()` | Generates the expansion sectors and raises the level cap to 100 (`Conquest.maxPlayerLevel`). Raises the loot box skill point cap from 10 to 30 (`maxLootBoxSkillPoints`), the bonus skill point cap from 61 to 101 (`maxBonusSkillpoints`, `maxPlayerLevel + 1`) and the reputation cap from Distinguished to Exalted (`maxReputation`). Changes the fleet caps of the Darkspace Compact and Meridia's Chosen (`Faction.ExpansionWarOpen` in `ConquestFleetPlanner.MaxFleetsFor` and `MaxTerritoryFleets`). |
 | Claim unlock | Completing the mission pays `SystemClaimUnlock`, which sets `systemClaimUnlocked` | Claiming systems, buying player-sector systems and the Empire level tab (`CommandTabUnlocks.IsEmpireLevelUnlocked` is `systemClaimUnlocked`). Empire Fleets, Defense stations and patrol fleets also need a held system. |
 
 After the mission completes it starts `StoryMissionBuyFirstSystem`, which asks you to buy the first system.

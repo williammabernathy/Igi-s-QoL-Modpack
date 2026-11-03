@@ -4,12 +4,12 @@ This stage covers the faction war in the Conquest sector (Ara Martis): the embas
 
 ## Spoiler: How you get here
 
-The stage opens at level 28. At that level the story step that sends you into the Conquest sector (Ara Martis) becomes available.
+The stage opens at level 28. At that level the story step that sends you into the Conquest sector (Ara Martis) becomes available. Its last objective is a talk to the Canisec Commander, which hands you the first mission of the chain below.
 
 The chain that follows, in order:
 
 1. The story mission "Sector Control" asks you to find the three embassies and talk to their representatives.
-2. Talking to a representative offers to align you with that faction. The choice is not permanent.
+2. Talking to a representative offers to align you with that faction, after a yes/no prompt. A faction that is your enemy refuses. Whether the choice can be changed later is `(not verified)` on this page.
 3. The faction's first mission ("Internship" for Stellar, "For the Collective!" for Kolyatov, "Alignment" for Luminate) takes you to its headquarters and has you run missions for it.
 4. Its second mission ("Hostile Takeover", "The People's Sector" or "Harmony") asks you to push that faction to 30% of the systems in the Conquest sector.
 
@@ -42,12 +42,12 @@ This part is the decompiled code of version 0.8.3.4 behind the sections above: m
 
 | Gate | Condition in code | What it controls |
 |---|---|---|
-| Level 28 | `StoryMissionSkipToConquest` is available at `player.level >= 28` | The story step that sends you into the Conquest sector (Ara Martis). |
+| Level 28 | `StoryMissionSkipToConquest` is available at `player.level >= 28` | The story step that sends you into the Conquest sector (Ara Martis). Its last objective is `ConquestCanisec1`, and its reward starts `ConquestThreeFactions`. |
 
 The chain that follows, in order:
 
 1. `ConquestThreeFactions` ("Sector Control") asks you to find the three embassies and talk to their representatives.
-2. Talking to a representative offers to align you with that faction (`FactionAlignmentChoice`). The choice is not permanent.
+2. Talking to a representative offers to align you with that faction (`Characters.AlignWithMajorFaction`, then `FactionAlignmentChoice`), after a yes/no prompt. A faction that is your enemy refuses. The code in this chain only starts the faction's first mission; whether the choice can be undone is not verified.
 3. The faction's first mission (`ConquestStellar1`, `ConquestKolyatov1` or `ConquestLuminate1`) takes you to its headquarters and has you run missions for it.
 4. Its second mission (`ConquestStellar2`, `ConquestKolyatov2` or `ConquestLuminate2`) asks you to push that faction to 30% of the systems in the Conquest sector.
 

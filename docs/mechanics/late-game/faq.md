@@ -14,13 +14,13 @@ Details: [Gates](README.md#spoiler-gates).
 
 ### Spoiler: What does the 30% sector-control mission unlock?
 
-It starts the next story mission of the Darkspace line. I did not find that mission defined in the code, so I can't tell you what it asks for.
+It starts the first mission of the Darkspace line. That mission is one travel step to a point of interest in a Conquest staging system. It pays XP and 200 reputation with the Darkspace Compact, and it starts the next Darkspace mission. The 30% mission itself pays 10,000,000 credits, 400 Vanguard Marks, 1 skill point and XP.
 
 Details: [Gates](README.md#spoiler-gates).
 
 ### Spoiler: How do I wake the dormant raider faction or open the closed sector?
 
-I don't know. In version 0.8.3.4 the only thing that wakes Malcyte or opens Meridia is the debug console, and I found no other caller in the code. How either one happens in a normal game is "(not verified)".
+I don't know. In version 0.8.3.4 the only thing that wakes Malcyte or opens Meridia is the debug console, and it works only once the expansion is unlocked. I found no other caller in the code. How either one happens in a normal game is "(not verified)".
 
 Details: [Gates](README.md#spoiler-gates).
 
@@ -37,19 +37,19 @@ Details: [On the system tooltip and in system data](control-story.md#on-the-syst
 It grows and spreads on the hourly conquest update (every 3600 s).
 
 - A system already above 0 rises by a random 0.05 to 0.1 each update, up to 1 (100%).
-- A system at 1.0 can seed one adjacent system at 0.05, with a 50% roll each update, and at most one new system per update.
+- Each update makes one 50% roll in total. When it passes, the first system found at 1.0 that has a neighbor with no control sets that neighbor to 0.05. That is at most one new system per update.
 
 Details: [The control row and its spread](control-story.md#spoiler-the-control-row-and-its-spread).
 
 ### Spoiler: How do I start the spread in a system?
 
-Use the Umbral Hacking Tool. It sets the system's control to 0.05, or 0.7 for the "uber" variant. It needs a friendly station and an infected neighbor above 0.19, unless it is the "uber" variant.
+Use the Umbral Hacking Tool. It sets the system's control to 0.05, or 0.7 for the "uber" variant. Use it at the conquest station (the hub) of a system where you are friendly with the owner and the system has no control yet. Unless it is the "uber" variant, a neighboring system's hub must also be above 0.19 (the game's message says "at least 20%").
 
 Details: [The control row and its spread](control-story.md#spoiler-the-control-row-and-its-spread).
 
 ### Spoiler: What does control do at one of the story faction's stations?
 
-At an Umbral station, missions unlock at 5% station control and shops at 50%. I did not cover what control does beyond those thresholds.
+At an Umbral station, the mission board gets an Umbral mission button at 5% station control and shops get an Umbral shop slot at 50%. The puppeteers' station in quadrant 2 always counts as 100%. I did not cover what control does beyond those thresholds.
 
 Details: [The control row and its spread](control-story.md#spoiler-the-control-row-and-its-spread).
 
@@ -70,10 +70,10 @@ Details: [The story faction's station](control-story.md#spoiler-the-story-factio
 
 ### Spoiler: What does the story transponder change?
 
-With the Umbral transponder, five reputation costs from the early pages are skipped:
+The item is called the Decoy Transponder in the game. The item text says it prevents reputation loss and reputation gains from combat, and it lasts until you next dock at a station. While it is active, five reputation costs from the early pages are skipped:
 
 - Entering a facility or boarding a ship.
-- Each part you kill on a station.
+- Each unit you kill, station parts and ships alike.
 - Destroying a faction station while you hit it. Normally this costs -5000 reputation, or -1000 if you are already at -5000 or below.
 - Destroying a Construction Yard. The cost is 0 whatever your standing.
 - Destroying a faction's only yard as a way to slow it. It costs 0 reputation instead of -5,000 (-1,000 if Hostile or worse).
@@ -82,7 +82,7 @@ Details: [What the transponder changes](control-story.md#spoiler-what-the-transp
 
 ### Spoiler: Can I kill a station's parts without losing reputation?
 
-Yes, in two cases. With the Umbral transponder, every part you kill skips the owner's reputation hit. Separately, several mission stations and Umbral stations are flagged so that killing their parts costs nothing with the owner. Normally each part costs 100 points while you are Neutral or better, and 5 otherwise.
+Yes, in two cases. With the Decoy Transponder active, every unit you kill skips the owner's reputation hit, parts and ships alike. Separately, several mission stations and Umbral stations are flagged so that killing their parts costs nothing with the owner. Normally each part costs 100 points while you are Neutral or better, and 5 otherwise.
 
 Details: [Killing station parts](control-story.md#killing-station-parts) and [Stations with no reputation loss](control-story.md#stations-with-no-reputation-loss).
 
@@ -90,9 +90,9 @@ Details: [Killing station parts](control-story.md#killing-station-parts) and [St
 
 ### Spoiler: Why can't I attack or enter the closed sector?
 
-You can't attack it because the Meridia sector allows no stations. Malcyte hold it without hubs, so there is nothing to besiege, and the game says "There is nothing to besiege here" when you order an attack.
+You can't attack it because the Meridia sector allows no stations. Malcyte hold it without hubs, so there is nothing to besiege, and the game says "There is nothing to besiege here" when you order an attack. Fleets cannot attack it.
 
-You can't enter the quadrant around it either, while it is closed. It is open only to Malcyte, their war ally Meridia's Chosen and, outside the Meridia sector itself, Darkspace Compact. Jump gates into the quadrant, and into the Meridia sector from outside it, are closed. How it opens in a normal game is "(not verified)".
+You can't claim or order anything in the quadrant around it either, while it is closed. It is open only to Malcyte, their war ally Meridia's Chosen and, outside the Meridia sector itself, Darkspace Compact. Claiming a system there, or ordering an Empire Fleet or raid there, is refused as "closed". The game also treats jump gates into the quadrant, and into the Meridia sector from outside it, as closed and sells no Jumpgate Pass for them. Whether they physically stop your travel is "(not verified)". How the quadrant opens in a normal game is also "(not verified)".
 
 Details: [The closed quadrant](closed-sector-story.md#the-closed-quadrant) and [Your options in the closed sector](closed-sector-story.md#your-options-in-the-closed-sector).
 
@@ -106,7 +106,7 @@ Details: [No economic outposts in the closed sector](closed-sector-story.md#no-e
 
 ### Spoiler: How big can the dormant faction's fleet get?
 
-While dormant, its fleet cap is 0, and it earns nothing. Once awake, the cap is 5 plus 1 for every 15 war-zone systems (rounded down), never more than 8. That is the same limit as Kolyatov, Stellar and Luminate.
+While dormant, it earns no system taxes, fields no fleets and has a fleet cap of 0. Once awake, the cap is 5 plus 1 for every 15 war-zone systems (rounded down), never more than 8. That is the same limit as Kolyatov, Stellar and Luminate.
 
 Details: [Fleet cap](closed-sector-story.md#fleet-cap).
 
@@ -134,7 +134,7 @@ Details: [As a raider](closed-sector-story.md#as-a-raider).
 
 ### Spoiler: How hard is it to board the dormant faction's ships?
 
-Harder than usual. It is a "hard boarding" faction, like Meridia's Chosen, Canisec and The Radiant. Its ships are simulated at the higher of the ship's own level and your effective level + 10, unless the boarding comes from a capture mission. That puts the defenders at least 10 levels above you, which sets their HP multiplier to about 2.8.
+Harder than usual. It is a "hard boarding" faction, like Meridia's Chosen, Canisec and The Radiant. Its ships are simulated at the higher of the ship's own level and your effective level + 10, unless the boarding comes from a capture mission. That puts the defenders at least 10 levels above you, which sets their HP multiplier to at least about 2.8.
 
 | Faction | Defense x | Surrender | Other |
 |---|---|---|---|
