@@ -3,7 +3,7 @@
     <AssemblyName>IgiQoL</AssemblyName>
     <RootNamespace>IgiQoL</RootNamespace>
     <!-- Major and minor of the next release. CI sets the patch from the newest release tag (.github/workflows/ci.yml). -->
-    <Version>0.3.2</Version>
+    <Version>0.3.3</Version>
   </PropertyGroup>
 
   <!-- PluginInfo.Version: the build's $(Version) as a constant, for [BepInPlugin]. -->

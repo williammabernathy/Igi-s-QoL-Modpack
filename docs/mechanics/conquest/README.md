@@ -25,6 +25,7 @@ In the code: [level cap](#code-level-cap).
 
 ## Pages
 
+- [Common questions](faq.md): short answers to questions players ask about the war and the 30% mission, each linked to the section with the full numbers.
 - [Glossary](glossary.md): terms and abbreviations used in the conquest pages. Earlier terms are in the [basics glossary](../basics/glossary.md).
 - [War](war.md): the war zone, the Defense number on a system tooltip, war effort, battles and sieges, capture, how NPC factions pick fights, and fleet labels on the map.
 - [Sector control](sector-control.md): the 30% sector-control mission and what you can do in the war before you hold a system.
