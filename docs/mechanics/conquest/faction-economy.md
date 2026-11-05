@@ -688,9 +688,9 @@ Source: `ConquestFleetPlanner.ChooseBuildOrder`, `ConquestFleetPlanner.ChooseGar
 
 #### Code: New Ship Level
 
-A ship leaves the yard at `max(1, galaxyLevel + 6)` (`FleetLevels.GetNpcFleetLevel`). `galaxyLevel` is `max(effectiveLevel, Conquest.GetHighestSystemLevel)`. `ConquestFleetOrders.IsDueRefit` sends a fleet to a yard system within 4 jumps (`ChooseRefitYard`) when its point-weighted level is at or below the NPC fleet level minus 3 (`FleetLevels.IsDueRefit`). The refit takes 300 s (`BeginRefit`), and `AssignRefit` allows 3 at once. A garrison refit is due on the same 3-level rule (`FactionGarrison.IsDueRefit`), takes 300 s and is skipped while the system is besieged.
+A ship leaves the yard at `FleetLevels.GetNewShipLevel(faction)` (`WarshipDeliveries.Dispatch` and `ConquestFleetPlanner.SendBuiltShip` both call it with the faction only), which for a non-player faction is `max(1, galaxyLevel + 6)` (`FleetLevels.GetNpcFleetLevel`). `galaxyLevel` is `max(effectiveLevel, Conquest.GetHighestSystemLevel)`. `ConquestFleetOrders.IsDueRefit` sends a fleet to a yard system within 4 jumps (`ChooseRefitYard`) when its point-weighted level is at or below the NPC fleet level minus 3 (`FleetLevels.IsDueRefit`); in 0.8.3.5 every fleet is compared to the NPC fleet level, no longer to the system level. The refit takes 300 s (`BeginRefit`), and `AssignRefit` allows 3 at once. A garrison refit is due on the same 3-level rule (`FactionGarrison.IsDueRefit`), takes 300 s and is skipped while the system is besieged.
 
-Source: `FleetLevels.GetNpcFleetLevel`, `ConquestWarTuning.RefitSeconds`, `ConquestWarTuning.MaxConcurrentRefits`
+Source: `FleetLevels.GetNewShipLevel`, `FleetLevels.GetNpcFleetLevel`, `ConquestWarTuning.RefitSeconds`, `ConquestWarTuning.MaxConcurrentRefits`
 
 #### Code: Delivery
 

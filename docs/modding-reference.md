@@ -4,7 +4,7 @@ This page comes from reading the decompiled code. Paths are relative to `decompi
 
 ## Startup Timing
 
-`Bootstrapper.Init` (`Behaviour.Bootstrap/Bootstrapper.cs:51`) runs as `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`, before the first scene. It fills every content registry in a fixed order: items, recipes, aspects, hazards, crew skills, skill trees, equipment builders, item builders, ships, drones, station parts, modules, defensive turrets, crew types, dungeons. Then it loads the main menu.
+`Bootstrapper.Init` (`Behaviour.Bootstrap/Bootstrapper.cs:50`) runs as `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`, before the first scene. It fills every content registry in a fixed order: items, recipes, aspects, hazards, crew skills, skill trees, equipment builders, item builders, ships, drones, station parts, modules, defensive turrets, crew types, dungeons. Then it loads the main menu.
 
 Plugins load before this runs. The test plugin (`src/HelloVanguard`) saw 0 registered items in `Awake` and 393 once `InventoryItemType.LoadAll` finished. So a content mod should postfix the registry's `LoadAll()` and edit content there. Don't touch registries from `Awake`, because they're still empty then.
 

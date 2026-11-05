@@ -589,7 +589,7 @@ The label on a fleet is the first line below that matches:
 
 | Label | Set when |
 |---|---|
-| Attacking | The fleet was sent to take a system (an NPC attack or a launching assault), or it is a supporter joining a battle. |
+| Attacking | The fleet was sent to take a system (an NPC attack or a launching assault), it is a supporter joining a battle, or it just started a clash or siege on arrival (0.8.3.5). |
 | Reinforcing | An idle fleet that is not on the frontline was sent to the best-scoring frontline system. Every retreating fleet shows it too, and so do warship deliveries. |
 | Responding to a distress call | The fleet was sent to a besieged or raided system that its faction owns. |
 | Holding position | The fleet is idle on a frontline system. It is also the default after any battle, a finished refit or a cancelled order. |
@@ -715,9 +715,9 @@ NPC fleet level   = max(1, galaxy level + 6)
 |---|---|
 | NPC fleet level | `FleetLevels.GetNpcFleetLevel` |
 | Galaxy level | `FleetLevels.GetGalaxyLevel` |
-| Fleet or garrison level (points-weighted average) | `FleetLevels.GetFleetLevel` |
+| Fleet or garrison level (points-weighted average; an Empire Fleet returns `GetPlayerLevel`) | `FleetLevels.GetFleetLevel` |
 | Due for refit (fleet level <= NPC fleet level - 3) | `FleetLevels.IsDueRefit` |
-| Your level, used for your Empire Fleets and player-faction ships | `FleetLevels.GetPlayerLevel` |
+| Your level (1 with no commander, otherwise `effectiveLevel`), used for your Empire Fleets and player-faction ships | `FleetLevels.GetPlayerLevel` |
 | Refit (300 s at a Construction Yard) | `ConquestFleetOrders.CompleteRefit` (raises entry levels to the NPC fleet level) |
 | Slow catch-up (+1 level per ship each hourly economy tick) | `ConquestFleetOrders.DriftLaggingFleets` |
 
@@ -930,7 +930,7 @@ Source: `ConquestFleetOrders.TryRetreat`, `ConquestFleetOrders.NeedsToRetreat`, 
 
 | Label | Reason |
 |---|---|
-| Attacking | `Attacking` (NPC `TryAttack`, an assault launching, or a supporter joining a battle) |
+| Attacking | `Attacking` (NPC `TryAttack`, an assault launching, a supporter joining a battle, or `StartEngagement` on arrival) |
 | Reinforcing | `Reinforcing` (warship deliveries use it too) |
 | Responding to a distress call | `RespondingToDistress` |
 | Holding position | `Loitering` |

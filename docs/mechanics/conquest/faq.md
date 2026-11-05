@@ -179,7 +179,7 @@ Details: [Fleet Labels on the Map](war.md#fleet-labels-on-the-map), [Retreats, R
 
 | Label | Meaning |
 |---|---|
-| Attacking | The fleet was sent to take a system, an assault is launching, or the fleet is joining a battle as a supporter. |
+| Attacking | The fleet was sent to take a system, an assault is launching, the fleet is joining a battle as a supporter, or it just started a clash or siege on arrival. |
 | Gathering for an assault | The fleet is heading to, or waiting at, the staging system of an assault. |
 | Holding position | The fleet is idle on a frontline system. It is also the label a fleet gets by default after a battle or a finished refit. |
 | Guarding faction space | The faction's remaining fleets are spread over its station systems. |

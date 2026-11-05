@@ -450,6 +450,8 @@ Only at combat-type locations. Ctrl + left-click on a part that is not hostile t
 
 Faction stations, embassy stations, player stations, Industrial Outposts and every guild or neutral station are space station kinds, so you cannot force-attack them. That leaves mission, skirmish and pirate stations and boardable facilities.
 
+Since 0.8.3.5, a plain left-click on a part of the station you are at docks you at its hub when the part belongs to the station's own faction, docking is possible right now and the station has a hub. The tooltip then shows a "dock" hint.
+
 When you attack a non-hostile part, it becomes hostile to you. Damaging any unit of a faction that is not your enemy marks every unit of that faction at that location hostile. The reputation cost is the same as the kill penalty above. Parts that are already hostile need only a plain click.
 
 Details: [Ctrl-Click on a Friendly Station](stations.md#ctrl-click-on-a-friendly-station).

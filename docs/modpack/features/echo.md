@@ -77,7 +77,7 @@ These are the thresholds ECHO checks before it acts. Each one defaults to the ga
 
 The "Missions ECHO takes at once" setting (1-5, default 1) lets ECHO take several missions from a board in one visit. ECHO only takes missions it would work on itself, meaning missions that aren't too risky for the flagship and that the flagship's loadout fits. It stops at the game's own mission limit.
 
-ECHO flies from each finished mission location to the nearest open one in the system. It then turns all the missions in on one trip home. This takes one decision instead of one decision per 10 s. ECHO turns in finished missions at the station it's docked at before it picks a new one.
+ECHO flies from each finished mission location to the nearest open one in the system. It then turns all the missions in on one trip home. This takes one station decision (12 s by default) instead of one per mission. ECHO turns in finished missions at the station it's docked at before it picks a new one.
 
 ECHO still goes home first when any of these is true:
 

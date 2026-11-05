@@ -110,7 +110,7 @@ In the code: [Outmatched Warning](#code-outmatched-warning).
 ## Your Fleets in Battle and on the Map
 
 - In a live battle, ships of your own Empire Fleets and patrol fleets that die are removed permanently. NPC ships in their fleets are removed as well.
-- In simulated battles, your ships use the larger of two figures for their hull rating: their spent upgrade points, or an NPC-equivalent figure (see [Hull Edge](../conquest/war.md#hull-edge)).
+- In simulated battles, your ships use the larger of two figures for their hull rating: their spent upgrade points, or an NPC-equivalent figure (see [Hull Edge](../conquest/war.md#hull-edge)). Since 0.8.3.5 the NPC-equivalent figure for an Empire Fleet ship is worked out at your current level, and for a patrol ship at its service level.
 - The "Withdrew" outcome appears in the Empire Log as "withdrew before relief arrived" (see [Outcomes](../conquest/war.md#outcomes)). It happens when the lead attacker is ordered away and has no standing supporters. Only Empire Fleets get this outcome, because the only code that ends a battle this way is the one that gives an Empire Fleet a new order or makes it retreat.
 - Your Attack order on a headquarters is refused with "A faction's headquarters can't be taken by a fleet."
 - The Fleets tab of the Empire window lists your own Empire Fleets.
@@ -342,7 +342,9 @@ Source: `EmpireFleets.GetOutmatchingDefense`, `EmpireFleetCommands`
 
 ### Code: Your Fleets in Battle and on the Map
 
-Source: `ConquestFleetMapIcon.GetTaskLabel`, `MapFleetCallout`, `EmpireFleets.RefuseAttack`, `HullRating.GetHullPoints`, `BattleManager.TickLive`
+The NPC-equivalent hull figure is `HullRating.GetNpcHullPoints`, which uses `ServiceLevels.GetLevel` in 0.8.3.5 (your level for an Empire Fleet ship, the stored service level for a patrol ship). `HullRating.GetServiceHullPoints` takes the larger of that and `TotalPointsSpent`.
+
+Source: `ConquestFleetMapIcon.GetTaskLabel`, `MapFleetCallout`, `EmpireFleets.RefuseAttack`, `HullRating.GetHullPoints`, `HullRating.GetServiceHullPoints`, `HullRating.GetNpcHullPoints`, `BattleManager.TickLive`
 
 ### Code: Your Fleets and Patrols in the Defense Number
 

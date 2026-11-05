@@ -1032,9 +1032,9 @@ Source: `AbstractUnitData.LoadDefaultEquipment`, `AbstractUnitData.GetDefaultEqu
 - Items are built with the level cap off.
 - Rarity uses the same `0.4 + L/100` roll.
 
-It is used for fighters launched from hangar bays (`HangarBayModule`).
+It is used for fighters launched from hangar bays (`HangarBayModule`) and for the standard-issue copies of your ships in conquest battles (`ConquestCombat.BuildStandardIssueCopy`).
 
-Source: `AbstractUnitData.LoadStandardIssueEquipment`, `HangarBayModule`
+Source: `AbstractUnitData.LoadStandardIssueEquipment`, `HangarBayModule`, `ConquestCombat.BuildStandardIssueCopy`
 
 ### Code: Loot
 
