@@ -6,6 +6,7 @@ using Behaviour.Equipment.Module;
 using Behaviour.Equipment.Turret;
 using Behaviour.Equipment.Turret.CombatTurrets;
 using Behaviour.Item;
+using Behaviour.Managers;
 using Behaviour.Unit;
 using Behaviour.Weapons;
 using BepInEx.Configuration;
@@ -32,8 +33,8 @@ public sealed class TargetPriority : Feature
     public TargetPriority() { Instance = this; }
 
     public override string Id => "TargetPriority";
-    public override string Title => "Target priority";
-    public override string Description => "Decides which enemy your ships attack when they pick a target themselves: the nearest one (the game's choice), the most damaged, the one hurting your fleet most, the one your guns hurt most, and more. Each ship can chain up to three rules, so a later rule decides when an earlier one sees no real difference. Single weapons can have their own rule too, for example one turret on drones while the rest follow the ship. Your clicks and attack orders always win. Set it per ship with the last button on its row in the fleet panel.";
+    public override string Title => "Target Priority";
+    public override string Description => "Decides which enemy your ships attack when they pick a target themselves: the game's own choice (Nearest alone), the nearest one, the most damaged, the one hurting your fleet most, the one your guns hurt most, and more. Each ship can use up to three rules in order, so a later rule decides when an earlier one sees no real difference. Single weapons can have their own rule too, for example one turret on drones while the rest follow the ship. Your clicks and attack orders always win, and so does the game for ships it gives a target itself: Escort ships, and Defensive ships while they are hit. Ships on Hold Fire pick no targets. The ship you fly picks targets by itself while ECHO or autoplay is flying it, and when the game moves it onto whoever threatens your fleet. Set it per ship with the last button on its row in the fleet panel.";
     public override Type[] PatchClasses => new[] { typeof(TargetPriorityPatches) };
 
     public override void OnActivated()
@@ -50,28 +51,28 @@ public sealed class TargetPriority : Feature
 
     public static readonly string[] RuleNames =
     {
-        "Nearest (game default)", "Lowest hull %", "Highest hull %", "Most damage to my fleet", "Attacking my flagship",
-        "Smallest first (drones, fighters)", "Largest first", "Lowest level", "Highest level", "Weakest to my weapons",
-        "Debuffed first",
+        "Nearest (game default)", "Lowest hull", "Highest hull", "Hurting my fleet most", "Attacking my flagship",
+        "Smallest first (drones, fighters)", "Largest first", "Lowest level", "Highest level", "Most vulnerable to my weapons",
+        "Most debuffs first",
     };
 
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
         Rule = cfg.Bind(Id, "Rule", TargetRule.Nearest, SettingInfo.Describe("Target choice",
-            "Which enemy your ships attack when they pick a target on their own. Nearest is the game's normal choice. Lowest hull %: finish off damaged enemies. Highest hull %: hit the healthiest. Most damage to my fleet: whoever has hurt your ships most in the last few seconds. Attacking my flagship: enemies shooting at or aiming at the ship you fly; a ship with this rule first also switches to whoever hits your flagship. Smallest or largest first: by hull size class, drones and carrier fighters count as smallest. Lowest or highest level: by enemy level. Weakest to my weapons: the enemy that takes the most damage from the ship's guns after its resistances. Debuffed first: the enemy carrying the most debuffs. Each ship can add up to two more rules in its popup; a rule that sees only a small difference passes the choice to the next one. Ties go to the nearest enemy.",
+            "Which enemy your ships attack when they pick a target on their own. Nearest alone keeps the game's own choice: it spreads your fleet over the enemies that threaten it most, nearer ones first. With a re-check time or another rule, Nearest means the nearest enemy. Lowest hull: finish off damaged enemies. Highest hull: hit the healthiest. Hurting my fleet most: whoever has hurt your ships most in the last few seconds. Attacking my flagship: enemies shooting at or aiming at the ship you fly; a ship with this rule first also switches to whoever hits your flagship. Smallest or largest first: by hull size class, drones and carrier fighters count as smallest. Lowest or highest level: by enemy level. Most vulnerable to my weapons: the enemy that takes the most damage from the ship's guns after its resistances. Most debuffs first: the enemy carrying the most debuffs. Each ship can add up to two more rules in its popup; a rule that sees only a small difference passes the choice to the next one. Ties go to the nearest enemy.",
             RuleNames));
-        RepickSeconds = cfg.Bind(Id, "RepickSeconds", 0f, SettingInfo.Describe("Re-check the target every (seconds)",
-            "0 keeps the game's behaviour: a ship sticks with its target until it dies or leaves. Above 0, each ship re-applies its target choice this often and switches when another enemy is clearly a better fit. It switches only when the difference is real (for example 10 points of hull, or 20% closer), so ships don't flip between two similar enemies. While a rule other than Nearest is set, ships also stop jumping to whoever just hit a nearby ally, except that \"Attacking my flagship\" still answers hits on your flagship.",
+        RepickSeconds = cfg.Bind(Id, "RepickSeconds", 0f, SettingInfo.Describe("Re-check target every (seconds)",
+            "0: a ship sticks with the target its rules chose until it dies or leaves (with Nearest alone the game decides, and it switches when another enemy threatens the fleet clearly more). Above 0, each ship re-applies its target choice this often and switches when another enemy is clearly a better fit. It switches only when the difference is real (for example 10 points of hull, or 20% closer), so ships don't flip between two similar enemies. A ship whose choice starts with \"Attacking my flagship\" switches to whoever attacks your flagship even at 0. While a rule other than Nearest is set, the ship you fly also keeps its target when the game would move it onto whoever threatens your fleet most.",
             new AcceptableValueRange<float>(0f, 30f)));
-        FinishBelowPercent = cfg.Bind(Id, "FinishBelowPercent", 0, SettingInfo.Describe("Don't switch away from targets below (hull %)",
-            "When re-checking, a ship keeps its current target if that target's hull is below this percentage, so nearly dead enemies get finished. 0 turns this off.",
+        FinishBelowPercent = cfg.Bind(Id, "FinishBelowPercent", 0, SettingInfo.Describe("Finish off targets below (% of hull)",
+            "When re-checking, a ship keeps its current target if that target's hull is below this percentage, so nearly dead enemies get finished off. 0 turns this off.",
             new AcceptableValueRange<int>(0, 100)));
-        WeakestGuardPercent = cfg.Bind(Id, "WeakestGuardPercent", 25, SettingInfo.Describe("Weakest to my weapons: needs a lead of (%)",
-            "\"Weakest to my weapons\" only prefers an enemy that takes more than this much more damage from the ship's guns than the other choice. A smaller difference counts as a tie and the next rule (or the nearest enemy) decides, so a small resistance gap never drags a ship across the field.",
+        WeakestGuardPercent = cfg.Bind(Id, "WeakestGuardPercent", 25, SettingInfo.Describe("Most vulnerable to my weapons: needs a lead of (%)",
+            "\"Most vulnerable to my weapons\" only prefers an enemy that takes more than this much more damage from the ship's guns than the other choice. A smaller difference counts as a tie and the next rule (or the nearest enemy) decides, so a small resistance gap never drags a ship across the field.",
             new AcceptableValueRange<int>(0, 200)));
-        DebuffedGuardPercent = cfg.Bind(Id, "DebuffedGuardPercent", 25, SettingInfo.Describe("Debuffed first: needs a lead of (%)",
-            "\"Debuffed first\" only prefers an enemy carrying more than this much more debuffs than the other choice (any debuff beats none). A smaller difference counts as a tie and the next rule (or the nearest enemy) decides.",
+        DebuffedGuardPercent = cfg.Bind(Id, "DebuffedGuardPercent", 25, SettingInfo.Describe("Most debuffs first: needs a lead of (%)",
+            "\"Most debuffs first\" only prefers an enemy carrying more than this much more debuffs than the other choice (any debuff beats none). A smaller difference counts as a tie and the next rule (or the nearest enemy) decides.",
             new AcceptableValueRange<int>(0, 200)));
     }
 
@@ -163,6 +164,8 @@ public sealed class TargetPriority : Feature
         string legacyDetail = $"legacy={legacyChain} rewritten={rewritten} loadout={restored}";
         if (legacyChain == "MostDamage" && rewritten && restored == "AttackingFlagship>DebuffedFirst>Nearest") ctx.Pass("settings-legacy", legacyDetail);
         else ctx.Fail("settings-legacy", legacyDetail);
+
+        yield return PopupLayout(ctx, flagship);
         ShipSettings.Restore(g, full);
         e = ShipSettings.Edit(g);
         SetChain(e, new[] { TargetRule.LowestHull });
@@ -247,13 +250,15 @@ public sealed class TargetPriority : Feature
 
         ChainChecks(ctx, module, candidates, flagship);
 
-        // Weapon rule: the ship stays on the nearest enemy, one weapon set to "Lowest hull %" takes the weakened one.
+        // Weapon rule: the ship stays on the nearest enemy, one weapon set to "Lowest hull %" takes the weakened one. The
+        // other weapon should reach the nearest enemy: since 0.8.3.5 a weapon that can't fires at an enemy it can reach
+        // (AbstractTurret.UpdateFallbackTarget), which isn't the ship's target.
         AbstractTurret ruled = null, other = null;
         foreach (var t in module.turrets)
         {
             if (t == null) continue;
             if (ruled == null && t.GetComponentInParent<SpaceShipHardpoint>() != null) ruled = t;
-            else if (other == null) other = t;
+            else if (other == null || (!other.CanWork(nearest) && t.CanWork(nearest))) other = t;
         }
         AbstractUnit weakInReach = null;
         if (ruled != null)
@@ -293,8 +298,14 @@ public sealed class TargetPriority : Feature
                 module.ResetCurrentTargets();
                 module.SetAutoTarget(nearest);
                 module.UpdateAvailableTargets(candidates);
-                string wDetail = $"hardpoint {index} ({(item != null ? item.displayName : "?")}) -> {Name(ruled.currentTarget)}, other weapon -> {Name(other.currentTarget)}, ship -> {Name(module.priorityTarget)}, weak={Name(weakInReach)}";
-                if (ruled.currentTarget == weakInReach && other.currentTarget == nearest) ctx.Pass("weapon-pick", wDetail);
+                // The turrets' next step re-checks their fallback target for the ship's new target; take it now, as the
+                // switch above happened since their last one.
+                ruled.UpdateFallbackTarget(0f);
+                other.UpdateFallbackTarget(0f);
+                // A weapon out of reach of the ship's target follows the game's own fallback; the mod only must not pick for it.
+                bool otherFollows = other.currentTarget == nearest || (!other.CanWork(nearest) && !TargetPriorityPatches.WeaponPicks.ContainsKey(other));
+                string wDetail = $"hardpoint {index} ({(item != null ? item.displayName : "?")}) -> {Name(ruled.currentTarget)}, other weapon -> {Name(other.currentTarget)} (reaches the ship's target {other.CanWork(nearest)}), ship -> {Name(module.priorityTarget)}, weak={Name(weakInReach)}";
+                if (ruled.currentTarget == weakInReach && otherFollows) ctx.Pass("weapon-pick", wDetail);
                 else ctx.Fail("weapon-pick", wDetail);
 
                 // The turret's own Update aims through the getter: its tracking point is parented to what it shoots at.
@@ -307,8 +318,9 @@ public sealed class TargetPriority : Feature
                 else ctx.Fail("weapon-aim", aimDetail);
 
                 // The ship's movement target stays on its own target. The game steers a ship at trackingTargetPos, the
-                // tracking point of the last turret that can hit the ship's target; a ruled turret's point sits on its
-                // own pick. The ruled turret goes last in the array, where the game's loop would end on it.
+                // tracking point of the last turret that tracks the ship's target; a ruled turret's point sits on its
+                // own pick, so the game must leave it out. The ruled turret goes last in the array, where the game's
+                // loop would end on it.
                 var steerTurrets = module.turrets;
                 bool ruledEligible = ruled.CanTarget(nearest) && (ruled.HasAmmo() || ruled.ammoType == null || ruled.AmmoAmountAvailable() > 0);
                 if (!ruledEligible) ctx.Skip("weapon-steer", "the ruled weapon can't hit the ship's own target with the ammo it has");
@@ -329,7 +341,11 @@ public sealed class TargetPriority : Feature
                     string steerDetail = steerPos.HasValue
                         ? $"ship target {Name(module.priorityTarget)}, ruled weapon last of {reordered.Length}: steering point {Vector2.Distance(steerPos.Value, mainPos):0.0} u from the ship's target, {Vector2.Distance(steerPos.Value, weakPos):0.0} u from the weapon's target"
                         : $"ship target {Name(module.priorityTarget)}, ruled weapon last of {reordered.Length}: no steering point (the ship heads for its target itself)";
-                    if (onMain) ctx.Pass("weapon-steer", steerDetail);
+                    // A tracking point leads its target and sits on its hull, so two enemies a few units apart can't be
+                    // told apart by it.
+                    float spread = Vector2.Distance(mainPos, weakPos);
+                    if (spread < 4f) ctx.Skip("weapon-steer", $"the two enemies are only {spread:0.0} u apart, too close to tell which one the ship steers at: " + steerDetail);
+                    else if (onMain) ctx.Pass("weapon-steer", steerDetail);
                     else ctx.Fail("weapon-steer", steerDetail);
                 }
             }
@@ -368,16 +384,34 @@ public sealed class TargetPriority : Feature
             else ctx.Fail("flagship-aim", aimDetail);
         }
 
-        // Live: an Aggressive fleet ship with "Lowest hull %" and a 1 s re-check, left to the game's own scanner.
+        // Live: an Aggressive fleet ship with "Lowest hull %" and a 1 s re-check, left to the game's own fleet target
+        // pick (WingmanActions, about once a second). A save whose fleet ships are all in another stance lends one the
+        // Aggressive stance for these checks, since the Escort and Defensive stances pick targets themselves.
         SpaceShipData wingData = null;
+        FleetStance? lentFrom = null;
         foreach (var d in GamePlayer.current.activeFleet)
-            if (d != null && d != flagship && d.unit != null && d.unit.autoActions is WingmanActions && d.fleetStance == FleetStance.Aggressive) { wingData = d; break; }
+            if (d != null && d != flagship && d.unit != null && d.unit.autoActions is WingmanActions && d.fleetStance == FleetStance.Aggressive
+                && d.unit.GetModule<CombatModule>() != null) { wingData = d; break; }
+        if (wingData == null)
+            foreach (var d in GamePlayer.current.activeFleet)
+            {
+                if (d == null || d == flagship || d.unit == null || !(d.unit.autoActions is WingmanActions)) continue;
+                var lent = d.unit.GetModule<CombatModule>();
+                if (lent == null) continue;
+                var stance = d.fleetStance;
+                lentFrom = stance;
+                d.fleetStance = FleetStance.Aggressive;
+                ctx.Cleanup(() => d.fleetStance = stance);
+                lent.ResetCurrentTargets();
+                wingData = d;
+                break;
+            }
         if (wingData == null)
         {
-            SkipFrom(ctx, "live-fleet", "no Aggressive fleet ship in space");
+            SkipFrom(ctx, "live-fleet", "no fleet ship with a combat module in space");
             yield break;
         }
-        // The re-check only sees what the fleet ship's scanner overlaps, and spawn spots are random: bring the weakened
+        // The chain only sees what the fleet ship's scanner reaches, and spawn spots are random: bring the weakened
         // enemy inside the scanner's range first.
         var wingScanner = wingData.unit.GetModule<ScannerModule>();
         float scanRange = wingScanner != null ? wingScanner.range : 0f;
@@ -406,7 +440,7 @@ public sealed class TargetPriority : Feature
         var start = candidates[0] != weak ? candidates[0] : candidates[1];
         wingModule.ResetCurrentTargets();
         wingModule.SetAutoTarget(start);
-        string startName = Name(wingModule.autoTarget);
+        string startName = Name(wingModule.priorityTarget);
         string liveDetail = "";
         bool switched = false;
         try
@@ -414,10 +448,10 @@ public sealed class TargetPriority : Feature
             float end = Time.realtimeSinceStartup + 8f;
             while (inRange && Time.realtimeSinceStartup < end && weak != null && !weak.isDestroyed)
             {
-                if (wingModule.autoTarget == weak) { switched = true; break; }
+                if (wingModule.priorityTarget == weak) { switched = true; break; }
                 yield return new WaitForSeconds(0.25f);
             }
-            liveDetail = $"ship={wingData.GetShipName()} start={startName} autoTarget={Name(wingModule.autoTarget)} manual={Name(wingModule.manualTarget)} weak={Name(weak)} weakDestroyed={(weak == null || weak.isDestroyed)} distance={weakDist:0.0} scannerRange={scanRange:0.0}";
+            liveDetail = $"ship={wingData.GetShipName()} start={startName} target={Name(wingModule.priorityTarget)} manual={Name(wingModule.manualTarget)} weak={Name(weak)} weakDestroyed={(weak == null || weak.isDestroyed)} distance={weakDist:0.0} scannerRange={scanRange:0.0}";
         }
         finally
         {
@@ -431,9 +465,9 @@ public sealed class TargetPriority : Feature
         else if (weak == null || weak.isDestroyed) ctx.Skip("live-fleet", "the weakened enemy died first: " + liveDetail);
         else ctx.Fail("live-fleet", liveDetail);
 
-        // A hit on the flagship moves an "Attacking my flagship" ship onto the attacker with Re-check at 0; a hit on
-        // another ship doesn't. The fleet ship stands in for that other ship (vanilla never calls it on itself, but
-        // the prefix only looks at which unit was hit).
+        // A real hit on the flagship, through the game's own TakeDamage: the fleet ship's next fleet pick moves an
+        // "Attacking my flagship" ship onto an enemy attacking the flagship with Re-check at 0. Lower in the chain the
+        // rule only breaks ties, so the same hit moves nobody. The pick is asked here the way WingmanActions asks it.
         AbstractUnit startOn = null, attacker = null;
         foreach (var c in candidates)
         {
@@ -456,25 +490,21 @@ public sealed class TargetPriority : Feature
         bool assisted, lowerHeld;
         try
         {
-            var assist = AccessTools.Method(typeof(AbstractUnit), "AssistPlayerAgainstAttacker");
             wingModule.ResetCurrentTargets();
             wingModule.SetAutoTarget(startOn);
-            // A hit on the flagship, as the TakeDamage prefix records it.
-            TargetRanking.RecordHit(attacker, ship, 0f);
-            assist.Invoke(wingData.unit, new object[] { wingData.unit, attacker });
-            var afterOther = wingModule.autoTarget;
-            assist.Invoke(ship, new object[] { wingData.unit, attacker });
-            var afterFlagship = wingModule.autoTarget;
-            assistDetail = $"start={Name(startOn)} attacker={Name(attacker)} afterOtherHit={Name(afterOther)} afterFlagshipHit={Name(afterFlagship)}";
-            assisted = afterOther == startOn && afterFlagship == attacker;
+            HitFlagship(ship, attacker);
+            var afterFlagship = FactionFleet.PickFor(wingData.unit, wingModule.IsValidTarget);
+            assisted = afterFlagship != null && afterFlagship != startOn && TargetRanking.AttacksFlagship(afterFlagship, ship);
+            assistDetail = $"start={Name(startOn)} attacker={Name(attacker)} pick after the hit={Name(afterFlagship)} attacksFlagship={assisted}";
 
             // Lower in the chain, "Attacking my flagship" only breaks ties: the same hit on the flagship moves nobody.
             SetChain(aw, new[] { TargetRule.Nearest, TargetRule.AttackingFlagship });
             wingModule.ResetCurrentTargets();
             wingModule.SetAutoTarget(startOn);
-            assist.Invoke(ship, new object[] { wingData.unit, attacker });
-            lowerDetail = $"chain={Chain(aw.targetRules)} start={Name(startOn)} afterFlagshipHit={Name(wingModule.autoTarget)}";
-            lowerHeld = wingModule.autoTarget == startOn;
+            HitFlagship(ship, attacker);
+            var lowerPick = FactionFleet.PickFor(wingData.unit, wingModule.IsValidTarget);
+            lowerDetail = $"chain={Chain(aw.targetRules)} start={Name(startOn)} pick after the hit={Name(lowerPick)}";
+            lowerHeld = lowerPick == startOn;
         }
         finally
         {
@@ -487,8 +517,8 @@ public sealed class TargetPriority : Feature
         if (lowerHeld) ctx.Pass("flagship-assist-lower", lowerDetail);
         else ctx.Fail("flagship-assist-lower", lowerDetail);
 
-        // A hit on another of your ships doesn't make its attacker an attacker of the flagship (the game's own
-        // trackers did: BroadcastThreatToAllies copies every hit to allies within 80 u).
+        // A hit on another of your ships doesn't make its attacker an attacker of the flagship: the mod keeps its own
+        // record of which ship was hit, since the game's threat is shared by the whole fleet.
         AbstractUnit ally = null;
         foreach (var c in candidates)
             if (c is AbstractUnit cu && cu != startOn && cu != attacker && !cu.isDestroyed && wingModule.IsValidTarget(cu)
@@ -502,9 +532,133 @@ public sealed class TargetPriority : Feature
             if (!attacks) ctx.Pass("flagship-assist-ally", allyDetail);
             else ctx.Fail("flagship-assist-ally", allyDetail);
         }
+        if (lentFrom.HasValue) wingData.fleetStance = lentFrom.Value;
+    }
+
+    // The ship popup keeps every row in place: a choice dims the controls it makes useless, it doesn't hide them, so
+    // nothing below moves and Close stays on screen. Measured on one open popup, before and after the changes that used
+    // to add and remove rows (target rules, drone mode, engagement distance).
+    private static readonly Vector3[] PopupCorners = new Vector3[4];
+
+    private static void PopupRects(RectTransform window, List<float> into)
+    {
+        into.Clear();
+        foreach (var rt in window.GetComponentsInChildren<RectTransform>(false))
+        {
+            rt.GetWorldCorners(PopupCorners);
+            into.Add(PopupCorners[0].x);
+            into.Add(PopupCorners[0].y);
+            into.Add(PopupCorners[2].x - PopupCorners[0].x);
+            into.Add(PopupCorners[2].y - PopupCorners[0].y);
+        }
+    }
+
+    private static int DimmedControls(RectTransform body)
+    {
+        int n = 0;
+        foreach (var g in body.GetComponentsInChildren<CanvasGroup>(true))
+            if (!g.interactable) n++;
+        return n;
+    }
+
+    private static IEnumerator PopupLayout(SelfCheckContext ctx, SpaceShipData ship)
+    {
+        var e = ShipSettings.Edit(ship.guid);
+        SetChain(e, Array.Empty<TargetRule>());
+        e.droneMode = DroneMode.Game;
+        e.engagement = EngagementMode.Auto;
+        ShipSettings.Save(ship.guid);
+        IgiQoL.UI.ShipPopup.Open(ship);
+        yield return null;
+        if (!IgiQoL.UI.ShipPopup.IsOpen)
+        {
+            ctx.Fail("popup-layout", "the ship popup didn't open");
+            ctx.Fail("popup-labels", "the ship popup didn't open");
+            yield break;
+        }
+        try
+        {
+            var body = IgiQoL.UI.ShipPopup.Body;
+            var window = (RectTransform)body.parent;
+            Canvas.ForceUpdateCanvases();
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(window);
+            var before = new List<float>();
+            PopupRects(window, before);
+            int dimmedBefore = DimmedControls(body);
+
+            // Every choice that used to show or hide a row, made through the dropdown itself.
+            var thens = new List<TMPro.TMP_Dropdown>();
+            TMPro.TMP_Dropdown rule = null, mode = null, engagement = null;
+            foreach (var dd in body.GetComponentsInChildren<TMPro.TMP_Dropdown>(true))
+            {
+                if (dd.options.Count == 0) continue;
+                string first = dd.options[0].text;
+                if (first == "None") thens.Add(dd);
+                else if (first.StartsWith("Default (") && dd.options.Count == RuleNames.Length + 1 && dd.options[1].text == RuleNames[0]) rule = dd;
+                else if (first == IgiQoL.Features.DroneModes.DroneModes.ModeNames[0]) mode = dd;
+                else if (first == "Auto (game default)") engagement = dd;
+            }
+            if (rule != null) rule.value = 3;
+            if (thens.Count > 0) thens[0].value = 3;
+            if (mode != null) mode.value = 2;
+            if (engagement != null) engagement.value = 2;
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(window);
+            var after = new List<float>();
+            PopupRects(window, after);
+            int dimmedAfter = DimmedControls(body);
+
+            float worst = 0f;
+            int moved = -1;
+            for (int i = 0; i < before.Count && i < after.Count; i++)
+            {
+                float d = Mathf.Abs(before[i] - after[i]);
+                if (d > worst) { worst = d; moved = i / 4; }
+            }
+            window.GetWorldCorners(PopupCorners);
+            var canvas = body.GetComponentInParent<Canvas>().rootCanvas;
+            var cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+            Vector2 low = RectTransformUtility.WorldToScreenPoint(cam, PopupCorners[0]), high = RectTransformUtility.WorldToScreenPoint(cam, PopupCorners[2]);
+            bool fits = new Rect(0f, 0f, Screen.width, Screen.height).Contains(low) && new Rect(0f, 0f, Screen.width, Screen.height).Contains(high);
+            string detail = $"{before.Count / 4} elements before, {after.Count / 4} after; largest move {worst:0.00} (element {moved}); dimmed controls {dimmedBefore} -> {dimmedAfter}; popup spans y {low.y:0}..{high.y:0} of {Screen.height}, fits={fits}";
+            if (before.Count == after.Count && worst <= 0.5f && dimmedAfter <= dimmedBefore && fits) ctx.Pass("popup-layout", detail);
+            else ctx.Fail("popup-layout", detail);
+
+            // A row's label sits in a one-line cell: its full text has to fit the cell, or it would end in an
+            // ellipsis. Weapon rows carry the game's own item names and are left out.
+            var clipped = new List<string>();
+            int labels = 0;
+            foreach (RectTransform row in body)
+            {
+                if (row.childCount < 2) continue;
+                var label = row.GetChild(0).GetComponent<TMPro.TMP_Text>();
+                if (label == null || !row.gameObject.activeSelf || string.IsNullOrEmpty(label.text)) continue;
+                if (char.IsDigit(label.text[0]) && label.text.Contains(". ")) continue;
+                labels++;
+                float want = label.GetPreferredValues(label.text).x, have = label.rectTransform.rect.width;
+                if (want > have + 0.5f) clipped.Add($"'{label.text}' needs {want:0} of {have:0}");
+            }
+            string labelDetail = $"{labels} row labels measured at text scale {TextScale.TextScale.Factor:0.00}" + (clipped.Count > 0 ? "; clipped: " + string.Join("; ", clipped) : "; none clipped");
+            if (clipped.Count == 0) ctx.Pass("popup-labels", labelDetail);
+            else ctx.Fail("popup-labels", labelDetail);
+            yield return ctx.Screenshot("ship-popup-all-rows");
+        }
+        finally { IgiQoL.UI.ShipPopup.Close(); }
     }
 
     private static string Name(TargetableUnit t) => t == null ? "none" : t.targetName + "#" + t.GetHashCode();
+
+    // One point of damage from the attacker, through the game's own TakeDamage, as a shot of the attacker would land.
+    private static void HitFlagship(AbstractUnit flagship, AbstractUnit attacker)
+    {
+        flagship.TakeDamage(new DamageData(attacker)
+        {
+            power = 5f,
+            hitTransform = flagship.transform,
+            hitCoordinates = flagship.transform.position,
+        });
+    }
 
     // The checks that need a fight, in the order they run. An early exit skips the rest by name, so the run still
     // reports every line.
@@ -665,8 +819,8 @@ public sealed class TargetPriority : Feature
 
 internal static class TargetRanking
 {
-    // Hits on your ships, kept by the mod: the game's targetedBy trackers also hold whoever hit any ally within 80 u
-    // (AbstractUnit.BroadcastThreatToAllies), which made every enemy in a fleet fight an "attacker" of the flagship.
+    // Hits on your ships, kept by the mod: the game's threat is one table for the whole fleet, so it can't tell an
+    // attacker of the flagship from an attacker of another of your ships.
     private struct Hit { public float flagshipUntil, until, damage; }
     private static readonly Dictionary<AbstractUnit, Hit> hits = new();
     private static readonly List<AbstractUnit> deadHits = new();
@@ -809,7 +963,7 @@ internal static class TargetRanking
     }
 
     // The guns' expected DPS after this enemy's resistances, on the layer a hit lands on now: shields have no
-    // per-type resistance, armour adds its own step.
+    // per-type resistance, armor adds its own step.
     internal static float WeaponScore(AbstractUnit enemy)
     {
         bool armor = enemy.currentShieldHP <= 0f && Resists.HasArmor(enemy) && enemy.currentArmorHP > 0f;
@@ -833,8 +987,8 @@ internal static class TargetRanking
         return false;
     }
 
-    // Hit the flagship in the last 3 s (the mod's own record), or has it as its target. Enemy combat ships aim from
-    // their threat table (CombatActions.ChooseCombatTarget), so this also catches attackers that haven't landed a hit yet.
+    // Hit the flagship in the last 3 s (the mod's own record), or has it as its target. Enemy ships aim at their
+    // fleet's pick (FactionFleet.Pick), so this also catches attackers that haven't landed a hit yet.
     internal static bool AttacksFlagship(AbstractUnit u, AbstractUnit flagship)
     {
         if (flagship == null || u == null) return false;
@@ -962,8 +1116,7 @@ internal static class TargetPriorityPatches
         }
     }
 
-    // Who hit your ships, for "Attacking my flagship" and "Most damage to my fleet". A prefix: TakeDamage ends by
-    // broadcasting the hit to allies (AssistPlayerAgainstAttacker), and the assist must already see it.
+    // Who hit your ships, for "Attacking my flagship" and "Most damage to my fleet".
     [HarmonyPrefix]
     [HarmonyPatch(typeof(AbstractUnit), nameof(AbstractUnit.TakeDamage))]
     private static void TakeDamagePrefix(AbstractUnit __instance, DamageData damageData)
@@ -975,6 +1128,122 @@ internal static class TargetPriorityPatches
             var source = damageData != null ? damageData.sourceUnit : null;
             if (source == null || __instance.isDestroyed || !Fleet.IsPlayerShip(__instance)) return;
             TargetRanking.RecordHit(source, __instance, damageData.damageAmount);
+        }
+        catch (Exception e) { feature.Fail(e, nameof(TargetPriorityPatches)); }
+    }
+
+    private static readonly List<TargetableUnit> fleetCandidates = new();
+    private static readonly List<AbstractUnit> fleetEnemies = new();
+    private static Vector2 sortFrom;
+    private static readonly Comparison<TargetableUnit> NearestFirst = (a, b) =>
+        Vector2.Distance(sortFrom, a.transform.position).CompareTo(Vector2.Distance(sortFrom, b.transform.position));
+
+    // While enemies are around, a ship that fights with others takes its target from its faction's fleet, about once
+    // a second (FactionFleet.Pick): Aggressive and Defensive fleet ships, the flagship under ECHO, and the ship you fly,
+    // which the game moves onto what threatens your fleet. The game scores enemies by the threat they caused, their
+    // distance and how many allies already fight them. For your ships with a chain the chain picks instead. Defensive
+    // ships answering a hit (threatOnly) stay the game's choice, as before.
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(FactionFleet), nameof(FactionFleet.Pick))]
+    private static bool FleetPickPrefix(FactionFleet __instance, FleetPickRequest request, ref AbstractUnit __result)
+    {
+        var feature = TargetPriority.Instance;
+        if (!feature.Active) return true;
+        try
+        {
+            var member = request.member;
+            if (member == null || request.isValid == null) return true;
+            if (request.threatOnly && member.autoActions is WingmanActions) return true;
+            var module = member.GetModule<CombatModule>();
+            if (module == null || !Resolve(module, out var r) || r.Vanilla) return true;
+            var pick = FleetPick(__instance, request, module, r, out bool final);
+            if (pick == null && !final) return true;
+            __instance.SetPick(member, pick);
+            __result = pick;
+            return false;
+        }
+        catch (Exception e)
+        {
+            feature.Fail(e, nameof(TargetPriorityPatches));
+            return true;
+        }
+    }
+
+    // The chain's pick, or the current target while it holds. Null with final set: a fleet ship with "Only attack
+    // within" has nothing inside it, so the game mustn't send it further. Null otherwise: nothing for the chain (no
+    // enemy in scanner range), so the game picks, which may chase an enemy that threatens the fleet from further away.
+    private static AbstractUnit FleetPick(FactionFleet fleet, FleetPickRequest request, CombatModule module, TargetPriority.Resolved r, out bool final)
+    {
+        var member = request.member;
+        var flagship = Fleet.Flagship;
+        bool leashed = r.leash > 0f && flagship != null && member != flagship && member.autoActions is WingmanActions;
+        final = leashed;
+        fleetCandidates.Clear();
+        if (request.threatOnly)
+        {
+            // The game's own candidates: enemies in the fleet's threat table it may attack.
+            fleet.CollectCandidates(request);
+            foreach (var c in fleet.candidates) fleetCandidates.Add(c.unit);
+        }
+        else
+        {
+            // Enemies the ship's scanner reaches, as the chain saw them before fleet picks, so a rule like "Lowest
+            // hull" doesn't send a ship across the whole location.
+            var scanner = member.GetModule<ScannerModule>();
+            float reach = scanner != null ? scanner.range : float.MaxValue;
+            Vector2 at = member.transform.position;
+            fleetEnemies.Clear();
+            fleet.owner?.GetEnemiesOf(member, fleetEnemies);
+            foreach (var u in fleetEnemies)
+                if (FactionFleet.IsUsable(request, u) && Vector2.Distance(at, u.transform.position) <= reach) fleetCandidates.Add(u);
+            fleetEnemies.Clear();
+        }
+
+        var current = module.priorityTarget as AbstractUnit;
+        if (current != null && leashed && Vector2.Distance(current.transform.position, flagship.transform.position) > r.leash)
+        {
+            module.ResetCurrentTargets();
+            current = null;
+        }
+        if (current == null || !FactionFleet.IsLive(current) || !request.isValid(current))
+            return TargetRanking.Pick(module, fleetCandidates, r.rules, r, validate: false) as AbstractUnit;
+
+        // With Re-check at 0 the ship sticks with its target, except that "Attacking my flagship" first moves it onto
+        // an enemy attacking the flagship.
+        bool due;
+        float now = Time.time;
+        if (r.repick > 0f)
+        {
+            due = !nextRepick.TryGetValue(module, out var next) || now >= next;
+            if (due) nextRepick[module] = now + r.repick;
+        }
+        else due = r.rules[0] == TargetRule.AttackingFlagship && !TargetRanking.AttacksFlagship(current, flagship);
+        if (!due || TargetRanking.BelowFinish(current, r.finishBelow)) return current;
+        var best = TargetRanking.Pick(module, fleetCandidates, r.rules, r, validate: false) as AbstractUnit;
+        return best != null && best != current && TargetRanking.ClearlyBetter(module.transform.position, best, current, r.rules, r) ? best : current;
+    }
+
+    // A ship that takes fleet picks skips the scan above (ScannerModule.UpdateCombatFromFleet calls this instead of
+    // UpdateAvailableTargets), so its weapon rules pick here, among the location's enemies its scanner reaches.
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(CombatModule), nameof(CombatModule.UpdateFromFleet))]
+    private static void FleetScanPostfix(CombatModule __instance, Vector2 center, float range)
+    {
+        var feature = TargetPriority.Instance;
+        if (!feature.Active) return;
+        try
+        {
+            if (!Resolve(__instance, out var r) || (r.weapons.Count == 0 && WeaponPicks.Count == 0)) return;
+            var unit = __instance.parent;
+            fleetEnemies.Clear();
+            PoiFleets.For(unit)?.GetEnemiesOf(unit, fleetEnemies);
+            fleetCandidates.Clear();
+            foreach (var u in fleetEnemies)
+                if (Vector2.Distance(center, u.transform.position) <= range && __instance.IsValidTarget(u)) fleetCandidates.Add(u);
+            fleetEnemies.Clear();
+            sortFrom = __instance.transform.position;
+            fleetCandidates.Sort(NearestFirst);
+            UpdateWeaponPicks(__instance, fleetCandidates, r);
         }
         catch (Exception e) { feature.Fail(e, nameof(TargetPriorityPatches)); }
     }
@@ -1106,85 +1375,5 @@ internal static class TargetPriorityPatches
             __result = target;
         }
         catch (Exception e) { feature.Fail(e, nameof(TargetPriorityPatches)); }
-    }
-
-    // The game steers a ship at trackingTargetPos: the tracking point of the last turret that can hit the ship's target
-    // (AbstractTargetingModule.EvaluateTurretApproach, every 0.5 s). A turret with a weapon rule has its tracking point on
-    // the weapon's own pick, so it would pull the whole ship's approach ring around that enemy. Recompute the point from
-    // the turrets that fire at the ship's target.
-    [HarmonyPostfix]
-    [HarmonyPatch(typeof(AbstractTargetingModule), "UpdateApproachDistance")]
-    private static void ApproachPostfix(AbstractTargetingModule __instance)
-    {
-        if (WeaponPicks.Count == 0) return;
-        var feature = TargetPriority.Instance;
-        if (!feature.Active) return;
-        try
-        {
-            var turrets = __instance.turrets;
-            var target = __instance.priorityTarget;
-            if (turrets == null || target == null) return;
-            bool ruled = false;
-            for (int i = 0; i < turrets.Length; i++)
-                if (turrets[i] != null && WeaponPicks.ContainsKey(turrets[i])) { ruled = true; break; }
-            if (!ruled) return;
-            Vector2? point = null;
-            for (int i = 0; i < turrets.Length; i++)
-            {
-                var t = turrets[i];
-                if (t == null || !t.CanTarget(target) || t.currentTarget != target) continue;
-                if (!(t.HasAmmo() || t.ammoType == null || t.AmmoAmountAvailable() > 0)) continue;
-                if (t.trackingTarget != null) point = t.trackingTarget.transform.position;
-            }
-            __instance.trackingTargetPos = point;
-        }
-        catch (Exception e) { feature.Fail(e, nameof(TargetPriorityPatches)); }
-    }
-
-    // Vanilla moves a player ship's auto target to whoever just hit a nearby ally (__instance, the ally that was hit).
-    // With a chain other than Nearest alone, the chain decides instead; a ship without a target still answers the
-    // attack. A chain that starts with "Attacking my flagship" still answers hits on the flagship, so a ship defends it
-    // without a re-check timer.
-    [HarmonyPrefix]
-    [HarmonyPatch(typeof(AbstractUnit), "AssistPlayerAgainstAttacker")]
-    private static bool AssistPrefix(AbstractUnit __instance, AbstractUnit playerShip, AbstractUnit attacker)
-    {
-        var feature = TargetPriority.Instance;
-        if (!feature.Active) return true;
-        try
-        {
-            var module = playerShip != null ? playerShip.GetModule<CombatModule>() : null;
-            if (module == null) return true;
-            if (!Resolve(module, out var r)) return true;
-            // The leash holds for a ship without a target too; vanilla would put it on an attacker at any distance.
-            if (attacker != null && OutsideLeash(module, attacker, r)) return false;
-            if (module.autoTarget == null || r.NearestOnly) return true;
-            // Only a chain that starts with "Attacking my flagship" answers the hit; lower down that rule only breaks ties.
-            return r.rules[0] == TargetRule.AttackingFlagship && attacker != null && __instance == Fleet.Flagship && FlagshipAssist(module, attacker, r);
-        }
-        catch (Exception e)
-        {
-            feature.Fail(e, nameof(TargetPriorityPatches));
-            return true;
-        }
-    }
-
-    // A fleet ship with "Only attack within" doesn't take an enemy further from the ship you fly than that.
-    private static bool OutsideLeash(CombatModule module, AbstractUnit enemy, TargetPriority.Resolved r)
-    {
-        var flagship = Fleet.Flagship;
-        return r.leash > 0f && flagship != null && module.parent != flagship && module.parent.autoActions is WingmanActions
-            && Vector2.Distance(enemy.transform.position, flagship.transform.position) > r.leash;
-    }
-
-    // The same limits as a re-pick: stay on a target being finished, never past the leash, and only switch when the
-    // attacker ranks clearly better (so a ship already on another flagship attacker stays on it).
-    private static bool FlagshipAssist(CombatModule module, AbstractUnit attacker, TargetPriority.Resolved r)
-    {
-        var current = module.autoTarget;
-        if (TargetRanking.BelowFinish(current, r.finishBelow)) return false;
-        if (OutsideLeash(module, attacker, r)) return false;
-        TargetRanking.Prepare(r.rules, module, null);
-        return TargetRanking.ClearlyBetter(module.transform.position, attacker, current, r.rules, r);
     }
 }

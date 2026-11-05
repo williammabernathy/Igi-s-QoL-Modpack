@@ -128,7 +128,7 @@ internal static class UsedInCheck
     {
         if (Guide.Guide.Instance == null || !Guide.Guide.Instance.Active)
         {
-            ctx.Skip("search", "the Stat reference tab is off");
+            ctx.Skip("search", "the Stat Reference tab is off");
             yield break;
         }
         ModWindow.Open("guide");

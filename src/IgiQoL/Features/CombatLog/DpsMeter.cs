@@ -56,12 +56,17 @@ internal sealed class MeterSettings
 internal static class DpsMeter
 {
     internal const string KindId = "dps-meter";
+    // Every character of a number cell gets the same advance, so the digits of a figure that changes each second
+    // don't push each other around. The bar's number sits right-aligned in a fixed slot; the tab's table cells are fixed widths.
+    internal const string MonoOpen = "<mspace=0.58em>", MonoClose = "</mspace>";
+
+    internal static string Mono(string s) => MonoOpen + s + MonoClose;
 
     internal static readonly int[] RowChoices = { 5, 8, 10, 15, 25 };
     private static readonly string[] RowNames = { "5", "8", "10", "15", "25" };
     private static readonly string[] ScopeNames = { "Current fight", "Whole session" };
     private static readonly string[] NumberNames = { "Total", "Per second", "Share" };
-    private static readonly string[] BarNames = { "Plain", "Split in 3" };
+    private static readonly string[] BarNames = { "Plain", "Split by shield, armor, hull" };
     private static readonly string[] ColourNames = { "By role", "By hull class", "By damage type", "Picked per ship" };
     internal static readonly string[] PresetNames = { "My fleet, dealt by ship", "My fleet, taken by ship", "Dealt by damage type" };
 
@@ -97,7 +102,7 @@ internal static class DpsMeter
         Popouts.Register(new PopoutKind
         {
             Id = KindId,
-            Title = "DPS meter",
+            Title = "DPS Meter",
             Owner = owner,
             DefaultSize = new Vector2(340f, 240f),
             MinSize = new Vector2(240f, 100f),
@@ -129,20 +134,20 @@ internal static class DpsMeter
     // Short, because it sits on the header and on the strip chip.
     internal static string ShortName(View v) => v switch
     {
-        View.DealtByWeapon => "Dealt by weapon",
-        View.DealtByType => "Dealt by type",
-        View.DealtByShip => "Dealt by ship",
-        View.DealtToTarget => "Dealt to enemy",
-        View.TakenByWeapon => "Taken by weapon",
-        View.TakenByType => "Taken by type",
-        View.TakenFromShip => "Taken from enemy",
-        _ => "Taken by ship",
+        View.DealtByWeapon => "Dealt by Weapon",
+        View.DealtByType => "Dealt by Type",
+        View.DealtByShip => "Dealt by Ship",
+        View.DealtToTarget => "Dealt to Enemy",
+        View.TakenByWeapon => "Taken by Weapon",
+        View.TakenByType => "Taken by Type",
+        View.TakenFromShip => "Taken From Enemy",
+        _ => "Taken by Ship",
     };
 
     private static string TitleOf(PopoutState s)
     {
         var settings = MeterSettings.Read(s);
-        return "DPS: " + ShortName(settings.view) + (settings.session ? " (session)" : "");
+        return "DPS: " + ShortName(settings.view) + (settings.session ? " (Session)" : "");
     }
 
     // Starts a meter from one of PresetNames.
@@ -209,11 +214,13 @@ internal static class DpsMeter
         row = Kit.Row(column, 8f, 26f);
         Kit.Label(row, "Number");
         Kit.Dropdown(row, NumberNames, (int)s.number, i => Change(p, "number", ((MeterNumber)i).ToString(), false), 110f);
-        Kit.Label(row, "Bar");
-        Kit.Dropdown(row, BarNames, s.split ? 1 : 0, i => Change(p, "bar", i == 1 ? "Split" : "Plain", false), 90f);
 
         row = Kit.Row(column, 8f, 26f);
-        Kit.Label(row, "Colour");
+        Kit.Label(row, "Bar");
+        Kit.Dropdown(row, BarNames, s.split ? 1 : 0, i => Change(p, "bar", i == 1 ? "Split" : "Plain", false), 200f);
+
+        row = Kit.Row(column, 8f, 26f);
+        Kit.Label(row, "Color");
         var picks = Kit.Column(column, 2f);
         Kit.Dropdown(row, ColourNames, (int)s.colour, i =>
         {
@@ -295,7 +302,11 @@ internal sealed class MeterList : MonoBehaviour
 
     internal int RowCount { get; private set; }
 
-    internal string TopNumber => RowCount > 0 ? pool[0].number.text : "";
+    // The number as the player reads it, without the fixed-advance tags.
+    internal string TopNumber => RowCount > 0 ? pool[0].number.text.Replace(DpsMeter.MonoOpen, "").Replace(DpsMeter.MonoClose, "") : "";
+
+    // The first row's number label, to measure text the way the meter draws it.
+    internal TMP_Text TopNumberLabel => RowCount > 0 ? pool[0].number : null;
 
     // The drawn width of row i's bar (the fill's right anchor), and the total behind it; -1 and 0 past the last row.
     internal float FillAt(int i) => i >= 0 && i < RowCount ? pool[i].fill.anchorMax.x : -1f;
@@ -381,12 +392,12 @@ internal sealed class MeterList : MonoBehaviour
             if (c.numberValue != value)
             {
                 c.numberValue = value;
-                c.number.text = settings.number switch
+                c.number.text = DpsMeter.Mono(settings.number switch
                 {
                     MeterNumber.PerSecond => GameMath.FormatNumber(value) + "/s",
                     MeterNumber.Share => value.ToString("0") + "%",
                     _ => GameMath.FormatNumber(value),
-                };
+                });
             }
 
             var colour = ColourOf(s);
@@ -437,7 +448,7 @@ internal sealed class MeterList : MonoBehaviour
         var bar = (RectTransform)c.fill.parent;
         UiCards.Stretch(bar);
         c.fillImage = c.fill.GetComponent<Image>();
-        c.armour = Overlay(bar, "Armour", out c.armourImage);
+        c.armour = Overlay(bar, "Armor", out c.armourImage);
         c.shield = Overlay(bar, "Shield", out c.shieldImage);
         c.armour.gameObject.SetActive(false);
         c.shield.gameObject.SetActive(false);

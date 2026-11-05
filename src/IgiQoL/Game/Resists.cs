@@ -20,12 +20,12 @@ public static class Resists
     internal static readonly AccessTools.FieldRef<ArmorModule, float> PaintStrip =
         AccessTools.FieldRefAccess<ArmorModule, float>("_paintStripAmount");
 
-    // Applies to every hit before shields, armour and hull (private AbstractUnit.DamageResistMultiplier).
+    // Applies to every hit before shields, armor and hull (private AbstractUnit.DamageResistMultiplier).
     public static float Multiplier(AbstractUnit unit, DamageType type) =>
         Mathf.Max(0.2f, 1f - unit.GetStat(EquipStat.DamageReduction) - unit.GetStat(type.GetResistStat()));
 
-    // The extra step for the part of a hit that reaches armour while it has HP left (private
-    // ArmorModule.ApplyArmorResistance): weak types take more, the rest less, minus any paint strip. 1 without armour.
+    // The extra step for the part of a hit that reaches armor while it has HP left (private
+    // ArmorModule.ApplyArmorResistance): weak types take more, the rest less, minus any paint strip. 1 without armor.
     public static float ArmorMultiplier(AbstractUnit unit, DamageType type)
     {
         var armor = unit.armorModule;

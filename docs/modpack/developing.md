@@ -1,6 +1,6 @@
-# Developing the modpack
+# Developing the Modpack
 
-How `src/IgiQoL` is put together and the rules every feature follows. Building and deploying are in [building.md](../building.md); testing in the game is in [dev-harness.md](dev-harness.md).
+This page explains how `src/IgiQoL` is put together and the rules every feature follows. Building and deploying are in [building.md](../building.md). Testing in the game is in [dev-harness.md](dev-harness.md).
 
 ## Layout
 
@@ -9,11 +9,11 @@ How `src/IgiQoL` is put together and the rules every feature follows. Building a
 | `Plugin.cs` | The BepInEx plugin (`igi.qol`). Logs the game version against `TestedGameVersion`, then starts the registry |
 | `Core/` | The feature registry, the `Feature` base class, game events, save data, per-ship settings, the startup report, the `[Dev]` harness and its dumps and profiler |
 | `Features/<Name>/` | One folder per feature: the `Feature` subclass, its Harmony patch classes, its tab, its self-check |
-| `Game/` | Small helpers over game objects shared by several features: `Fleet` (flagship, fleet ship list, data-to-unit), `Cargo` (count, move, deposit target), `Items` (rule keys, the ammo a ship's fit fires), `Resists` (the share of a hit a unit takes by damage type, shields and hull, then armour), `Effects` (the buffs and debuffs on a unit), `Aggro` (a unit's target, what an NPC's threat table is after, and who is targeting a unit) |
-| `Rules/` | `ItemRules`, the per-save item rule table that loot pickup limits, ECHO cargo rules and station services read |
-| `UI/` | The mod window and its widgets (`Kit`), pop-out windows (`Popout`), settings rows, the ship settings popup, drag handles, fleet row layout, link clicks (`LinkClicks`), shared UI templates (`Templates`) |
+| `Game/` | Small helpers over game objects that several features share: `Fleet` (the flagship, the fleet's ship list, and the live unit for a ship's data), `Cargo` (counting, moving and finding the deposit target), `Items` (rule keys and the ammo a ship's fit fires), `Resists` (the share of a hit a unit takes by damage type, through shields and hull first and then armor), `Effects` (the buffs and debuffs on a unit) and `Aggro` (a unit's target, the threat list of its faction fleet at the location, and who is targeting a unit) |
+| `Rules/` | `ItemRules`, the per-save item rule table that loot pickup limits, ECHO Cargo Rules and station services read |
+| `UI/` | The mod window and its widgets (`Kit`), pop-out windows (`Popout`), settings rows, the ship settings popup, drag handles, the fleet row layout, link clicks (`LinkClicks`), tests for whether a key is held, used by settings that name a key to hold (`HeldKey`), and shared UI templates (`Templates`) |
 
-## Startup and lifecycle
+## Startup and Lifecycle
 
 ```mermaid
 sequenceDiagram
@@ -33,7 +33,7 @@ sequenceDiagram
     Game->>F: GameEvents.Arrived(ship) (SpaceShip.CompleteTravel)
 ```
 
-`FeatureRegistry.All` lists the features in start order; `Core` is first and always on. Each feature gets its own Harmony instance, so `Fail` can unpatch just that feature. A feature whose patching or `OnActivated` throws is marked failed and the rest start anyway; if `Core` fails, nothing else starts. The startup line `IgiQoL startup: N active, N disabled, N failed` sums it up, and `StartupReport` shows failures in a popup at the main menu.
+`FeatureRegistry.All` lists the features in start order. `Core` is first and always on. Each feature gets its own Harmony instance, so `Fail` can unpatch just that feature. If a feature's patching or `OnActivated` throws, the feature is marked failed and the rest start anyway. If `Core` fails, nothing else starts. The startup line `IgiQoL startup: N active, N disabled, N failed` sums up the result, and `StartupReport` shows failures in a popup at the main menu.
 
 `Feature` members a subclass fills in:
 
@@ -47,9 +47,9 @@ sequenceDiagram
 | `OnActivated` | Subscribe to `GameEvents`, add a tab with `ModWindow.AddTab(owner, id, title, order, build)` |
 | `SelfCheck` | The in-game test, see [dev-harness.md](dev-harness.md) |
 
-## Game events
+## Game Events
 
-`Core/GameEvents.cs` raises four events. Each subscriber runs in its own try/catch; an exception logs `[Core] <Event> handler <Type.Method>` and switches off the subscriber's feature only (when the handler is an instance method on a `Feature`). Handlers that are instance methods of a feature that is off are skipped.
+`Core/GameEvents.cs` raises four events. Each subscriber runs in its own try/catch. When a handler throws, the registry logs `[Core] <Event> handler <Type.Method>`. If the handler is an instance method on a `Feature`, only that feature is switched off. Handlers that are instance methods of a feature that is off are skipped.
 
 | Event | When | Use it for |
 |---|---|---|
@@ -58,7 +58,7 @@ sequenceDiagram
 | `HudReady` | `HudManager.Start`, once per save load; `HudManager.Instance` and its serialized buttons are set | Creating HUD elements. Don't poll for the HUD |
 | `Arrived` | `SpaceShip.CompleteTravel` | Things that happen when a ship arrives somewhere |
 
-## Save data
+## Save Data
 
 `SaveData.Root` is the mod's JSON object in the save, under `Player.igiQol`:
 
@@ -71,17 +71,35 @@ sequenceDiagram
 - On save, a postfix on `GamePlayer.ToJson` writes `Export()`: ship records of ships you no longer own are pruned, and the result is a copy, because the autosave thread serialises it while the game keeps running.
 - Write your record when the value changes. There's no save hook per feature.
 
-`ShipSettings` is the typed view of the per-ship records: `Get(guid)` reads (cached), `Edit(guid)` returns the instance to change, `Save(guid)` writes it to the save. `null` or `Auto` in a field means "use the feature's config value". `Snapshot`/`Restore` copy a ship's settings as JSON, which loadouts use.
+`ShipSettings` is the typed view of the per-ship records. `Get(guid)` reads a record (cached), `Edit(guid)` returns the instance to change, and `Save(guid)` writes it to the save. A value of `null` or `Auto` in a field means "use the feature's config value". `Snapshot` and `Restore` copy a ship's settings as JSON, which loadouts use.
 
-## Mod window and settings
+## Mod Window and Settings
 
-`ModWindow.AddTab(owner, id, title, order, build)` registers a tab (a tab whose owner feature is off is hidden; pass `null` for a tab several features share); `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. `ModWindow.Open(id)`, `Show(id)` (rebuild) and `Close()` are the rest of the API. Widgets come from `Kit`: `Row`, `Column`, `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Dropdown`, `Tile`, `Tooltip`.
+`ModWindow.AddTab(owner, id, title, order, build)` registers a tab. A tab whose owner feature is off is hidden; pass `null` as the owner for a tab that several features share. `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. The rest of the API is `ModWindow.Open(id)`, `Show(id)` (which rebuilds the tab) and `Close()`. Widgets come from `Kit`: `Row`, `Column`, `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Search` (a search field with a lens that a right-click clears), `Dropdown`, `Tile` and `Tooltip`.
 
-A view that floats outside the window registers a `PopoutKind` with `Popouts.Register` from `OnActivated`: an id, a title, the owning feature, default and minimum size, the default show condition with its `Relevant` test, a `Build(popout, body)` for the body and an optional `BuildOptions` for rows of its own in the Options panel. `Popouts.Open(id)`, `Close(id)`, `Toggle(id)` and `Rebuild(id)` drive it. The frame handles dragging, collapsing, resizing, opacity, click-through, the show condition and saving the layout; the kind's own options go in `popout.State.options`, saved with `State.Save(popout.Id)`. The combat overview (`Features/CombatOverview/`) is the example.
+A view that floats outside the window registers a `PopoutKind` with `Popouts.Register` from `OnActivated`. The kind gives:
 
-A view with a tab sets `DockTab` to the tab's id: its header gets a Dock button (`Popouts.DockBack(id)`) and its strip chip's `x` docks it back. On the tab, `PopoutTabButton.Add` makes a pop-out button whose caption follows the view's state. `Multiple = true` allows several windows of one kind, with ids `<kind>-<n>`: `Popouts.OpenNew(kind, init)` creates one, `Windows(kind)` lists them open or closed, `AnyOpen` and `CloseAll` cover the lot, and `Remove(id)` forgets one with its layout. `TitleOf(state)` gives each window its own title. The Log (`Features/EventLog/EventLogTab.cs`) is the small single-window example and the note windows (`Features/Notes/NotesPopout.cs`) the small multi-window one.
+- an id, a title and the owning feature;
+- the default and minimum size;
+- the default show condition, with its `Relevant` test;
+- a `Build(popout, body)` for the body;
+- an optional `BuildOptions` for rows of its own in the Options panel.
 
-Config entries become rows through `SettingRows.AddSection(column, feature)` and `AddEntries(column, section)`, which read the label, help and choices from `SettingInfo`. A feature that sets `SettingsTab` builds its rows on that tab; the Settings tab shows every feature's on/off switch and the rows of features without a tab. When the owning tab's feature is off, the rows fall back to the Settings tab.
+`SortingOrder` is the window's canvas order. It is 2 by default, which puts the window under the mod window (3). The galaxy map's window also draws at 3, so a view meant for the map uses 4 (the War Overview, `Features/ConquestDetails/`). `Popouts.Open(id)`, `Close(id)`, `Toggle(id)` and `Rebuild(id)` drive the window. The frame handles dragging, collapsing, resizing, opacity, click-through, the show condition and saving the layout. The kind's own options go in `popout.State.options`, saved with `State.Save(popout.Id)`. The combat overview (`Features/CombatOverview/`) is the example to copy.
+
+A view with a tab sets `DockTab` to the tab's id. Its header then gets a Dock button (`Popouts.DockBack(id)`), and the `x` on its chip in the strip docks it back. On the tab, `PopoutTabButton.Add` makes a pop-out button whose caption follows the view's state.
+
+`Multiple = true` allows several windows of one kind, with ids `<kind>-<n>`:
+
+- `Popouts.OpenNew(kind, init)` creates one.
+- `Windows(kind)` lists the windows of the kind, open or closed.
+- `AnyOpen` and `CloseAll` cover all of them.
+- `Remove(id)` forgets one window together with its layout.
+- `TitleOf(state)` gives each window its own title.
+
+The Log (`Features/EventLog/EventLogTab.cs`) is the small single-window example. The note windows (`Features/Notes/NotesPopout.cs`) are the small multi-window example.
+
+Config entries become rows through `SettingRows.AddSection(column, feature)` and `AddEntries(column, section)`, which read the label, help and choices from `SettingInfo`. A feature that sets `SettingsTab` builds its rows on that tab. The Settings tab shows every feature's on/off switch and the rows of features that have no tab of their own. When the feature that owns a tab is off, its rows fall back to the Settings tab.
 
 ## Conventions
 
@@ -104,21 +122,21 @@ private static void SomeMethodPostfix(SomeGameType __instance)
 `Fail` switches the feature off, unpatches it on the next frame and reports it, so a bug costs one feature, not the game. `MonoBehaviour.Update` methods and UI callbacks follow the same shape.
 
 - Compare UnityEngine objects with `== null` / `!= null`, never `?.` or `??`: those skip Unity's destroyed-object check.
-- Reset per-save static state from `GameEvents.SaveLoaded`, or from `MainMenuShown` when it must be gone before the next save starts loading. Statics keyed by Unity objects (caches, cooldowns) need this too, or they keep destroyed objects from the last save alive.
-- No LINQ and no allocation on per-frame paths (patches on `Update`, `FixedUpdate`, targeting, physics). Reuse lists; look things up with tuple keys rather than building strings.
+- Reset per-save static state from `GameEvents.SaveLoaded`. Use `MainMenuShown` instead when the state must be gone before the next save starts loading. Statics keyed by Unity objects (caches, cooldowns) need this too. Otherwise they keep destroyed objects from the last save alive.
+- Use no LINQ and no allocation on per-frame paths (patches on `Update`, `FixedUpdate`, targeting and physics). Reuse lists, and look things up with tuple keys rather than building strings.
 - `Dictionary.GetValueOrDefault` doesn't exist on net472; use `TryGetValue`.
 - Use `Fleet.Flagship` for the ship you fly (null outside space), `Fleet.Ships(withMercenaries)` for the flown ship plus the active fleet, `Fleet.Unit(data)` for a ship's live unit.
 - Text the player reads (descriptions, labels, tooltips, log lines) is plain language: what it does, the game's own names for things, no internal ids.
 - Comments explain why, in plain sentences, and don't restate the code. Don't restyle code you aren't changing.
 - Builds have no `warning CS` lines.
 
-## Adding a feature
+## Adding a Feature
 
 1. Create `Features/<Name>/<Name>.cs` with a `Feature` subclass (`public static <Name> Instance;` set in the constructor) and its patch classes.
-2. Add it to `FeatureRegistry.All`. Order matters only for features that depend on another's state at activation.
+2. Add it to `FeatureRegistry.All`. Order matters for features that depend on another's state at activation, and for the self-checks, which run in that order: a check that undocks or spawns enemies (`MissileRetarget`) sits after the checks that need a docked ship or a quiet location.
 3. Bind its settings in `BindConfig` with `SettingInfo.Describe`, and decide whether they belong on an existing tab (`SettingsTab`) or on Settings.
 4. Write a `SelfCheck` that exercises the change in the game, with `ctx.Cleanup` undoing whatever it touched.
-5. Build, run the harness with `OnlyChecks = <Id>`, then the full harness.
+5. Build, run the harness with `OnlyChecks = <Id>`, then the full harness (`tools/Harness` does the run on a save copy; see [dev-harness.md](dev-harness.md)).
 6. Document it in the matching page under `docs/modpack/features/`, add its settings to [settings.md](settings.md), and bump the feature and startup counts in [README.md](README.md).
 
-Task tracking lives in one local file at the repo root: `FEATURELIST.md` (open features, bugs found in play, checks still owed in play, dropped ideas, standing decisions, harness notes). It's gitignored and stays on the machine it was written on.
+`LESSONS_LEARNED.md`, local and gitignored at the repo root, collects the findings and traps from earlier sessions: where the game keeps the logic a change needs, harness gotchas, standing decisions, and dead ends already explored. Read it before starting on an area, and add to it when a session finds something the next one would otherwise rediscover. Task status and per-run results go in commit messages, not in a tracking file.

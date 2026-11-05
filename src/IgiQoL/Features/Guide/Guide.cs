@@ -28,11 +28,11 @@ public sealed class Guide : Feature
     public Guide() { Instance = this; }
 
     public override string Id => "Guide";
-    public override string Title => "Stat reference";
-    public override string Description => "The Stat reference tab: damage types with the weapons that deal them and the armour weak to them, every armour type's resistance, how a hit is reduced on its way to the hull, and your ship's handling and crit numbers, all read from the game's data.";
+    public override string Title => "Stat Reference";
+    public override string Description => "The Stat Reference tab: damage types with the weapons that deal them and the armor weak to them, every armor type's resistance, how a hit is reduced on its way to the hull, and your ship's handling and crit numbers, all read from the game's data.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 
-    public override void OnActivated() => ModWindow.AddTab(this, "guide", "Stat reference", 85, Build);
+    public override void OnActivated() => ModWindow.AddTab(this, "guide", "Stat Reference", 85, Build);
 
     internal sealed class WeaponType
     {
@@ -115,17 +115,17 @@ public sealed class Guide : Feature
         Collect();
 
         bool usedIn = UsedIn.UsedIn.Instance != null && UsedIn.UsedIn.Instance.Active;
-        if (usedIn) UsedIn.UsedInSearch.Build(Section(content, "Forge recipes that use an item", first: true));
+        if (usedIn) UsedIn.UsedInSearch.Build(Section(content, "Forge Recipes That Use an Item", first: true));
 
-        var hit = Section(content, "How a hit lands", first: !usedIn);
+        var hit = Section(content, "How a Hit Lands", first: !usedIn);
         Kit.Text(hit, "1. The weapon rolls its damage: power / 5, times 0.8 to 1.25, spread over its shots per second. A critical hit multiplies it by 2 plus the weapon's critical damage bonus; with the Mega crit skill one hit can crit more than once.");
         Kit.Text(hit, "2. The weapon's bonus for its damage type and its general damage bonus are added on top.");
         Kit.Text(hit, "3. The target's damage reduction and its resistance to that damage type take their share off. Together they never remove more than 80%.");
         Kit.Text(hit, "4. Shields absorb the hit first and treat every damage type the same. Weapons with a damage-vs-shield bonus hit shields harder.");
-        Kit.Text(hit, "5. Armour takes what's left: it cuts damage by its resistance, unless the armour is weak to that damage type, then it takes extra instead. Painter drones strip armour resistance for a while. Damage-vs-armour bonuses apply here.");
+        Kit.Text(hit, "5. Armor takes what's left: it cuts damage by its resistance, unless the armor is weak to that damage type, then it takes extra instead. Painter drones strip armor resistance for a while. Damage-vs-armor bonuses apply here.");
         Kit.Text(hit, "6. Whatever gets through comes off the hull.");
 
-        var types = Section(content, "Damage types and the weapons that deal them");
+        var types = Section(content, "Damage Types and the Weapons That Deal Them");
         foreach (DamageType t in Enum.GetValues(typeof(DamageType)))
         {
             var sb = new StringBuilder();
@@ -135,10 +135,10 @@ public sealed class Guide : Feature
             sb.Clear();
             foreach (var a in Armours)
                 if (a.weak.Contains(t)) sb.Append(sb.Length > 0 ? ", " : "").Append(a.name).Append(" takes +").Append(Percent(a.minWeak, a.maxWeak));
-            Kit.Text(types, Colored(t) + ": " + weapons + "." + (sb.Length > 0 ? " Strong against armour: " + sb + "." : ""));
+            Kit.Text(types, Colored(t) + ": " + weapons + "." + (sb.Length > 0 ? " Strong against armor: " + sb + "." : ""));
         }
 
-        var armours = Section(content, "Armour types");
+        var armours = Section(content, "Armor Types");
         foreach (var a in Armours)
         {
             var sb = new StringBuilder(a.name).Append(": resists ").Append(Percent(a.minResist, a.maxResist));
@@ -171,7 +171,7 @@ public sealed class Guide : Feature
     private static void ShipSection(RectTransform content)
     {
         var ship = Fleet.Flagship;
-        var lines = Section(content, "Your ship" + (ship != null ? ": " + ship.spaceShipData.GetShipName() : ""));
+        var lines = Section(content, "Your Ship" + (ship != null ? ": " + ship.spaceShipData.GetShipName() : ""));
         if (ship == null || ship.engine == null)
         {
             Kit.Muted(lines, "Shown while you're in space.");
@@ -201,7 +201,7 @@ public sealed class Guide : Feature
             string key = "@EquipStat" + s + "Description";
             if (!Translation.Exists(key)) continue;
             string name = Translation.Exists("@EquipStat" + s) ? Translation.Translate("@EquipStat" + s) : s.ToString();
-            if (descriptions == null) descriptions = Section(content, "The game's own stat descriptions");
+            if (descriptions == null) descriptions = Section(content, "The Game's Own Stat Descriptions");
             Kit.Text(descriptions, "<b>" + name + "</b>: " + Translation.Translate(key));
         }
     }
@@ -212,7 +212,7 @@ public sealed class Guide : Feature
         int typed = 0;
         foreach (DamageType t in Enum.GetValues(typeof(DamageType)))
             if (Weapons.Exists(w => w.type == t)) typed++;
-        string d = $"{Weapons.Count} weapon types, {Armours.Count} armour types, {typed}/{Enum.GetValues(typeof(DamageType)).Length} damage types dealt by a weapon; weak links {Armours.FindAll(a => a.weak.Count > 0).Count}";
+        string d = $"{Weapons.Count} weapon types, {Armours.Count} armor types, {typed}/{Enum.GetValues(typeof(DamageType)).Length} damage types dealt by a weapon; weak links {Armours.FindAll(a => a.weak.Count > 0).Count}";
         if (Weapons.Count > 0 && Armours.Count > 0) ctx.Pass("data", d);
         else ctx.Fail("data", d);
 

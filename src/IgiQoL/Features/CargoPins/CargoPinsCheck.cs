@@ -43,6 +43,7 @@ internal static class CargoPinsCheck
 
         yield return CheckSlot(ctx, fleetShip, before);
         yield return CheckPopup(ctx, fleetShip, before);
+        yield return CheckBuiltItem(ctx, fleetShip, before);
     }
 
     // The fit read from data names the same ammo as the game's check on the spawned ship.
@@ -100,7 +101,8 @@ internal static class CargoPinsCheck
     {
         var cargo = ship.cargo;
         var aboard = new HashSet<string>();
-        foreach (var s in cargo.items) aboard.Add(s.item.identifier);
+        // Built items (no identifier) can't be pinned, so they move with the rest.
+        foreach (var s in cargo.items) if (CargoPins.CanPin(s.item)) aboard.Add(s.item.identifier);
         InventoryItemType pinned = null, loose = null;
         foreach (var t in InventoryItemType.all)
         {
@@ -199,8 +201,12 @@ internal static class CargoPinsCheck
             CargoPins.RefreshMarks(ship);
             bool hidden = mark != null && !mark.gameObject.activeSelf;
             string key = CargoPins.Instance.PinKey.Value.ToString();
-            string detail = $"mark shown={shown} then hidden={hidden}; hints '{unpinnedHint}' / '{pinnedHint}'";
-            if (shown && hidden && unpinnedHint != null && unpinnedHint.StartsWith(key + ": pin") && pinnedHint != null && pinnedHint.StartsWith("Pinned:")) ctx.Pass("slot", detail);
+            string button = CargoPins.MoveAllButton();
+            bool namesButton = unpinnedHint != null && pinnedHint != null && unpinnedHint.Contains(button) && pinnedHint.Contains(button);
+            string detail = $"mark shown={shown} then hidden={hidden}; hints '{unpinnedHint}' / '{pinnedHint}'; game's button text '{button}' in both={namesButton}";
+            // Plain text: a highlight mark or colour tag left in it shows up as literal markup in the tooltip.
+            bool plain = button.Length > 0 && !button.StartsWith("@") && button.IndexOf('<') < 0 && button.IndexOf('#') < 0;
+            if (shown && hidden && namesButton && plain && unpinnedHint.StartsWith(key + ": pin") && pinnedHint.StartsWith("Pinned:")) ctx.Pass("slot", detail);
             else ctx.Fail("slot", detail);
         }
         finally
@@ -271,6 +277,53 @@ internal static class CargoPinsCheck
         {
             ShipPopup.Close();
             if (ore != null) ship.cargo.Remove(ore, 3);
+            ShipSettings.Restore(ship.guid, before);
+        }
+    }
+
+    // An item built in play (crafted or looted gear) has no identifier: it can't be pinned by type, so the popup leaves it
+    // out, the pin hint is absent, and the popup still opens with it aboard.
+    private static IEnumerator CheckBuiltItem(SelfCheckContext ctx, SpaceShipData ship, LightJson.JsonObject before)
+    {
+        var manager = InventoryInteractionManager.Instance;
+        var baseType = FreeOre(ship);
+        if (baseType == null || manager == null || manager.inventorySlotPrefab == null || HudManager.Instance == null)
+        {
+            ctx.Skip("built-item", "no ore type the ship doesn't carry, or no inventory slot prefab or HUD");
+            yield break;
+        }
+        // Built gear gets an item type of its own with no identifier (InventoryItemType.CreateEquipment); the plain
+        // constructor makes the same from an ore's definition.
+        var built = new InventoryItemType(baseType.definition);
+        var stack = ship.cargo.Add(built, 2);
+        var holder = UiCards.NewChild("IgiQoL_PinCheck", HudManager.Instance.rootCanvasTransform);
+        holder.sizeDelta = new Vector2(76f, 76f);
+        var canvas = holder.gameObject.AddComponent<Canvas>();
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 5;
+        try
+        {
+            var slot = Object.Instantiate(manager.inventorySlotPrefab, holder);
+            ((RectTransform)slot.transform).sizeDelta = new Vector2(76f, 76f);
+            slot.SetEntry(stack);
+            string hint = CargoPins.Hint(slot);
+            var choices = CargoPins.PinChoices(ship, out _);
+            bool offered = choices.Contains(built);
+            bool pinned = CargoPins.Pinned(ship, built);
+            string error = null;
+            try { ShipPopup.Open(ship); }
+            catch (System.Exception e) { error = e.GetType().Name + ": " + e.Message; }
+            yield return null;
+            bool open = ShipPopup.IsOpen;
+            string detail = $"can pin={CargoPins.CanPin(built)} offered={offered} pinned={pinned} hint={(hint ?? "none")} popup open={open} error={(error ?? "none")}";
+            if (!CargoPins.CanPin(built) && !offered && !pinned && hint == null && open && error == null) ctx.Pass("built-item", detail);
+            else ctx.Fail("built-item", detail);
+        }
+        finally
+        {
+            ShipPopup.Close();
+            Object.Destroy(holder.gameObject);
+            ship.cargo.Remove(built, 2);
             ShipSettings.Restore(ship.guid, before);
         }
     }

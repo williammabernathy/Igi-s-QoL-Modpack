@@ -18,7 +18,7 @@ public sealed class DronesOnArrival : Feature
     public DronesOnArrival() { Instance = this; }
 
     public override string Id => "DronesOnArrival";
-    public override string Title => "Drones on arrival";
+    public override string Title => "Drones on Arrival";
     public override string Description => "Launches your ships' docked drones by themselves when the ship arrives somewhere that isn't a station.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 

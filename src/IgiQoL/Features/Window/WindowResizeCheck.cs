@@ -2,7 +2,9 @@ using System.Collections;
 using System.Text;
 using IgiQoL.Core;
 using IgiQoL.UI;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.EventSystems;
 
 namespace IgiQoL.Features.Window;
@@ -88,6 +90,73 @@ internal static class WindowResizeCheck
         }
         if (fits) ctx.Pass("tab-widths", widths.ToString().TrimEnd());
         else ctx.Fail("tab-widths", widths + $"canvas={canvas.x:0}");
+
+        // At the default width no label on the Settings tab is cut off: each one's text fits the room its row gives it.
+        ModWindow.Show("settings");
+        yield return null;
+        yield return null;
+        Drag(handle, new Vector2(760f - root.sizeDelta.x, 0f) * scale);
+        yield return null;
+        yield return null;
+        int labels = 0, cut = 0;
+        string firstCut = null;
+        var content = ModWindow.Content;
+        for (int i = 0; i < content.childCount; i++)
+        {
+            var row = content.GetChild(i);
+            if (row.name != "Row" || row.childCount == 0) continue;
+            var label = row.GetChild(0).GetComponent<TMP_Text>();
+            if (label == null) continue;
+            labels++;
+            float need = label.GetPreferredValues(label.text).x, room = label.rectTransform.rect.width;
+            if (need > room + 0.5f)
+            {
+                cut++;
+                firstCut ??= $"'{label.text}' needs {need:0} has {room:0}";
+            }
+        }
+        d = $"window {root.sizeDelta.x:0} px, {labels} labels, {cut} cut off{(firstCut == null ? "" : ", first " + firstCut)}";
+        if (labels > 0 && cut == 0) ctx.Pass("setting-labels", d);
+        else ctx.Fail("setting-labels", d);
+
+        // The pop-out strip keeps its place and height, and every chip is one width, so opening a pop-out moves nothing.
+        var strip = root.Find("PopoutStrip") as RectTransform;
+        if (strip == null) ctx.Fail("popout-strip", "no PopoutStrip in the window");
+        else
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(root);
+            var bodyRect = (RectTransform)root.Find("Body");
+            float bodyBefore = bodyRect.rect.height, stripBefore = strip.rect.height;
+            bool activeBefore = strip.gameObject.activeSelf;
+            PopoutKind kind = null;
+            foreach (var k in Popouts.Kinds)
+                if (!k.Multiple && !Popouts.IsOpen(k.Id)) { kind = k; break; }
+            string chipDetail = "no pop-out kind to open";
+            bool chipsEqual = true;
+            float bodyAfter = bodyBefore, stripAfter = stripBefore;
+            if (kind != null)
+            {
+                Popouts.Open(kind.Id);
+                yield return null;
+                yield return null;
+                LayoutRebuilder.ForceRebuildLayoutImmediate(root);
+                bodyAfter = bodyRect.rect.height;
+                stripAfter = strip.rect.height;
+                int chips = 0;
+                foreach (var le in strip.GetComponentsInChildren<LayoutElement>(true))
+                    if (le.GetComponent<Button>() != null && le.preferredWidth > 30f)
+                    {
+                        chips++;
+                        chipsEqual &= Mathf.Approximately(le.preferredWidth, PopoutStrip.ChipWidth);
+                    }
+                chipDetail = $"{chips} chips at {PopoutStrip.ChipWidth:0} px";
+                Popouts.Close(kind.Id);
+                yield return null;
+            }
+            d = $"strip active {activeBefore} height {stripBefore:0.#} -> {stripAfter:0.#}, tab content height {bodyBefore:0.#} -> {bodyAfter:0.#}, {chipDetail}";
+            if (activeBefore && Mathf.Approximately(stripBefore, stripAfter) && Mathf.Approximately(bodyBefore, bodyAfter) && chipsEqual) ctx.Pass("popout-strip", d);
+            else ctx.Fail("popout-strip", d);
+        }
 
         // A layout saved far off and bigger than the screen opens inside it.
         ModWindow.Close();

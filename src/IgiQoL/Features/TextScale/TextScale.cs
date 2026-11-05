@@ -21,7 +21,7 @@ public sealed class TextScale : Feature
     public TextScale() { Instance = this; }
 
     public override string Id => "TextScale";
-    public override string Title => "Text size";
+    public override string Title => "Text Size";
     public override string Description => "Draws all text bigger or smaller without resizing the panels around it. The game's Scale setting (Settings > Graphics) still sizes panels and text together.";
     public override Type[] PatchClasses => new[] { typeof(TextScalePatches) };
 

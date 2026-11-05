@@ -1,47 +1,38 @@
 using System;
+using Behaviour.UI.Shared;
 using Behaviour.UI.Spacestation;
 using Behaviour.UI.Tooltip;
-using Behaviour.Util;
 using Source.Galaxy.POI;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
-using Object = UnityEngine.Object;
 
 namespace IgiQoL.Features.FavouriteStations;
 
-// A Favourite / Unfavourite button at the start of the airlock's button row, cloned from the airlock's own buttons.
+// A Favourite / Unfavourite button at the start of the airlock's text buttons (the row in the action card under the station
+// characters), made like the airlock's own.
 internal sealed class AirlockFavourite : MonoBehaviour
 {
     public const string Name = "IgiFavouriteStation";
 
     private Airlock airlock;
     internal GameObject button;
-    private TMP_Text label;
     private float nextRefresh;
     private bool? shownFavourite;
 
     public static void Attach(Airlock airlock)
     {
-        if (airlock.homeStationButton == null || airlock.GetComponent<AirlockFavourite>() != null) return;
+        if (airlock.textButtons == null || airlock.GetComponent<AirlockFavourite>() != null) return;
         var c = airlock.gameObject.AddComponent<AirlockFavourite>();
         c.airlock = airlock;
-        var template = airlock.homeStationButton;
-        var go = Object.Instantiate(template, template.transform.parent);
-        go.name = Name;
-        foreach (var t in go.GetComponentsInChildren<Translatable>(true)) Object.Destroy(t);
-        var b = go.GetComponent<Button>();
-        b.onClick = new Button.ButtonClickedEvent();
-        b.onClick.AddListener(c.Click);
-        var rt = (RectTransform)go.transform;
-        airlock.PlaceBelowCharacters(rt);
-        // First in the row, so the game's situational buttons and Station services keep their places after it.
-        airlock.buttonRow.Remove(rt);
-        airlock.buttonRow.Insert(0, rt);
-        go.SetActive(true);
+        // Made like the game's own text buttons (height 30, font 12); first in the row, so the game's situational buttons and
+        // Station services keep their places after it.
+        var b = UiButton.Add(airlock.textButtons, "Favourite", c.Click, ButtonRole.Plain, 0f, null, null, 30f, 12f);
+        b.name = Name;
+        var go = b.gameObject;
+        Airlock.IgnoreForEcho(go);
+        go.transform.SetAsFirstSibling();
         c.button = go;
-        c.label = go.GetComponentInChildren<TMP_Text>();
         c.Refresh();
+        airlock.RefreshDivider();
     }
 
     private void Click()
@@ -63,7 +54,11 @@ internal sealed class AirlockFavourite : MonoBehaviour
         var f = FavouriteStations.Instance;
         if (!f.Active)
         {
-            if (button.activeSelf) button.SetActive(false);
+            if (button.activeSelf)
+            {
+                button.SetActive(false);
+                airlock.RefreshDivider();
+            }
             return;
         }
         // The tab and the galaxy map can change the list while you're docked.
@@ -73,14 +68,15 @@ internal sealed class AirlockFavourite : MonoBehaviour
 
     internal void Refresh()
     {
+        // The game puts its situational buttons (Build outpost) at the front of the row when they show up later.
+        if (button.transform.GetSiblingIndex() != 0) button.transform.SetAsFirstSibling();
         bool favourite = FavouriteStations.IsFavourite(SpaceStation.current);
         if (shownFavourite == favourite) return;
         shownFavourite = favourite;
         string text = favourite ? "Unfavourite" : "Favourite";
-        label.text = text;
-        var rt = (RectTransform)button.transform;
-        rt.sizeDelta = new Vector2(Mathf.Max(80f, label.GetPreferredValues(text).x + 24f), rt.sizeDelta.y);
-        airlock.SetButtonState(button, true, airlock.GetBaseButtonColor(), favourite
+        // Sizes the button to its label, as the game's own text buttons are.
+        Airlock.SetButtonLabel(button, text);
+        Airlock.SetButtonState(button, true, favourite
             ? "Takes this station off the favourites on the QoL window's Stations tab."
             : "Adds this station to the favourites on the QoL window's Stations tab, which shows what it has, your storage here, the jumps to it and a Travel to button.");
         var tip = button.GetComponent<TooltipSource>();

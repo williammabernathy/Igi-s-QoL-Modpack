@@ -67,7 +67,7 @@ public sealed class Contacts : Feature
         MarkLoot = cfg.Bind(Id, "MarkLoot", true, SettingInfo.Describe("Edge markers: loot",
             $"Marks the {ContactMarkers.MaxPerKind} nearest off-screen loot stacks, coloured by rarity. Click a marker to tractor it."));
         MarkOres = cfg.Bind(Id, "MarkOres", true, SettingInfo.Describe("Edge markers: preferred ores",
-            $"Marks the {ContactMarkers.MaxPerKind} nearest off-screen asteroids with an ore from the Preferred ores list on the ECHO tab, coloured by the ore's rarity. Click a marker to send your mining ships there. Nothing shows while that list is empty."));
+            $"Marks the {ContactMarkers.MaxPerKind} nearest off-screen asteroids with an ore from the Preferred Ores list on the ECHO tab, coloured by the ore's rarity. Click a marker to send your mining ships there. Nothing shows while that list is empty."));
     }
 
     public override void OnActivated()
@@ -185,7 +185,7 @@ public sealed class Contacts : Feature
         if (list != null)
             foreach (var t in list.GetComponentsInChildren<TMP_Text>())
             {
-                boardHeading |= t.text.StartsWith("Boardable ships (", StringComparison.Ordinal);
+                boardHeading |= t.text.StartsWith("Boardable Ships (", StringComparison.Ordinal);
                 wreckHeading |= t.text.StartsWith("Wrecks (", StringComparison.Ordinal);
                 lootHeading |= t.text.StartsWith("Loot (", StringComparison.Ordinal);
             }
@@ -206,7 +206,7 @@ public sealed class Contacts : Feature
             string text = badge.Text;
             // Each non-zero kind once, with its exact count, and nothing for a kind that isn't here.
             var parts = new List<string>();
-            if (b > 0) parts.Add(b + " boardable");
+            if (b > 0) parts.Add(b + (b == 1 ? " boardable ship" : " boardable ships"));
             if (w > 0) parts.Add(w + (w == 1 ? " wreck" : " wrecks"));
             if (l > 0) parts.Add(l + " loot");
             bool textOk = !wantShown || text == string.Join(" | ", parts);
@@ -229,7 +229,7 @@ public sealed class Contacts : Feature
         var ship = Fleet.Flagship;
         if (ship == null || !Singleton<LootManager>.HasInstance || ship.GetModule<TractorModule>() == null || !TractorCaps.TractorCaps.Instance.Active)
         {
-            ctx.Skip("loot-reason", "not in space, no tractor beam on the flagship, or Loot pickup limits is off");
+            ctx.Skip("loot-reason", "not in space, no tractor beam on the flagship, or Loot Pickup Limits is off");
             yield break;
         }
         InventoryItemType ore = null;
@@ -255,13 +255,17 @@ public sealed class Contacts : Feature
             ModWindow.Open("contacts");
             yield return new WaitForSeconds(1.5f);
             var list = ModWindow.IsOpen ? ModWindow.Content.GetComponentInChildren<ContactsList>() : null;
-            string expected = Translation.Translate(ore.displayName) + " x3 | never pick up";
+            string expected = Translation.Translate(ore.displayName) + " x3";
             TMP_Text row = null;
             if (list != null)
                 foreach (var t in list.GetComponentsInChildren<TMP_Text>())
                     if (t.text == expected) { row = t; break; }
-            if (row != null) ctx.Pass("loot-reason", "row '" + row.text + "'");
-            else ctx.Fail("loot-reason", "no row '" + expected + "'");
+            // The reason has its own column: the name stays whole and the mark sits in the same row.
+            TMP_Text note = RowCell(row, ContactsList.NotPickedUp);
+            string withReason = RowLayout(row);
+            bool found = row != null;
+            if (found && note != null) ctx.Pass("loot-reason", $"row '{row.text}' with '{note.text}', cells {withReason}");
+            else ctx.Fail("loot-reason", $"row '{row?.text}' (wanted '{expected}') note cell {(note != null ? "found" : "missing")}");
 
             source = row != null ? row.GetComponent<ItemTooltipSource>() : null;
             if (source == null || !UITooltip.TooltipEnabled) ctx.Skip("loot-reason-tooltip", "no row tooltip or tooltips are off");
@@ -272,10 +276,27 @@ public sealed class Contacts : Feature
                 if (UITooltip._current != null)
                     foreach (var t in UITooltip._current.Content.GetComponentsInChildren<TMP_Text>(true))
                         if (t.text.StartsWith("Not picked up automatically: ", StringComparison.Ordinal)) line = t.text;
-                if (line == "Not picked up automatically: never pick up") ctx.Pass("loot-reason-tooltip", line);
-                else ctx.Fail("loot-reason-tooltip", "line '" + line + "'");
+                string wantLine = "Not picked up automatically: " + TractorCaps.TractorCaps.Describe(TractorCaps.TractorCaps.Skip.Never, ore);
+                if (line == wantLine) ctx.Pass("loot-reason-tooltip", line);
+                else ctx.Fail("loot-reason-tooltip", $"line '{line}', wanted '{wantLine}'");
                 yield return ctx.Screenshot("window-contacts-loot-reason");
             }
+
+            // Dropping the rule clears the mark, and no cell in the row moves or changes width.
+            if (source != null) UITooltip.Hide(source);
+            Rules.ItemRules.UseForTest("{\"default\":{\"tractorCap\":0}}");
+            yield return new WaitForSeconds(1.5f);
+            TMP_Text row2 = null;
+            var list2 = ModWindow.IsOpen ? ModWindow.Content.GetComponentInChildren<ContactsList>() : null;
+            if (list2 != null)
+                foreach (var t in list2.GetComponentsInChildren<TMP_Text>())
+                    if (t.text == expected) { row2 = t; break; }
+            string withoutReason = RowLayout(row2);
+            bool cleared = row2 != null && RowCell(row2, ContactsList.NotPickedUp) == null;
+            string layoutDetail = $"with the mark {withReason}; without {withoutReason}; mark cleared={cleared}";
+            // "found" was taken before the wait: the list rebuilds its rows meanwhile, which leaves "row" destroyed.
+            if (found && row2 != null && cleared && withReason == withoutReason) ctx.Pass("loot-row-layout", layoutDetail);
+            else ctx.Fail("loot-row-layout", layoutDetail);
         }
         finally
         {
@@ -285,6 +306,31 @@ public sealed class Contacts : Feature
             if (item != null) Object.DestroyImmediate(item.gameObject);
             PruneLoot();
         }
+    }
+
+    // A sibling cell in the same row as `cell` whose text is `text`, or null.
+    private static TMP_Text RowCell(TMP_Text cell, string text)
+    {
+        if (cell == null || cell.transform.parent == null) return null;
+        foreach (var t in cell.transform.parent.GetComponentsInChildren<TMP_Text>())
+            if (t.text == text) return t;
+        return null;
+    }
+
+    // Each direct child of the row as "x:width", so two readings are equal exactly when nothing moved or resized.
+    private static string RowLayout(TMP_Text cell)
+    {
+        if (cell == null || cell.transform.parent == null) return "(no row)";
+        Canvas.ForceUpdateCanvases();
+        var row = cell.transform.parent;
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < row.childCount; i++)
+        {
+            var c = (RectTransform)row.GetChild(i);
+            if (i > 0) sb.Append(' ');
+            sb.Append(c.anchoredPosition.x.ToString("0.#")).Append(':').Append(c.rect.width.ToString("0.#"));
+        }
+        return sb.ToString();
     }
 
     // Two Cerrax asteroids and one Amberic spawned next to the ship show up as two ore rows, the listed ore marked.
@@ -331,10 +377,10 @@ public sealed class Contacts : Feature
             if (list != null)
                 foreach (var t in list.GetComponentsInChildren<TMP_Text>())
                 {
-                    heading |= t.text.StartsWith("Asteroid ores (", StringComparison.Ordinal);
+                    heading |= t.text.StartsWith("Asteroid Ores (", StringComparison.Ordinal);
                     if (t.text.StartsWith(aName + ", ", StringComparison.Ordinal) || t.text.StartsWith(bName + ", ", StringComparison.Ordinal)) texts.Add(t.text);
                     aRow |= t.text == aExpected;
-                    bRow |= t.text.StartsWith(bName + ", surface | ", StringComparison.Ordinal) && t.text.EndsWith("| preferred", StringComparison.Ordinal);
+                    bRow |= t.text.StartsWith(bName + ", surface | ", StringComparison.Ordinal) && RowCell(t, "Preferred") != null;
                 }
             string detail = $"groups={(list != null ? list.OreGroupCount : -1)} heading={heading} expected '{aExpected}' rows=[{string.Join("; ", texts)}]";
             if (heading && aRow && bRow) ctx.Pass("ores", detail);
@@ -496,7 +542,7 @@ public sealed class ContactsList : MonoBehaviour
     {
         public Kind kind;
         public object key;
-        public TMP_Text main, dist, value;
+        public TMP_Text main, dist, value, note;
         public RectTransform rt;
         public UnityEngine.UI.Image bg;
     }
@@ -519,6 +565,9 @@ public sealed class ContactsList : MonoBehaviour
     private TractorModule tractor;
     private RectTransform column;
     private float nextRefresh;
+    // Loot your ships leave and preferred ores get their own fixed column, so the name keeps its width when the mark appears.
+    private const float NoteWidth = 100f;
+    internal const string NotPickedUp = "Not picked up";
 
     public int BoardableCount => boardables.Count;
     public int WreckCount => wrecks.Count;
@@ -702,7 +751,7 @@ public sealed class ContactsList : MonoBehaviour
         var ship = Fleet.Flagship;
         tractor = ship != null ? ship.GetModule<TractorModule>() : null;
 
-        Kit.Heading(column, "Boardable ships (" + boardables.Count + ")");
+        Kit.Heading(column, "Boardable Ships (" + boardables.Count + ")");
         foreach (var b in boardables)
         {
             var unit = b;
@@ -728,7 +777,7 @@ public sealed class ContactsList : MonoBehaviour
         }
         if (wrecks.Count == 0) Kit.Muted(column, "None");
 
-        Kit.Heading(column, "Loot (" + groupList.Count + (groupList.Count == 1 ? " kind)" : " kinds)"));
+        Kit.Heading(column, "Loot (" + groupList.Count + (groupList.Count == 1 ? " Kind)" : " Kinds)"));
         foreach (var g in groupList)
         {
             var type = g.type;
@@ -738,6 +787,8 @@ public sealed class ContactsList : MonoBehaviour
             r.main.color = type.rarity.GetColor();
             // Loot in space: the tooltip says why your ships leave it (see TractorCaps), without the inventory click hints.
             Kit.ItemTooltip(r.main, type, ItemTooltipContext.InSpace, interactive: false);
+            r.note = Kit.Fixed(row, "", NoteWidth, TextAlignmentOptions.MidlineLeft, ColorHelper.reddish);
+            Kit.ItemTooltip(r.note, type, ItemTooltipContext.InSpace, interactive: false);
             r.value = Kit.Fixed(row, "", 70f, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
             r.dist = Kit.Fixed(row, "", 50f, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
             if (tractor != null) Kit.TextButton(row, "Tractor", () => Contacts.Tractor(type), 70f);
@@ -750,7 +801,7 @@ public sealed class ContactsList : MonoBehaviour
         if (oreSection)
         {
             oreList.Sort(byOreDistance);
-            Kit.Heading(column, "Asteroid ores (" + asteroidsHere + " asteroids)");
+            Kit.Heading(column, "Asteroid Ores (" + asteroidsHere + " Asteroids)");
             foreach (var g in oreList)
             {
                 string key = g.key;
@@ -759,6 +810,7 @@ public sealed class ContactsList : MonoBehaviour
                 var r = new Row { kind = Kind.Ore, key = key, main = Kit.Label(row, "") };
                 r.main.color = g.ore.item.rarity.GetColor();
                 Kit.Tooltip(r.main, Translation.Translate(g.ore.item.displayName), g.ore.GetDescription());
+                r.note = Kit.Fixed(row, "", NoteWidth, TextAlignmentOptions.MidlineLeft, ColorHelper.poiTooltipMuted);
                 r.value = Kit.Fixed(row, "", 70f, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
                 r.dist = Kit.Fixed(row, "", 50f, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);
                 Kit.TextButton(row, "Mine", () => { if (oreGroups.TryGetValue(key, out var now) && now.closest != null) Contacts.Mine(now.closest, !KeepWindow); }, 70f);
@@ -817,7 +869,7 @@ public sealed class ContactsList : MonoBehaviour
     {
         foreach (var r in rows)
         {
-            string main, value = null;
+            string main, value = null, note = null;
             switch (r.kind)
             {
                 case Kind.Boardable: main = BoardableText((BoardableUnit)r.key); break;
@@ -825,8 +877,8 @@ public sealed class ContactsList : MonoBehaviour
                 case Kind.Ore:
                 {
                     var g = oreGroups[(string)r.key];
-                    main = Translation.Translate(g.ore.item.displayName) + (g.core ? ", core" : ", surface") + " | " + g.asteroids + (g.asteroids == 1 ? " asteroid" : " asteroids")
-                           + (OrePreference.OrePreference.Instance.Active && OrePreference.OrePreference.Ores.Contains(g.ore.item.identifier) ? " | preferred" : "");
+                    main = Translation.Translate(g.ore.item.displayName) + (g.core ? ", core" : ", surface") + " | " + g.asteroids + (g.asteroids == 1 ? " asteroid" : " asteroids");
+                    note = OrePreference.OrePreference.Instance.Active && OrePreference.OrePreference.Ores.Contains(g.ore.item.identifier) ? "Preferred" : "";
                     value = scanLevel == 2 ? GameMath.FormatNumber(g.amount) : "";
                     break;
                 }
@@ -834,13 +886,15 @@ public sealed class ContactsList : MonoBehaviour
                 {
                     var g = groups[(InventoryItemType)r.key];
                     string why = TractorCaps.TractorCaps.WhySkipped(g.type);
-                    main = Translation.Translate(g.type.displayName) + " x" + g.total + (g.pieces > 1 ? " (" + g.pieces + " stacks)" : "") + (why != null ? " | " + why : "");
+                    main = Translation.Translate(g.type.displayName) + " x" + g.total + (g.pieces > 1 ? " (" + g.pieces + " stacks)" : "");
+                    note = why != null ? NotPickedUp : "";
                     value = GameMath.FormatNumber(g.type.sellValue * g.total) + " cr";
                     break;
                 }
             }
             if (r.main.text != main) r.main.text = main;
             if (r.value != null && r.value.text != value) r.value.text = value;
+            if (r.note != null && r.note.text != note) r.note.text = note;
             float d = distance.TryGetValue(r.key, out var v) ? v : float.MaxValue;
             string dist = d == float.MaxValue ? "-" : d.ToString("0");
             if (r.dist.text != dist) r.dist.text = dist;
@@ -857,10 +911,19 @@ public sealed class ContactsList : MonoBehaviour
         var sim = b.simulation;
         Behaviour.Dungeon.DungeonOperation op;
         if (sim != null && !sim.isComplete) text += " | boarding in progress";
-        else if (Singleton<DungeonManager>.HasInstance && (op = Singleton<DungeonManager>.Instance.GetOperation(b)) != null) text += " | " + op.phase;
+        else if (Singleton<DungeonManager>.HasInstance && (op = Singleton<DungeonManager>.Instance.GetOperation(b)) != null) text += " | " + PhaseText(op.phase);
         else if (data.isFullyDepleted) text += " | depleted";
         return text;
     }
+
+    private static string PhaseText(Source.CompartmentSystem.MissionPhase phase) => phase switch
+    {
+        Source.CompartmentSystem.MissionPhase.Approach => "approaching",
+        Source.CompartmentSystem.MissionPhase.Active => "operation under way",
+        Source.CompartmentSystem.MissionPhase.Extraction => "crew extracting",
+        Source.CompartmentSystem.MissionPhase.Complete => "operation complete",
+        _ => "operation under way",
+    };
 
     private static string WreckText(SalvageContainer c)
     {

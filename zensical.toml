@@ -42,7 +42,7 @@ nav = [
     "mechanics/expansion/your-empire.md",
     "mechanics/expansion/empire-fleets.md",
   ] },
-  { "Late game (Spoilers)" = [
+  { "Late Game (Spoilers)" = [
     "mechanics/late-game/README.md",
     "mechanics/late-game/faq.md",
     "mechanics/late-game/glossary.md",
@@ -56,6 +56,7 @@ nav = [
     "modpack/features/fleet-combat.md",
     "modpack/features/loot-and-cargo.md",
     "modpack/features/stations.md",
+    "modpack/features/conquest.md",
     "modpack/features/logs-and-reference.md",
     "modpack/settings.md",
     "setup.md",

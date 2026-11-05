@@ -26,9 +26,9 @@ public sealed class TractorCaps : Feature
     public TractorCaps() { Instance = this; }
 
     public override string Id => "TractorCaps";
-    public override string Title => "Loot pickup limits";
-    public override string Description => "Your ships stop pulling in an item automatically once they carry the limit set for it on the Item rules tab (or never pull it in, with -1), and can leave cheap bulky loot alone. Loot they leave says why on its tooltip and on its Scanner row. Clicking the item yourself still picks it up.";
-    public override string SettingsTab => "Item rules";
+    public override string Title => "Loot Pickup Limits";
+    public override string Description => "Your ships stop picking up an item with their tractor beam once they carry the limit set for it on the Item Rules tab (or never pick it up, with -1), and can leave cheap bulky loot alone. Loot they leave says why on its tooltip and on its Scanner row. Clicking the item yourself still picks it up.";
+    public override string SettingsTab => "Item Rules";
     public override Type[] PatchClasses => new[] { typeof(TractorCapsPatches) };
 
     public ConfigEntry<int> MinCreditsPerM3;
@@ -36,8 +36,8 @@ public sealed class TractorCaps : Feature
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
-        MinCreditsPerM3 = cfg.Bind(Id, "MinCreditsPerM3", 0, SettingInfo.Describe("Skip loot worth less per m3 than",
-            "Your ships (and ECHO's loot-before-leaving) don't pull in loot whose sell value per m3 of hold space is below this many credits, so cheap bulky items don't fill the hold. Items your missions need and ammo a ship fires are still picked up, and clicking an item yourself always works. 0 turns this off.",
+        MinCreditsPerM3 = cfg.Bind(Id, "MinCreditsPerM3", 0, SettingInfo.Describe("Don't pick up loot worth less than (credits per m3)",
+            "Your ships (and ECHO's loot-before-leaving) don't pick up loot whose sell value per m3 of hold space is below this many credits, so cheap bulky items don't fill the hold. Items your missions need and ammo a ship fires are still picked up, and clicking an item yourself always works. 0 turns this off.",
             new AcceptableValueRange<int>(0, 1000000)));
     }
 
@@ -65,9 +65,9 @@ public sealed class TractorCaps : Feature
 
     public static string Describe(Skip skip, InventoryItemType item) => skip switch
     {
-        Skip.Limit => "limit " + ItemRules.Resolve(item).tractorCap + " reached",
-        Skip.Never => "never pick up",
-        Skip.Cheap => "below " + Instance.MinCreditsPerM3.Value + " cr/m3",
+        Skip.Limit => "pickup limit of " + ItemRules.Resolve(item).tractorCap + " reached",
+        Skip.Never => "your Item Rules say never to pick it up",
+        Skip.Cheap => "worth under " + Instance.MinCreditsPerM3.Value + " cr per m3",
         _ => null,
     };
 
@@ -114,6 +114,8 @@ public sealed class TractorCaps : Feature
             else ctx.Fail("resolve-ammo", $"{Items.RuleKey(ammo)} tractorCap={ammoCap}, expected 3 from the Ammo category rule");
         }
 
+        StalePick(ctx);
+
         var ship = GamePlayer.current.currentSpaceShip;
         Inventory.InventoryItem stack = null;
         foreach (var s in ship.cargo.items) { stack = s; break; }
@@ -136,7 +138,7 @@ public sealed class TractorCaps : Feature
         }
         finally { Instance.MinCreditsPerM3.Value = floor0; ItemRules.Load(); }
         string detail = $"{Items.RuleKey(stack.item)} count={Cargo.Count(ship, stack.item)} cap1 allows={capped} ('{cappedWhy}') cap0 allows={uncapped}";
-        if (!capped && cappedWhy == "limit 1 reached" && uncapped) ctx.Pass("gate", detail);
+        if (!capped && cappedWhy == "pickup limit of 1 reached" && uncapped) ctx.Pass("gate", detail);
         else ctx.Fail("gate", detail);
 
         // Value per m3: a stack type below the line is skipped, the same type with the line at 0 or under its value isn't.
@@ -168,7 +170,7 @@ public sealed class TractorCaps : Feature
             Instance.MinCreditsPerM3.Value = 1000000;
             bool unsellableAllowed = unsellable == null || Allows(ship, unsellable);
             string vd = $"{bulky.identifier}: {bulky.sellValue} cr per {bulky.m3} m3 = {perM3:0.##}/m3; line above it allows={above} ('{aboveWhy}'), at or under it allows={below}, off allows={off}; unsellable {unsellable?.identifier ?? "(none)"} allows={unsellableAllowed}";
-            if (!above && aboveWhy == "below " + line + " cr/m3" && below && off && unsellableAllowed) ctx.Pass("value", vd);
+            if (!above && aboveWhy == "worth under " + line + " cr per m3" && below && off && unsellableAllowed) ctx.Pass("value", vd);
             else ctx.Fail("value", vd);
         }
         finally { Instance.MinCreditsPerM3.Value = min0; ItemRules.Load(); }
@@ -188,8 +190,46 @@ public sealed class TractorCaps : Feature
         }
         finally { ItemRules.Load(); }
         string nd = $"cap -1: {bulky.identifier} allows={neverOre} ('{neverWhy}'), used ammo {usedAmmo?.identifier ?? "(none fitted)"} allows={neverAmmo}";
-        if (!neverOre && neverWhy == "never pick up" && neverAmmo) ctx.Pass("never", nd);
+        if (!neverOre && neverWhy == "your Item Rules say never to pick it up" && neverAmmo) ctx.Pass("never", nd);
         else ctx.Fail("never", nd);
+    }
+
+    // A ship that already picked a loot stack drops it once a rule forbids it, instead of hovering at it for good.
+    // The pick is set the way the game's own scan sets it (autoTarget has a private setter), then the scan runs
+    // with a "never pick up" rule in force.
+    private static void StalePick(SelfCheckContext ctx)
+    {
+        var flagship = Fleet.Flagship;
+        var module = flagship == null ? null : flagship.GetModule<TractorModule>();
+        TractorableItem item = null;
+        if (module != null)
+            foreach (var candidate in UnityEngine.Object.FindObjectsByType<TractorableItem>(FindObjectsInactive.Exclude))
+                if (candidate != null && !candidate.isTractored && candidate.data != null && candidate.data.itemType != null
+                    && GamePlayer.current.RequiredItemCountForMissions(candidate.data.itemType) == 0 && candidate.data.itemType.itemCategory != ItemCategory.Ammo)
+                { item = candidate; break; }
+        if (item == null) { ctx.Skip("stale-pick", module == null ? "the flagship has no tractor beam" : "no loose loot in space"); return; }
+        var autoTarget = Traverse.Create(module).Property("autoTarget");
+        var before = module.autoTarget;
+        try
+        {
+            autoTarget.SetValue(item);
+            ItemRules.UseForTest("{\"default\":{\"tractorCap\":-1}}");
+            bool held = module.autoTarget == item;
+            module.UpdateAvailableTargets(new Behaviour.Weapons.TargetableUnit[] { item });
+            bool dropped = module.autoTarget == null;
+            ItemRules.UseForTest("{\"default\":{\"tractorCap\":0}}");
+            autoTarget.SetValue(item);
+            module.UpdateAvailableTargets(new Behaviour.Weapons.TargetableUnit[] { item });
+            bool kept = module.autoTarget == item;
+            string d = $"{Items.RuleKey(item.data.itemType)}: pick set {held}, dropped after a never-pick-up rule {dropped}, kept with no rule {kept}";
+            if (held && dropped && kept) ctx.Pass("stale-pick", d);
+            else ctx.Fail("stale-pick", d);
+        }
+        finally
+        {
+            ItemRules.Load();
+            autoTarget.SetValue(before);
+        }
     }
 }
 
@@ -207,6 +247,26 @@ internal static class TractorCapsPatches
                 __result = false;
         }
         catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(CanBeAutoTractoredByPostfix)); }
+    }
+
+    // The game picks a loot stack once and flies to it until it is pulled in. A limit reached after the pick leaves the
+    // ship hovering at an item the filter above will never let its beams take, so the pick is dropped when the rules no
+    // longer allow it. Runs once per scan of the ship's surroundings, allocation-free. An item already in the beams and
+    // a manual pick (your own click) are left alone.
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(TractorModule), nameof(TractorModule.UpdateAvailableTargets))]
+    private static void DropDisallowedPickPostfix(TractorModule __instance)
+    {
+        if (!TractorCaps.Instance.Active) return;
+        try
+        {
+            var pick = __instance.autoTarget as TractorableItem;
+            if (pick == null || pick.isTractored || pick.data == null || pick.data.itemType == null || __instance.manualTarget == pick) return;
+            var unit = __instance.parent;
+            if (unit != null && Fleet.IsPlayerShip(unit) && !TractorCaps.Allows((SpaceShipData)unit.unitData, pick.data.itemType))
+                __instance.ResetAutoTarget();
+        }
+        catch (Exception e) { TractorCaps.Instance.Fail(e, nameof(DropDisallowedPickPostfix)); }
     }
 
     // Tooltips of loot in space (and of the Scanner's loot rows) say why your ships leave the item alone.

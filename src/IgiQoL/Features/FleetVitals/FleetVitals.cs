@@ -21,7 +21,7 @@ public sealed class FleetVitalsFeature : Feature
     public FleetVitalsFeature() { Instance = this; }
 
     public override string Id => "FleetVitals";
-    public override string Title => "Fleet shield and armor bars";
+    public override string Title => "Fleet Shield and Armor Bars";
     public override string Description => "Shows a shield bar above and an armor bar below each ship's hull bar in the fleet panel (bottom left). A ship without shields or armor leaves that bar's slot blank.";
     public override Type[] PatchClasses => new[] { typeof(FleetPanelRowPatches) };
 

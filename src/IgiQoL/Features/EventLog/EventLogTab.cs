@@ -213,16 +213,21 @@ public static class EventLogTab
             }
         }
 
+        // Every row has a fixed height that depends only on its kind and the text size, never on its text or the window
+        // width: an operation line gets two lines, everything else one, and a longer text ends in "..." with the whole
+        // line in its tooltip. So a merged pickup or a "(x3)" can't move the lines below it.
+        internal static int TextLines(LogKind kind) => kind == LogKind.Operation ? 2 : 1;
+
+        internal static float RowHeight(LogKind kind) => Mathf.Ceil(TextLines(kind) * 16f * TextScale.TextScale.Factor + 4f);
+
         private static Line NewLine(RectTransform column, LogEntry e)
         {
-            var r = Kit.Row(column, 6f, 20f);
+            var r = Kit.Row(column, 6f, RowHeight(e.kind));
             var time = Kit.Fixed(r, "", 70f, TextAlignmentOptions.MidlineLeft, ColorHelper.poiTooltipMuted);
             Kit.Fixed(r, KindName(e.kind), 56f, TextAlignmentOptions.MidlineLeft, ColorHelper.poiTooltipMuted);
             var text = Kit.Label(r, "");
-            // A long line wraps onto a second one: the row's height follows its text, 20 at least.
-            text.textWrappingMode = TextWrappingModes.Normal;
-            text.overflowMode = TextOverflowModes.Overflow;
-            r.GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = -1f;
+            text.textWrappingMode = TextLines(e.kind) > 1 ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Ellipsis;
             text.color = e.color;
             if (e.item != null) Kit.ItemTooltip(text, e.item);
             return new Line { row = r, time = time, text = text, repeats = -1 };

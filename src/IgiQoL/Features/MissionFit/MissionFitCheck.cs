@@ -31,6 +31,7 @@ internal static class MissionFitCheck
         board.ShowMissionBoard();
         yield return null;
         int before = CheckRows(ctx, "rows", board);
+        var offersBefore = new List<Mission>(Offers());
         yield return ctx.Screenshot("mission-board-fit");
 
         Mission target = null;
@@ -58,7 +59,13 @@ internal static class MissionFitCheck
         board.ShowMissionBoard();
         yield return null;
         int after = CheckRows(ctx, "restored", board);
-        if (after != before) ctx.Fail("restored-count", $"{after} greyed after the fit came back, {before} before");
+        // The board can refresh its offers while the check runs; then the counts describe different missions, and
+        // "restored" above has already checked the new rows against the fleet's fit.
+        var offersAfter = Offers();
+        bool same = offersAfter.Count == offersBefore.Count && offersBefore.TrueForAll(offersAfter.Contains);
+        if (!same) ctx.Skip("restored-count", $"the board refreshed during the check ({offersBefore.Count} offers before, {offersAfter.Count} after, not the same missions)");
+        else if (after != before) ctx.Fail("restored-count", $"{after} greyed after the fit came back, {before} before");
+        else ctx.Pass("restored-count", $"{after} greyed after the fit came back, as before");
     }
 
     private static IEnumerator Fit(SelfCheckContext ctx, string name, Board board, SpaceShipData ship, InventoryItemType gear, Mission target, int before)
@@ -90,7 +97,7 @@ internal static class MissionFitCheck
     private static List<Mission> Offers() =>
         GamePlayer.current.currentPointOfInterest is SpaceStation ss ? ss.missionBoard.availableMissions : new List<Mission>();
 
-    // Every row on the board: a "No fit" chip, and a dimmed icon and name, exactly on the offers no ship of yours fits;
+    // Every row on the board: a "No equipment" chip, and a dimmed icon and name, exactly on the offers no ship of yours fits;
     // the chip itself isn't dimmed and missions you hold are never marked. Returns how many rows are marked.
     private static int CheckRows(SelfCheckContext ctx, string name, Board board, string prefix = "")
     {

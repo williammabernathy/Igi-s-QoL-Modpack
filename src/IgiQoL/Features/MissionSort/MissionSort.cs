@@ -35,7 +35,7 @@ public sealed class MissionSort : Feature
     public MissionSort() { Instance = this; }
 
     public override string Id => "MissionSort";
-    public override string Title => "Mission sort";
+    public override string Title => "Mission Sort";
     public override string Description => "Sorts the station mission board and the missions window by type, level or difficulty, and the missions window also by distance. Pick the order with the sort button in the board's header or under the missions window's list (each click moves to the next one), or here. Each section is sorted on its own, and missions that tie keep the game's order. While sorting by level, each row shows the mission's level.";
     public override Type[] PatchClasses => new[] { typeof(MissionSortPatches) };
 
@@ -56,7 +56,7 @@ public sealed class MissionSort : Feature
             "Order of the missions in each section of the station mission board. Game order: as the game lists them. Type: story, combat, mining, salvage, cargo, repair, then the rest. Level: highest first, with the level shown on each row. Difficulty: hardest first (Insane, Hard, Challenging, Normal, Easy), then faction and story missions. The sort button in the board's header changes this too.",
             Names.Take(4).ToArray()));
         Window = cfg.Bind(Id, "Window", WindowSort.GameOrder, SettingInfo.Describe("Missions window order",
-            "Order of your missions in each section of the missions window (ready to turn in, in progress). Game order, Type, Level and Difficulty work as on the mission board; under Level, each row's level replaces its jump count, since the list has no room for both. Distance: nearest first (the location you're at, then this system, then by jumps), with missions whose location or route is unknown last. The sort button under the window's list changes this too.",
+            "Order of your missions in each section of the missions window (\"Ready to turn in\" and \"In progress\"). Game order, Type, Level and Difficulty work as on the mission board; under Level, each row's level replaces its jump count, since the list has no room for both. Distance: nearest first (the location you're at, then this system, then by jumps), with missions whose location or route is unknown last. The sort button under the window's list changes this too.",
             Names));
     }
 

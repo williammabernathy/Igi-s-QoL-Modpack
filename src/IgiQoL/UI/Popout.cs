@@ -41,6 +41,9 @@ public sealed class PopoutKind
     public string DockTab;
     // A window's own title (for example a meter's view); null means Title.
     public Func<PopoutState, string> TitleOf;
+    // Canvas order of the window. 2 keeps a pop-out under the mod window (3); a view meant for the galaxy map needs 4,
+    // because the map's window draws at 3 and would cover it.
+    public int SortingOrder = 2;
 
     internal string TitleFor(PopoutState s) => TitleOf != null ? TitleOf(s) : Title;
 }
@@ -122,8 +125,31 @@ public static class Popouts
 
     public static void Register(PopoutKind kind)
     {
-        if (kinds.Count == 0) GameEvents.HudReady += RestoreOpen;
+        if (kinds.Count == 0)
+        {
+            GameEvents.HudReady += RestoreOpen;
+            InputSystem.onAfterUpdate += ClaimWheel;
+        }
         kinds.Add(kind);
+    }
+
+    // Click-through passes clicks to the game but not the wheel. The galaxy map and the event system read the wheel
+    // in Update and LateUpdate in no fixed order with the pop-outs' own Update, so the body starts blocking here,
+    // right after the input update and before any of them. Popout.Update keeps it that way for the rest of the frame.
+    private static void ClaimWheel()
+    {
+        if (open.Count == 0 || !Popout.WheelMoved()) return;
+        try
+        {
+            Vector2 point = Input.mousePosition;
+            foreach (var p in open.Values)
+                if (p != null && p.ClaimsWheelAt(point)) p.BlockBody();
+        }
+        catch (Exception e)
+        {
+            InputSystem.onAfterUpdate -= ClaimWheel;
+            Plugin.Log.LogError($"[Window] pop-out wheel handling stopped: {e}");
+        }
     }
 
     public static PopoutState State(string id)
@@ -370,6 +396,26 @@ public sealed class Popout : MonoBehaviour
     public bool ClicksPass => bodyGroup != null && !bodyGroup.blocksRaycasts;
     public RectTransform Body { get; private set; }
 
+    // True when a wheel turn at this screen point belongs to this window: click-through is on (otherwise the body
+    // blocks by itself) and the point is on the shown body.
+    internal bool ClaimsWheelAt(Vector2 screenPoint)
+    {
+        if (!State.clickThrough || body == null || !body.activeInHierarchy) return false;
+        var canvas = root.GetComponent<Canvas>().rootCanvas;
+        var cam = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+        return RectTransformUtility.RectangleContainsScreenPoint(Body, screenPoint, cam);
+    }
+
+    internal void BlockBody()
+    {
+        if (!bodyGroup.blocksRaycasts) bodyGroup.blocksRaycasts = true;
+    }
+
+    // The game reads the wheel both ways: the map's zoom through the Input System, its sector and system steps
+    // through the old Input class.
+    internal static bool WheelMoved() =>
+        Mouse.current != null && Mouse.current.scroll.ReadValue().y != 0f || Input.mouseScrollDelta.y != 0f;
+
     private RectTransform root;
     private GameObject frame, options, resize, body;
     private CanvasGroup rootGroup, bodyGroup;
@@ -384,7 +430,7 @@ public sealed class Popout : MonoBehaviour
         root.pivot = new Vector2(0f, 1f);
         var canvas = root.gameObject.AddComponent<Canvas>();
         canvas.overrideSorting = true;
-        canvas.sortingOrder = 2; // under the mod window (3), so an open pop-out never covers a tab
+        canvas.sortingOrder = kind.SortingOrder;
         root.gameObject.AddComponent<GraphicRaycaster>();
         var p = root.gameObject.AddComponent<Popout>();
         p.Kind = kind;
@@ -417,7 +463,7 @@ public sealed class Popout : MonoBehaviour
         FleetBarParts.AddLine(header, Kind.TitleFor(State), 12f, ColorHelper.stationCardTitle, TextAlignmentOptions.MidlineLeft);
         CaptainCards.AddSpacer(header);
         Kit.Tooltip(Kit.TextButton(header, "Options", ToggleOptions, 64f).GetComponentInChildren<TMP_Text>(), null,
-            "Show condition, opacity, click-through and position of this window.");
+            "Choose when this window shows and how see-through it is, whether clicks pass through it, and reset its position and size.");
         var collapse = Kit.TextTile(header, State.collapsed ? "+" : "-", 22f, ToggleCollapsed);
         collapseText = collapse.GetComponentInChildren<TMP_Text>();
         if (Kind.DockTab != null)
@@ -471,12 +517,15 @@ public sealed class Popout : MonoBehaviour
     {
         var row = Kit.Row(column, 8f, 26f);
         Kit.Label(row, "Show");
-        Kit.Dropdown(row, new[] { "Always", "Only when " + (Kind.RelevantLabel ?? "relevant") }, (int)State.show, i =>
+        Kit.Dropdown(row, new[] { "Always", "Only when relevant" }, (int)State.show, i =>
         {
             State.show = (PopoutShow)i;
             State.Save(Id);
             nextShowCheck = 0f;
         }, 200f);
+        // What "relevant" means for this window, kept out of the dropdown so its text stays at full size.
+        var relevantNote = Kit.Muted(column, "Only when relevant shows this window when " + (Kind.RelevantLabel ?? "it has something to show") + ".");
+        relevantNote.name = "RelevantNote";
 
         row = Kit.Row(column, 8f, 26f);
         Kit.Label(row, "Opacity");
@@ -488,12 +537,13 @@ public sealed class Popout : MonoBehaviour
         }, 90f);
 
         string key = WindowFeature.Instance != null ? KeyName(WindowFeature.Instance.PopoutInteractKey.Value) : "Ctrl";
-        Kit.Toggle(column, "Clicks pass through to the game (hold " + key + " to use the window)", State.clickThrough, on =>
+        var clickThrough = Kit.Toggle(column, "Click-through (hold " + key + " to use the window)", State.clickThrough, on =>
         {
             State.clickThrough = on;
             bodyGroup.blocksRaycasts = !on;
             State.Save(Id);
         });
+        FleetBarParts.SetTooltip(clickThrough, null, "On: clicks on the window's body reach the game under it, and the mouse wheel still scrolls the window. Hold " + key + " to use the window itself while this is on.");
 
         row = Kit.Row(column, 8f, 26f);
         Kit.Label(row, "Position and size");
@@ -614,8 +664,9 @@ public sealed class Popout : MonoBehaviour
                 headerBackground.color = ColorHelper.panelHeaderBlue;
                 rootGroup.alpha = State.opacity / 100f;
             }
-            // Click-through lets go while the interact key is held, so the body can be used.
-            bool block = !State.clickThrough || InteractHeld();
+            // Click-through lets go while the interact key is held, so the body can be used. The wheel over the body
+            // always scrolls the window (see Popouts.ClaimWheel).
+            bool block = !State.clickThrough || InteractHeld() || WheelMoved() && ClaimsWheelAt(Input.mousePosition);
             if (bodyGroup.blocksRaycasts != block) bodyGroup.blocksRaycasts = block;
         }
         catch (Exception e)
@@ -639,17 +690,7 @@ public sealed class Popout : MonoBehaviour
     private static bool InteractHeld()
     {
         var feature = WindowFeature.Instance;
-        var kb = Keyboard.current;
-        if (feature == null || kb == null || UIHelper.IsTypingInInputField()) return false;
-        // The Input System has no single Ctrl, Shift or Alt key; either side counts.
-        switch (feature.PopoutInteractKey.Value)
-        {
-            case Key.LeftCtrl or Key.RightCtrl: return kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed;
-            case Key.LeftShift or Key.RightShift: return kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
-            case Key.LeftAlt or Key.RightAlt: return kb.leftAltKey.isPressed || kb.rightAltKey.isPressed;
-            case var key when key > Key.None && (int)key <= Keyboard.KeyCount: return kb[key].isPressed;
-            default: return false;
-        }
+        return feature != null && HeldKey.IsDown(feature.PopoutInteractKey.Value);
     }
 
     internal static string KeyName(Key key) => key switch
@@ -678,7 +719,7 @@ internal sealed class ResizeHandle : MonoBehaviour, IBeginDragHandler, IDragHand
         rt.anchoredPosition = Vector2.zero;
         // The mod window lays out its children; the handle sits on top of them in the corner.
         rt.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
-        UiCards.AddBackground(rt.gameObject, ColorHelper.resizeHandleIdle);
+        UiCards.AddBackground(rt.gameObject, ColorHelper.windowGripRest);
         return rt.gameObject.AddComponent<ResizeHandle>();
     }
 
@@ -689,16 +730,18 @@ internal sealed class ResizeHandle : MonoBehaviour, IBeginDragHandler, IDragHand
 
     public void OnEndDrag(PointerEventData eventData) => onEnd?.Invoke();
 
-    public void OnPointerEnter(PointerEventData eventData) => GetComponent<Image>().color = ColorHelper.resizeHandleHover;
+    public void OnPointerEnter(PointerEventData eventData) => GetComponent<Image>().color = ColorHelper.windowGripHot;
 
-    public void OnPointerExit(PointerEventData eventData) => GetComponent<Image>().color = ColorHelper.resizeHandleIdle;
+    public void OnPointerExit(PointerEventData eventData) => GetComponent<Image>().color = ColorHelper.windowGripRest;
 }
 
-// A strip along the bottom of the mod window, shown while a pop-out is open: one chip per pop-out (greyed while its
-// show condition hides it). A chip brings its window back on screen and flashes it; its x closes it, or docks it back
-// into its tab for a view that has one.
+// A strip along the bottom of the mod window: one chip per open pop-out (greyed while its show condition hides it).
+// A chip brings its window back on screen and flashes it; its x closes it, or docks it back into its tab for a view
+// that has one. The strip always keeps its height, so opening the first pop-out never moves the tab content.
 internal sealed class PopoutStrip : MonoBehaviour
 {
+    // Every chip is this wide (it shrinks only when the window runs out of room).
+    internal const float ChipWidth = 130f;
     private int version = -1;
     private RectTransform row;
 
@@ -709,9 +752,7 @@ internal sealed class PopoutStrip : MonoBehaviour
         // The right padding keeps the last chip's x clear of the window's resize corner.
         row.GetComponent<HorizontalLayoutGroup>().padding = new RectOffset(6, 16, 0, 0);
         UiCards.AddBackground(row.gameObject, ColorHelper.panelHeaderBlue);
-        // On the window, not the row: the row hides while nothing is popped out.
         window.gameObject.AddComponent<PopoutStrip>().row = row;
-        row.gameObject.SetActive(false);
     }
 
     private void Update()
@@ -731,9 +772,10 @@ internal sealed class PopoutStrip : MonoBehaviour
             Destroy(child);
         }
         bool any = false;
-        // Texts under an inactive row have no font yet, and measuring them throws.
-        row.gameObject.SetActive(true);
-        Kit.Muted(row, "Pop-out windows");
+        var heading = Kit.Muted(row, "Pop-out windows");
+        // One line in a 24 px row: a narrow window cuts the heading short instead of wrapping it out of the strip.
+        heading.textWrappingMode = TextWrappingModes.NoWrap;
+        heading.overflowMode = TextOverflowModes.Ellipsis;
         foreach (var kind in Popouts.Kinds)
             foreach (var id in Popouts.Windows(kind.Id))
             {
@@ -747,9 +789,9 @@ internal sealed class PopoutStrip : MonoBehaviour
                     if (target != null) target.Flash();
                 }, 130f);
                 var text = chip.GetComponentInChildren<TMP_Text>();
-                // As wide as its title, shrinking (down to 40 px) when the strip runs out of room.
+                // The same width for every chip, so a renamed title or a changed view never moves its neighbours.
                 var le = chip.GetComponent<LayoutElement>();
-                le.preferredWidth = Mathf.Clamp(Mathf.Ceil(text.GetPreferredValues(title).x) + 12f, 90f, 220f);
+                le.preferredWidth = ChipWidth;
                 le.minWidth = 40f;
                 text.overflowMode = TextOverflowModes.Ellipsis;
                 if (!p.Shown) text.color = ColorHelper.poiTooltipMuted;
@@ -762,7 +804,7 @@ internal sealed class PopoutStrip : MonoBehaviour
                 });
                 FleetBarParts.SetTooltip(x, null, dock ? "Dock back: close this window and open its tab." : "Close this window.");
             }
-        row.gameObject.SetActive(any);
+        if (!any) heading.text = "Pop-out windows: none open";
     }
 }
 

@@ -46,7 +46,7 @@ public sealed class EchoKit : Feature
     public EchoKit() { Instance = this; }
 
     public override string Id => "EchoKit";
-    public override string Title => "ECHO abilities and deployables";
+    public override string Title => "ECHO Abilities and Deployables";
     public override string Description => "Lets ECHO use your flagship's abilities and the deployables in its cargo (turrets, shield pylons, decoys, mines) by rules you set on the ECHO tab, and pick its turrets back up after the fight. Every rule starts off.";
     public override string SettingsTab => "ECHO";
 

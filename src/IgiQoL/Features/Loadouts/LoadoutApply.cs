@@ -68,10 +68,10 @@ public static class LoadoutApply
         {
             if (ship == GamePlayer.current.currentSpaceShip)
             {
-                if (Loadout.CaptureEcho().ToString() != l.echo.ToString()) r.done.Add("ECHO settings");
+                if (Loadout.CaptureEcho().ToString() != l.echo.ToString()) r.done.Add("ECHO settings applied");
                 RestoreEcho(l.echo);
             }
-            else r.done.Add("ECHO settings: used when you next fly this ship");
+            else r.done.Add("ECHO settings saved with the loadout will be used when you next fly this ship");
         }
         LoadoutStore.SetLastApplied(ship.guid, l.name);
 
@@ -139,7 +139,7 @@ public static class LoadoutApply
         if (ship.skillLoadout == l.skill) return;
         if (ship == GamePlayer.current.currentSpaceShip) captain.SetSelectedLoadout(index);
         else ship.skillLoadout = l.skill;
-        r.done.Add($"skill preset \"{l.skill}\"");
+        r.done.Add($"Skill preset \"{l.skill}\" selected");
     }
 
     private enum Kind { Hardpoint, Module, Booster }
@@ -278,7 +278,7 @@ public static class LoadoutApply
                 default: ship.EquipModule(s.result, s.module); break;
             }
         }
-        r.done.Add(changed + (changed == 1 ? " slot refitted" : " slots refitted") + (stored > 0 ? $", {stored} removed {(stored == 1 ? "piece" : "pieces")} to the armory" : ""));
+        r.done.Add(changed + (changed == 1 ? " slot refitted" : " slots refitted") + (stored > 0 ? $"; {stored} {(stored == 1 ? "piece" : "pieces")} moved to the armory" : ""));
     }
 
     private static void Claim(Slot s, Candidate c, bool substitute)
@@ -380,7 +380,7 @@ public static class LoadoutApply
             if (ship.AssignOfficer(officer)) seated++;
             else r.problems.Add($"No free officer seat for {officer.GetFullName()}.");
         }
-        if (seated + unseated > 0) r.done.Add($"officers: {seated} seated, {unseated} to the roster");
+        if (seated + unseated > 0) r.done.Add($"Officers: {seated} seated, {unseated} back in the roster");
     }
 
     private static void Crew(SpaceShipData ship, Loadout l, ApplyReport r)
@@ -446,7 +446,7 @@ public static class LoadoutApply
         if (toReserve > 0) parts.Add(toReserve + " to the reserve");
         if (fromReserve > 0) parts.Add(fromReserve + " from the reserve");
         if (hired > 0) parts.Add($"{hired} hired for {GameMath.FormatNumber(spent)} cr");
-        if (parts.Count > 0) r.done.Add("crew: " + string.Join(", ", parts));
+        if (parts.Count > 0) r.done.Add("Crew: " + string.Join(", ", parts));
     }
 
     private static int Count(CrewData data, string type) => data.crew.TryGetValue(type, out int n) ? n : 0;

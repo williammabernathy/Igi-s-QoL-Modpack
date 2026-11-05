@@ -20,7 +20,7 @@ namespace IgiQoL.Features.CraftRollup;
 internal sealed class RollupPanel : MonoBehaviour
 {
     public const string StartLabel = "Craft missing parts";
-    public const string StopLabel = "Stop roll-up";
+    public const string StopLabel = "Stop crafting parts";
 
     private ForgeTabContents tab;
     private GameObject vanillaText;
@@ -44,11 +44,12 @@ internal sealed class RollupPanel : MonoBehaviour
     {
         var parent = tab.notCraftableContent;
         var root = UiCards.NewChild("IgiRollup", parent);
-        // The strip is 70 px; the text reaches 30 px above it, into the empty part of the details pane, left of the deposit toggle.
+        // The strip is 70 px; the text stays inside it, left of the amount field and the button. Above it the game's
+        // ingredient list grows down with the ingredient count, so anything taller would draw over the last rows.
         root.anchorMin = Vector2.zero;
         root.anchorMax = Vector2.one;
         root.offsetMin = Vector2.zero;
-        root.offsetMax = new Vector2(0f, 30f);
+        root.offsetMax = Vector2.zero;
         var panel = root.gameObject.AddComponent<RollupPanel>();
         panel.tab = tab;
         foreach (Transform child in parent)
@@ -58,15 +59,20 @@ internal sealed class RollupPanel : MonoBehaviour
             break;
         }
 
-        panel.summary = FleetBarParts.AddLine(root, "", 11f, ColorHelper.offWhite, TextAlignmentOptions.BottomLeft);
+        // Top aligned, so the game's "Insufficient materials" line stays where it is whatever the second line does.
+        panel.summary = FleetBarParts.AddLine(root, "", 11f, ColorHelper.offWhite, TextAlignmentOptions.TopLeft);
         panel.summary.textWrappingMode = TextWrappingModes.Normal;
         panel.summary.overflowMode = TextOverflowModes.Ellipsis;
+        // A long time or fee shrinks the text rather than spilling out of the strip.
+        panel.summary.enableAutoSizing = true;
+        panel.summary.fontSizeMax = 11f;
+        panel.summary.fontSizeMin = 8f;
         panel.summary.richText = true;
         var srt = (RectTransform)panel.summary.transform;
         srt.anchorMin = Vector2.zero;
         srt.anchorMax = Vector2.one;
         srt.offsetMin = new Vector2(8f, 6f);
-        srt.offsetMax = new Vector2(-216f, -2f);
+        srt.offsetMax = new Vector2(-216f, -4f);
 
         // A copy of the game's Craft button, so it looks the same; its click and translation key are replaced.
         var template = tab.craftableContent.Find("Button");
@@ -127,25 +133,65 @@ internal sealed class RollupPanel : MonoBehaviour
         if (plan != null)
         {
             preview = null;
-            summary.text = insufficient + "\n" + Rollups.Status(plan);
-            string running = Details(plan, true);
-            Kit.Tooltip(summary, "Roll-up", running);
-            Kit.Tooltip(button.targetGraphic, "Roll-up", running);
-            buttonText.text = StopLabel;
+            SetTexts(insufficient + "\n" + Rollups.Status(plan), Rollups.RunningLabel, Details(plan, true), StopLabel);
             button.interactable = true;
             amountField.gameObject.SetActive(false);
             amountLabel.SetActive(false);
+            FitStrip();
             return;
         }
         preview = Rollups.Build(forge, recipe, amount);
         amountField.gameObject.SetActive(true);
         amountLabel.SetActive(true);
-        buttonText.text = StartLabel;
         button.interactable = preview.HasWork;
-        summary.text = insufficient + "\n" + Summary(preview);
-        string details = Details(preview, false);
-        Kit.Tooltip(summary, "Craft missing parts", details);
-        Kit.Tooltip(button.targetGraphic, "Craft missing parts", details);
+        SetTexts(insufficient + "\n" + Summary(preview), StartLabel, Details(preview, false), StartLabel);
+        FitStrip();
+    }
+
+    // The panel refreshes every second, but the texts only change when the plan does: a text set again every time would
+    // re-layout the strip and rebuild both tooltips for nothing.
+    private string shownSummary, shownDetails, shownButton;
+
+    private void SetTexts(string text, string title, string details, string label)
+    {
+        if (shownSummary != text)
+        {
+            shownSummary = text;
+            summary.text = text;
+        }
+        if (shownDetails != details || shownButton != label)
+        {
+            shownDetails = details;
+            Kit.Tooltip(summary, title, details);
+            Kit.Tooltip(button.targetGraphic, title, details);
+        }
+        if (shownButton != label)
+        {
+            shownButton = label;
+            buttonText.text = label;
+        }
+    }
+
+    private static readonly Vector3[] corners = new Vector3[4];
+
+    // The game's ingredient list grows down with the ingredient count, and in the station's own forge screen, which
+    // is shorter than the popup, a long recipe reaches into this strip. The summary then hides rather than drawing
+    // over the rows; the button's tooltip still has all of it.
+    private void FitStrip()
+    {
+        var box = WorldRect((RectTransform)summary.transform);
+        bool crowded = WorldRect((RectTransform)tab.resultsList.transform).Overlaps(box);
+        foreach (var row in tab.ingredientsList.rows)
+            if (!crowded && row != null && WorldRect((RectTransform)row.transform).Overlaps(box)) crowded = true;
+        if (summary.gameObject.activeSelf == crowded) summary.gameObject.SetActive(!crowded);
+    }
+
+    internal bool SummaryShown => summary.gameObject.activeSelf;
+
+    private static Rect WorldRect(RectTransform rt)
+    {
+        rt.GetWorldCorners(corners);
+        return Rect.MinMaxRect(corners[0].x, corners[0].y, corners[2].x, corners[2].y);
     }
 
     private void OnClick()
@@ -177,47 +223,35 @@ internal sealed class RollupPanel : MonoBehaviour
 
     private static string Orange => ColorUtility.ToHtmlStringRGB(ColorHelper.orange75);
 
+    // Two short lines at most: what crafting the missing parts costs, and how many items still have to be brought. The
+    // times and the item list are in the tooltip.
     private static string Summary(RollupPlan plan)
     {
         var sb = new StringBuilder();
         if (!plan.HasWork)
         {
-            sb.Append("<color=#").Append(Orange).Append(">No recipe or ore here makes what's missing: ");
-            AppendItems(sb, plan.missing);
-            return sb.Append("</color>").ToString();
+            sb.Append("<color=#").Append(Orange).Append(">Nothing here can make the missing items (hover for the list).</color>");
+            return sb.ToString();
         }
-        sb.Append("Roll-up: ");
-        if (plan.PartCount > 0)
-            sb.Append(plan.PartCount).Append(plan.PartCount == 1 ? " part, " : " parts, ").Append(FormatString.FormatTime(plan.seconds)).Append(" forge time, ");
-        if (plan.refines.Count > 0)
-            sb.Append(plan.refines.Count).Append(plan.refines.Count == 1 ? " ore to refine, " : " ores to refine, ").Append(FormatString.FormatTime(plan.refineSeconds)).Append(" refinery time, ");
-        sb.Append(GameMath.FormatNumber(plan.credits)).Append(" cr");
+        sb.Append("Costs ").Append(GameMath.FormatNumber(plan.credits)).Append(" cr: ");
+        if (plan.PartCount > 0) sb.Append(plan.PartCount).Append(plan.PartCount == 1 ? " part" : " parts");
+        if (plan.PartCount > 0 && plan.refines.Count > 0) sb.Append(" and ");
+        if (plan.refines.Count > 0) sb.Append(plan.refines.Count).Append(plan.refines.Count == 1 ? " ore to refine" : " ores to refine");
+        sb.Append('.');
         if (plan.missing.Count > 0)
-        {
-            sb.Append(". <color=#").Append(Orange).Append(">Bring: ");
-            AppendItems(sb, plan.missing);
-            sb.Append("</color>");
-        }
+            sb.Append("\n<color=#").Append(Orange).Append(">Still missing ").Append(Kinds(plan.missing.Count)).Append(" (hover for the list).</color>");
         return sb.ToString();
     }
 
-    private static void AppendItems(StringBuilder sb, Dictionary<InventoryItemType, int> items)
-    {
-        bool first = true;
-        foreach (var kv in items)
-        {
-            if (!first) sb.Append(", ");
-            first = false;
-            sb.Append(kv.Value).Append(' ').Append(Rollups.Name(kv.Key));
-        }
-    }
+    private static string Kinds(int n) => n == 1 ? "1 item" : n + " items";
 
     private static string Details(RollupPlan plan, bool running)
     {
         var sb = new StringBuilder();
         if (!plan.HasWork)
         {
-            sb.Append("Nothing at this forge makes the missing ingredients and the station holds no ore that refines into them, so there's nothing to roll up. Bring them to the station first.");
+            sb.Append("Nothing at this forge makes the missing ingredients, and the station holds no ore that refines into them, so there is nothing to craft. Bring them to the station first:\n");
+            foreach (var kv in plan.missing) sb.Append(kv.Value).Append(' ').Append(Rollups.Name(kv.Key)).Append('\n');
             return sb.ToString();
         }
         if (plan.refines.Count > 0)
@@ -241,7 +275,7 @@ internal sealed class RollupPanel : MonoBehaviour
         for (int i = 0; i < plan.steps.Count; i++)
         {
             var s = plan.steps[i];
-            if (i == plan.PartCount) sb.Append(running ? "" : "Then:\n");
+            if (i == plan.PartCount) sb.Append(running ? "" : "Then the recipe itself:\n");
             sb.Append(running ? (s.started ? "[queued] " : "[waiting] ") : "").Append(s.amount).Append("x ").Append(Rollups.RecipeName(s.recipe)).Append('\n');
         }
         if (!running)
@@ -253,7 +287,7 @@ internal sealed class RollupPanel : MonoBehaviour
             sb.Append("\nCost ").Append(GameMath.FormatNumber(plan.credits)).Append(" cr, paid as each job starts.\n");
             if (plan.missing.Count > 0)
             {
-                sb.Append("\nNot made here from what the station holds; bring these to the station's materials storage (the roll-up waits for them):\n");
+                sb.Append("\nNot made here from what the station holds. Bring these to the station's materials storage; crafting waits for them:\n");
                 foreach (var kv in plan.missing) sb.Append(kv.Value).Append(' ').Append(Rollups.Name(kv.Key)).Append('\n');
             }
         }

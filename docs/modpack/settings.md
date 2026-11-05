@@ -1,26 +1,31 @@
-# Settings reference
+# Settings Reference
 
-Every setting of Igi's QoL Modpack is in `BepInEx/config/igi.qol.cfg`, one section per feature. You don't need to edit the file: the mod window shows every row under the name in the second column, with the full explanation on hover, and writes the file as you change it. BepInEx rewrites the file at each start with a description and the default above every key, so the file explains itself too.
+Every setting of Igi's QoL Modpack is in `BepInEx/config/igi.qol.cfg`, with one section per feature. You don't need to edit the file. The mod window shows every row under the name in the second column, with the full explanation on hover, and it writes the file as you change a setting. BepInEx rewrites the file at each start with a description and the default above every key, so the file explains itself too.
 
-`Enabled` ("Feature on" in the window) is in every section, defaults to `true` and applies at the next game start. Per-ship overrides from the ship settings popup are saved in the save game, not in this file.
+`Enabled` ("Feature on" in the window) is in every section, defaults to `true`, and applies at the next game start. Per-ship overrides from the ship settings popup are saved in the save game, not in this file.
 
-The `[Dev]` section is the developer harness, off by default; it's documented in [dev-harness.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/modpack/dev-harness.md).
+Where a setting is a list of choices, the values below are the names the `.cfg` file uses. The window shows plainer names for some of them: `Vanilla` reads "Same as yours" (the Stealth and Ammo choices in `[EchoOperations]`), `Off` in `[MissileRetarget]` reads "Fly on (game default)", `ArmourPiercing` reads "Armor Piercing", and `SideMenu` and `DockButton` read "On top of the side menu" and "Above the Dock button".
+
+The `[Dev]` section is the developer harness. It is off by default and documented in [dev-harness.md](https://github.com/williammabernathy/Igi-s-QoL-Modpack/blob/main/docs/modpack/dev-harness.md).
 
 ## Window and HUD
 
 ### `[Window]`
 
-[Mod window](features/interface.md#mod-window), [pop-out windows](features/interface.md#pop-out-windows)
+[Mod Window](features/interface.md#mod-window), [pop-out windows](features/interface.md#pop-out-windows)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `Hotkey` | Hotkey | `F6` | a key name: `F6`, `F7`, `Backquote`, `K`, ... |
+| `Hotkey` | Mod window hotkey | `F6` | a key name, for example `F6`, `F7`, `Backquote` or `K` |
 | `ButtonPlace` | QoL button in space | `SideMenu` | `SideMenu`, `DockButton` |
-| `PopoutInteractKey` | Pop-out windows: key to use a click-through window | `LeftCtrl` | a key name: `LeftCtrl`, `LeftShift`, `LeftAlt`, `F8`, ...; either Ctrl, Shift or Alt key counts |
+| `PopoutInteractKey` | Key to use a click-through pop-out | `LeftCtrl` | a key name, for example `LeftCtrl`, `LeftShift`, `LeftAlt` or `F8`; either the left or right Ctrl, Shift or Alt key counts |
+| `KeepCardsOnScreen` | Keep hover cards on the screen | `true` | `true` or `false`. On: a tall hover card slides up or down to stay on screen, still beside the mouse. Off: the game's own placement |
+
+The Window section in the mod window also has a "QoL button position" row with a Reset button. It puts the QoL button back after you dragged it. The offset is kept in Unity's PlayerPrefs, not in this file.
 
 ### `[TextScale]`
 
-[Text size](features/interface.md#text-size)
+[Text Size](features/interface.md#text-size)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -28,7 +33,7 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[FleetVitals]`
 
-[Fleet shield and armor bars](features/interface.md#fleet-shield-and-armor-bars)
+[Fleet Shield and Armor Bars](features/interface.md#fleet-shield-and-armor-bars)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -36,19 +41,19 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[FleetStrip]`
 
-[Fleet command strip](features/interface.md#fleet-command-strip): only `Enabled`.
+[Fleet Command Strip](features/interface.md#fleet-command-strip): this feature has no setting besides `Enabled`.
 
 ### `[JumpsRemaining]`
 
-[Jumps remaining](features/interface.md#jumps-remaining): only `Enabled`.
+[Jumps Remaining](features/interface.md#jumps-remaining): this feature has no setting besides `Enabled`.
 
 ### `[MissionDistance]`
 
-[Mission distance](features/interface.md#mission-distance): only `Enabled`.
+[Mission Distance](features/interface.md#mission-distance): this feature has no setting besides `Enabled`.
 
 ### `[MissionSort]`
 
-[Mission sort](features/interface.md#mission-sort)
+[Mission Sort](features/interface.md#mission-sort)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -57,25 +62,29 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[MissionFit]`
 
-[Mission fit](features/interface.md#mission-fit): only `Enabled`.
+[Mission Fit](features/interface.md#mission-fit): this feature has no setting besides `Enabled`.
 
-## ECHO, the autopilot
+## ECHO, the Autopilot
 
 ### `[EchoPriority]`
 
-[ECHO activity priority](features/echo.md#echo-activity-priority): only `Enabled`.
+[ECHO Activity Priority](features/echo.md#echo-activity-priority)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `EmptyMinutes` | Skip empty locations for (minutes) | `5` | 0 to 60 (0 turns it off) |
 
 ### `[EchoGates]`
 
-[ECHO decisions](features/echo.md#echo-decisions)
+[ECHO Decisions](features/echo.md#echo-decisions)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `LootBeforeLeaving` | Pick up loot before leaving | `true` | `true`, `false` |
 | `RaidReputationThreshold` | Raid factions at reputation or below | `-500` | whole number |
 | `DungeonCrewMinimum` | Crew needed to start an operation | `3` | whole number |
-| `BoardingCrewFraction` | Crew needed to board a ship (share of max) | `0.5` | number |
-| `HireCrewBelowFraction` | Hire crew when below (share of max) | `0.5` | number |
+| `BoardingCrewFraction` | Crew needed to board a ship (share of the flagship's maximum crew) | `0.5` | number |
+| `HireCrewBelowFraction` | Hire crew when below (share of the flagship's maximum crew) | `0.5` | number |
 | `FastUnloading` | Fast cargo unloading | `false` | `true`, `false` |
 | `QuickStationSteps` | Quick station steps | `false` | `true`, `false` |
 | `RecruitPrisoners` | Recruit willing prisoners before hiring | `false` | `true`, `false` |
@@ -84,12 +93,12 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[EchoMissions]`
 
-[ECHO missions](features/echo.md#echo-missions)
+[ECHO Missions](features/echo.md#echo-missions)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `MissionsAtOnce` | Missions ECHO takes at once | `1` | 1 to 5 |
-| `BountyHunt` | Combat: Eliminate Pirate Presence / Eliminate (faction) forces | `true` | `true`, `false` |
+| `BountyHunt` | Combat: Eliminate Pirate Presence or Eliminate (faction) forces | `true` | `true`, `false` |
 | `ClearSalvageField` | Combat: Reclaim Salvage Rights | `true` | `true`, `false` |
 | `ClearAsteroidField` | Combat: Reclaim Asteroid Belt | `true` | `true`, `false` |
 | `ClearDungeon` | Combat: Clear Pirate Base | `true` | `true`, `false` |
@@ -102,7 +111,7 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[EchoRetreat]`
 
-[ECHO retreat](features/echo.md#echo-retreat)
+[ECHO Retreat](features/echo.md#echo-retreat)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -111,7 +120,7 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[EchoKit]`
 
-[ECHO abilities and deployables](features/echo.md#echo-abilities-and-deployables)
+[ECHO Abilities and Deployables](features/echo.md#echo-abilities-and-deployables)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -120,21 +129,21 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[OrePreference]`
 
-[Preferred ores](features/echo.md#preferred-ores): only `Enabled`.
+[Preferred Ores](features/echo.md#preferred-ores): this feature has no setting besides `Enabled`.
 
 ### `[EchoOperations]`
 
-[ECHO's operations](features/echo.md#echos-operations)
+[ECHO's Operations](features/echo.md#echos-operations)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `StealthMode` | Stealth | `Vanilla` | `Vanilla`, `Silent`, `Balanced`, `Aggressive` |
-| `AmmoType` | Ammo | `Vanilla` | `Vanilla`, `Standard`, `ArmourPiercing`, `Hollow` |
-| `AutoBuyOut` | Accept buyouts automatically | `false` | `true`, `false` |
+| `StealthMode` | ECHO: Stealth | `Vanilla` | `Vanilla`, `Silent`, `Balanced`, `Aggressive` |
+| `AmmoType` | ECHO: Ammo | `Vanilla` | `Vanilla`, `Standard`, `ArmourPiercing`, `Hollow` |
+| `AutoBuyOut` | ECHO: Auto Accept Buyouts | `false` | `true`, `false` |
 
 ### `[EchoCargo]`
 
-[ECHO cargo rules](features/echo.md#echo-cargo-rules)
+[ECHO Cargo Rules](features/echo.md#echo-cargo-rules)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -143,27 +152,27 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | `SellFromStorage` | Sell from station storage | `false` | `true`, `false` |
 | `SellFromArmory` | Sell from the armory | `false` | `true`, `false` |
 
-## Fleet and combat
+## Fleet and Combat
 
 ### `[TargetPriority]`
 
-[Target priority](features/fleet-combat.md#target-priority)
+[Target Priority](features/fleet-combat.md#target-priority)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `Rule` | Target choice | `Nearest` | `Nearest`, `LowestHull`, `HighestHull`, `MostDamage`, `AttackingFlagship`, `SmallestFirst`, `LargestFirst`, `LowestLevel`, `HighestLevel`, `WeakestToMyWeapons`, `DebuffedFirst` |
-| `RepickSeconds` | Re-check the target every (seconds) | `0` | 0 to 30 |
-| `FinishBelowPercent` | Don't switch away from targets below (hull %) | `0` | 0 to 100 |
-| `WeakestGuardPercent` | Weakest to my weapons: needs a lead of (%) | `25` | 0 to 200 |
-| `DebuffedGuardPercent` | Debuffed first: needs a lead of (%) | `25` | 0 to 200 |
+| `RepickSeconds` | Re-check target every (seconds) | `0` | 0 to 30 |
+| `FinishBelowPercent` | Finish off targets below (% of hull) | `0` | 0 to 100 |
+| `WeakestGuardPercent` | Most vulnerable to my weapons: needs a lead of (%) | `25` | 0 to 200 |
+| `DebuffedGuardPercent` | Most debuffs first: needs a lead of (%) | `25` | 0 to 200 |
 
 ### `[EngagementDistance]`
 
-[Engagement distance](features/fleet-combat.md#engagement-distance): only `Enabled`.
+[Engagement Distance](features/fleet-combat.md#engagement-distance): this feature has no setting besides `Enabled`. The distance is set per ship in its popup, and it only applies while the ship is chasing its target.
 
 ### `[Separation]`
 
-[Keep distance in combat](features/fleet-combat.md#keep-distance-in-combat)
+[Keep Distance in Combat](features/fleet-combat.md#keep-distance-in-combat): this feature applies only while a ship is chasing its target. It never applies to the ship's own target, and it doesn't apply to ships the game flies in formation (Escort, Hold Fire, a Hold or Move order, or Defensive until hit).
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -173,23 +182,23 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[FleetRetreat]`
 
-[Retreat for repairs](features/fleet-combat.md#retreat-for-repairs): only `Enabled`. The threshold is set per ship in the popup.
+[Retreat for Repairs](features/fleet-combat.md#retreat-for-repairs): this feature has no setting besides `Enabled`. The threshold is set per ship in the popup.
 
 ### `[ShipStats]`
 
-[Ship stats on hover](features/fleet-combat.md#ship-stats-on-hover): only `Enabled`.
+[Ship Stats on Hover](features/fleet-combat.md#ship-stats-on-hover): this feature has no setting besides `Enabled`.
 
 ### `[CombatOverview]`
 
-[Combat overview](features/fleet-combat.md#combat-overview). Its show condition, opacity, click-through and "Ships shown" are per machine, in the window's Options.
+[Combat Overview](features/fleet-combat.md#combat-overview): its show condition, opacity, click-through and "Ships shown" are per machine and are set in the window's Options.
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `Hotkey` | Hotkey | `F7` | a key name: `F7`, `F8`, ...; `None` turns it off |
+| `Hotkey` | Combat overview hotkey | `F7` | a key name, for example `F7` or `F8`; `None` turns it off |
 
 ### `[MissileRetarget]`
 
-[Missile retargeting](features/fleet-combat.md#missile-retargeting)
+[Missile Retargeting](features/fleet-combat.md#missile-retargeting)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -197,33 +206,38 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[DroneModes]`
 
-[Drone modes](features/fleet-combat.md#drone-modes): only `Enabled`.
+[Drone Modes](features/fleet-combat.md#drone-modes)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `ShipTargetFallback` | Ship's target only: guard when the ship has none | `false` | `true`, `false` |
+| `StayOnHold` | Drones stay near the ship on Hold Position | `false` | `true`, `false` |
 
 ### `[DronesOnArrival]`
 
-[Drones on arrival](features/fleet-combat.md#drones-on-arrival)
+[Drones on Arrival](features/fleet-combat.md#drones-on-arrival)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
 | `Default` | Launch drones on arrival | `false` | `true`, `false` |
 
-## Loot and cargo
+## Loot and Cargo
 
 ### `[ItemRules]`
 
-[Item rules](features/loot-and-cargo.md#item-rules): only `Enabled`.
+[Item Rules](features/loot-and-cargo.md#item-rules): this feature has no setting besides `Enabled`.
 
 ### `[TractorCaps]`
 
-[Loot pickup limits](features/loot-and-cargo.md#loot-pickup-limits)
+[Loot Pickup Limits](features/loot-and-cargo.md#loot-pickup-limits)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `MinCreditsPerM3` | Skip loot worth less per m3 than | `0` | 0 to 1000000 |
+| `MinCreditsPerM3` | Don't pick up loot worth less than (credits per m3) | `0` | 0 to 1000000 |
 
 ### `[FleetHolds]`
 
-[Shared fleet holds](features/loot-and-cargo.md#shared-fleet-holds)
+[Shared Fleet Holds](features/loot-and-cargo.md#shared-fleet-holds)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -231,11 +245,11 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[CargoPins]`
 
-[Pinned cargo](features/loot-and-cargo.md#pinned-cargo)
+[Pinned Cargo](features/loot-and-cargo.md#pinned-cargo)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `PinKey` | Pin key | `P` | a key name: `P`, `K`, `F7`, ... |
+| `PinKey` | Pin key | `P` | a key name, for example `P`, `K` or `F7` |
 
 ### `[Contacts]`
 
@@ -249,11 +263,11 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 | `MarkLoot` | Edge markers: loot | `true` | `true`, `false` |
 | `MarkOres` | Edge markers: preferred ores | `true` | `true`, `false` |
 
-## Stations, loadouts and crafting
+## Stations, Loadouts and Crafting
 
 ### `[StationServices]`
 
-[Station services](features/stations.md#station-services)
+[Station Services](features/stations.md#station-services)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
@@ -267,57 +281,70 @@ The `[Dev]` section is the developer harness, off by default; it's documented in
 
 ### `[Loadouts]`
 
-[Ship loadouts](features/stations.md#ship-loadouts): only `Enabled`.
+[Ship Loadouts](features/stations.md#ship-loadouts): this feature has no setting besides `Enabled`.
 
 ### `[CraftRollup]`
 
-[Crafting roll-up](features/stations.md#crafting-roll-up): only `Enabled`.
+[Crafting Roll-Up](features/stations.md#crafting-roll-up): this feature has no setting besides `Enabled`.
 
 ### `[RefineryFilter]`
 
-[Refinery filter](features/stations.md#refinery-filter): only `Enabled`.
+[Refinery Filter](features/stations.md#refinery-filter): this feature has no setting besides `Enabled`.
 
 ### `[UsedIn]`
 
-["Used in" tooltips](features/stations.md#used-in-tooltips): only `Enabled`.
+[Used in (Forge Recipes)](features/stations.md#used-in-forge-recipes): this feature has no setting besides `Enabled`.
 
 ### `[Operations]`
 
-[Operations tab](features/stations.md#operations-tab)
+[Operations](features/stations.md#operations-tab)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `PlayerAutoBuyOut` | Accept buyouts automatically | `false` | `true`, `false` |
-| `BoardingCompartment` | Boardings | `None` | `None` or the name of one of the game's compartment types, for example `Armory`, `CargoHold`, `Bridge`, `LivingQuarters`, `ReactorRoom`, `MessHall`, `Brig`, `OfficersLounge` |
-| `InstallationCompartment` | Installations | `None` | `None` or a compartment type name, the same list as `BoardingCompartment`; installations mostly have rooms such as `StorageBay`, `ControlRoom`, `GeneratorRoom`, `ServerRoom`, `Workshop` |
+| `PlayerAutoBuyOut` | Auto Accept Buyouts | `false` | `true`, `false` |
+| `BoardingCompartment` | Priority compartment: boardings | `None` | `None` or the name of one of the game's compartment types, for example `Armory`, `CargoHold`, `Bridge`, `LivingQuarters`, `ReactorRoom`, `MessHall`, `Brig` or `OfficersLounge` |
+| `InstallationCompartment` | Priority compartment: installations | `None` | `None` or a compartment type name, from the same list as `BoardingCompartment`. Installations mostly have rooms such as `StorageBay`, `ControlRoom`, `GeneratorRoom`, `ServerRoom` and `Workshop` |
 
 ### `[FavouriteStations]`
 
-[Favourite stations](features/stations.md#favourite-stations): only `Enabled`. The list itself is kept in the save.
+[Favourite Stations](features/stations.md#favourite-stations): this feature has no setting besides `Enabled`. The list itself is kept in the save.
 
-## Logs, reference and other mods
+## Conquest
 
-### `[EventLog]`
+### `[ConquestDetails]`
 
-[Event log](features/logs-and-reference.md#event-log): only `Enabled`.
-
-### `[CombatLog]`
-
-[DPS parser](features/logs-and-reference.md#dps-parser)
+[Conquest Details](features/conquest.md#conquest-details)
 
 | Key | In the window | Default | Values |
 |---|---|---|---|
-| `FightGapSeconds` | Seconds without damage that end a fight | `15` | 5 to 120 |
+| `CardDetail` | System card detail | `Summary` | `Summary` shows a short War block, and the full breakdown while `DetailKey` is held. `Always` shows the full breakdown at all times |
+| `DetailKey` | Key for the full breakdown | `LeftShift` | a key name, for example `LeftShift`, `LeftCtrl`, `LeftAlt` or `F8`; either the left or right Shift, Ctrl or Alt key counts; ignored while you type in a text field |
+
+The War Overview's show condition, opacity, click-through, "List", "Targets of" and "Sort targets by" are per machine and are set in the window's Options. Its system cards always show the full breakdown.
+
+## Logs, Reference and Other Mods
+
+### `[EventLog]`
+
+[Event Log](features/logs-and-reference.md#event-log): this feature has no setting besides `Enabled`.
+
+### `[CombatLog]`
+
+[DPS Parser](features/logs-and-reference.md#dps-parser)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `FightGapSeconds` | End a fight after this many quiet seconds | `15` | 5 to 120 |
 | `WriteFile` | Write each fight to a file | `false` | `true`, `false` |
 
 ### `[Guide]`
 
-[Stat reference](features/logs-and-reference.md#stat-reference): only `Enabled`.
+[Stat Reference](features/logs-and-reference.md#stat-reference): this feature has no setting besides `Enabled`.
 
 ### `[Notes]`
 
-[Notes](features/logs-and-reference.md#notes): only `Enabled`.
+[Notes](features/logs-and-reference.md#notes): this feature has no setting besides `Enabled`.
 
 ### `[Mods]`
 
-[Other mods](features/logs-and-reference.md#other-mods): only `Enabled`.
+[Other Mods](features/logs-and-reference.md#other-mods): this feature has no setting besides `Enabled`.

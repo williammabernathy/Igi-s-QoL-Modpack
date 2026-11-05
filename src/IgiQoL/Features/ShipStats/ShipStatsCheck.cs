@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Behaviour.Ability;
 using Behaviour.Equipment.Module;
+using Behaviour.Managers;
 using Behaviour.UI;
 using Behaviour.UI.Tooltip;
 using Behaviour.Unit;
@@ -14,7 +15,6 @@ using Source.Combat;
 using Source.Galaxy;
 using Source.Item;
 using Source.Player;
-using Source.SpaceShip.Auto;
 using Source.UI.Tooltip;
 using Source.Util;
 using TMPro;
@@ -30,8 +30,6 @@ internal static class ShipStatsCheck
     private static readonly MethodInfo ArmorStep = AccessTools.Method(typeof(ArmorModule), "ApplyArmorResistance");
     private static readonly MethodInfo BuildCard = AccessTools.Method(typeof(SpaceShip), "BuildTooltipCard");
     private const string BoostId = "IgiQoL_ShipStatsCheck";
-    private static readonly AccessTools.FieldRef<ThreatTable, Dictionary<AbstractUnit, float>> ThreatOf =
-        AccessTools.FieldRefAccess<ThreatTable, Dictionary<AbstractUnit, float>>("threat");
 
     public static IEnumerator Run(SelfCheckContext ctx)
     {
@@ -65,7 +63,7 @@ internal static class ShipStatsCheck
             foreach (var type in Resists.Types)
                 mismatch ??= Compare(ship, type);
         }
-        string matchDetail = $"{ships.Count} ships ({(enemy != null ? "1 enemy" : "no enemy")}), {armored} with armour, {weakTypes} armour weak types";
+        string matchDetail = $"{ships.Count} ships ({(enemy != null ? "1 enemy" : "no enemy")}), {armored} with armor, {weakTypes} armor weak types";
         if (mismatch == null) ctx.Pass("match", matchDetail);
         else ctx.Fail("match", matchDetail + "; " + mismatch);
 
@@ -200,48 +198,53 @@ internal static class ShipStatsCheck
         yield return CheckAggro(ctx, enemy, flagship, ships);
     }
 
-    // The enemy's threat list follows the game's own table and marks the unit it's attacking, and "Attacked by" lists
-    // the units aiming at a ship but not the ones that only hit a nearby ally. All in one frame, so the enemy's own
-    // once-a-second target choice (CombatActions.Update) can't interfere. Ships at a station location run
-    // SpaceStationActions and keep no table, so such an enemy gets the game's CombatActions for the check, the way
-    // ECHO's idle combat hands one to a ship (IdleManager.SetIdleCombatMode).
+    // The enemy's threat list follows its faction's table and marks the unit it's attacking, and "Attacked by" lists
+    // the units aiming at a ship but not the ones that only hit it a while ago. All in one frame, so the game's own
+    // fleet target pick (FactionFleet.Pick, every second or so) can't interfere.
     private static IEnumerator CheckAggro(SelfCheckContext ctx, SpaceShip enemy, SpaceShip flagship, List<SpaceShip> ships)
     {
-        if (enemy == null || enemy.isDestroyed) enemy = Enemy();
-        if (enemy == null)
+        // The threat and target rows need an enemy that can aim at the flagship: a combat module, and hostile to it
+        // here (ships at a station location of a hostile faction can be at peace with you until you provoke them).
+        if (enemy == null || enemy.isDestroyed || enemy.GetModule<CombatModule>() == null || !enemy.IsEnemy(flagship)) enemy = Enemy(armedAgainst: flagship);
+        if (enemy == null && SelfCheckContext.SpawnEnemies(1))
         {
-            ctx.Skip("threat", "no enemy ship");
-            ctx.Skip("attackers", "no enemy ship");
-            yield break;
+            float until = Time.realtimeSinceStartup + 30f;
+            while ((enemy = Enemy(armedAgainst: flagship)) == null && Time.realtimeSinceStartup < until) yield return new WaitForSecondsRealtime(0.5f);
         }
-        var original = enemy.autoActions;
-        var combat = original as CombatActions;
-        if (combat == null)
+        var fleet = enemy != null ? PoiFleets.For(enemy)?.FleetOf(enemy) : null;
+        if (fleet == null)
         {
-            combat = new CombatActions(enemy);
-            enemy.SetTemporaryActions(combat);
+            string why = enemy == null ? "no enemy ship with weapons that is hostile to you here" : enemy.displayName + " is in no fleet at this location";
+            ctx.Skip("threat", why);
+            ctx.Skip("attackers", why);
+            yield break;
         }
         SpaceShip wing = null;
         foreach (var s in ships)
             if (wing == null && s != flagship && s != enemy) wing = s;
-        var table = ThreatOf(combat.threat);
-        var saved = new Dictionary<AbstractUnit, float>(table);
+        var table = fleet.threat.entries;
+        var saved = new Dictionary<AbstractUnit, FleetThreat.Entry>(table);
         try
         {
-            float top = 1f;
-            foreach (var v in table.Values) top = Mathf.Max(top, v);
-            top *= 10f;
-            combat.threat.Set(flagship, top);
-            if (wing != null) combat.threat.Set(wing, top / 2f);
+            float now = Time.time;
+            float top = Mathf.Max(fleet.threat.GetTop(), 1f) * 10f;
+            fleet.threat.Write(flagship, top, now);
+            if (wing != null) fleet.threat.Write(wing, top / 2f, now);
             enemy.SetManualTarget(flagship);
+            // The game picks the module a unit aims with on its next 0.25 s step (AbstractUnit.UpdateTarget); a unit
+            // that had no target yet, like a ship idling at a station, has none until then. Take that step now.
+            enemy.targetProvider = enemy.GetPriorityTargetModule();
 
-            var game = combat.threat.GetPriorityTargetThreat(useIgnore: false);
+            float gameTop = fleet.threat.GetTop();
+            bool gameAgrees = Mathf.Approximately(gameTop, fleet.threat.Get(flagship));
             var threat = Find(enemy, ShipStats.ThreatTitle);
             var rows = threat != null ? threat.rows : new List<TooltipRow>();
             bool first = rows.Count > 0 && rows[0].label == Aggro.Name(flagship) && rows[0].value == "100%" && rows[0].badge == "target";
             bool second = wing == null || (rows.Count > 1 && rows[1].label == Aggro.Name(wing) && rows[1].value == "50%" && rows[1].badge == null);
-            string threatDetail = $"{enemy.displayName} ({(original == combat ? saved.Count + " entries before" : "lent a table; it runs " + (original != null ? original.GetType().Name : "none"))}): {Describe(threat)}; game's top {Aggro.Name(game.unit)}";
-            if (game.unit == flagship && first && second && rows.Count <= ShipStats.AggroRows + 1) ctx.Pass("threat", threatDetail);
+            var gun = enemy.GetModule<CombatModule>();
+            string aims = $"aims with {(enemy.targetProvider != null ? enemy.targetProvider.GetType().Name : "nothing")}, combat module blocked {(gun != null ? gun.blocked.ToString() : "none")}, its target {Aggro.Name(Aggro.Target(enemy) as AbstractUnit)}";
+            string threatDetail = $"{enemy.displayName} ({saved.Count} entries before): {Describe(threat)}; game's top {gameTop:0} is the flagship's: {gameAgrees}; {aims}";
+            if (gameAgrees && first && second && rows.Count <= ShipStats.AggroRows + 1) ctx.Pass("threat", threatDetail);
             else ctx.Fail("threat", threatDetail);
 
             string targeting = null;
@@ -255,7 +258,7 @@ internal static class ShipStatsCheck
             bool wingClear = true;
             if (wing != null)
             {
-                wing.AddTargetedBy(enemy, 10f); // what the game's BroadcastThreatToAllies does when an ally is hit
+                wing.AddTargetedBy(enemy, 10f); // what a hit leaves behind when the enemy has since picked another target
                 var onWing = new List<AbstractUnit>();
                 Aggro.Attackers(wing, onWing);
                 wingClear = !onWing.Contains(enemy);
@@ -284,7 +287,6 @@ internal static class ShipStatsCheck
         {
             table.Clear();
             foreach (var kv in saved) table[kv.Key] = kv.Value;
-            if (enemy.autoActions != original) enemy.SetTemporaryActions(original);
             // SetManualTarget above left the enemy aiming at the flagship.
             if (enemy.targetProvider != null) enemy.targetProvider.ResetCurrentTargets();
         }
@@ -352,10 +354,11 @@ internal static class ShipStatsCheck
         return string.Join("\n", parts);
     }
 
-    private static SpaceShip Enemy()
+    private static SpaceShip Enemy(AbstractUnit armedAgainst = null)
     {
         foreach (var s in Object.FindObjectsByType<SpaceShip>(FindObjectsInactive.Exclude))
-            if (s != null && !s.isDestroyed && s.faction != null && Faction.player.IsEnemy(s.faction)) return s;
+            if (s != null && !s.isDestroyed && s.faction != null && Faction.player.IsEnemy(s.faction)
+                && (armedAgainst == null || s.GetModule<CombatModule>() != null && s.IsEnemy(armedAgainst))) return s;
         return null;
     }
 
@@ -370,7 +373,7 @@ internal static class ShipStatsCheck
         hit.OverrideDamageAmount(100f);
         ArmorStep.Invoke(ship.armorModule, new object[] { hit });
         float gameArmor = hit.damageAmount / 100f, myArmor = Resists.ArmorMultiplier(ship, type);
-        if (Mathf.Abs(gameArmor - myArmor) > 0.0001f) return $"{ship.displayName} {type} armour: game {gameArmor:0.0000}, helper {myArmor:0.0000}";
+        if (Mathf.Abs(gameArmor - myArmor) > 0.0001f) return $"{ship.displayName} {type} armor: game {gameArmor:0.0000}, helper {myArmor:0.0000}";
         return null;
     }
 

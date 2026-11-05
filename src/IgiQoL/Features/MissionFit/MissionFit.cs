@@ -24,8 +24,8 @@ public sealed class MissionFit : Feature
     public MissionFit() { Instance = this; }
 
     public override string Id => "MissionFit";
-    public override string Title => "Mission fit";
-    public override string Description => "Greys out station mission board offers none of your ships has the equipment for, such as a mining mission when no ship carries a mining turret, mining drones or a hangar that mines. The row keeps its place and can still be picked and accepted, and a red \"No fit\" chip says what's missing. Your flagship and fleet ships count, wherever they are; mercenaries don't. ECHO checks only the flagship, so it can still refuse an offer that isn't greyed out.";
+    public override string Title => "Mission Fit";
+    public override string Description => "Greys out station mission board offers that none of your ships has the equipment for, such as a mining mission when no ship carries a mining turret, mining drones or a hangar that mines. The row keeps its place and can still be picked and accepted. A red \"No equipment\" chip marks it, and the chip's tooltip says what is missing. Your flagship and fleet ships count, wherever they are; mercenaries don't. ECHO checks only the flagship, so it can still refuse an offer that isn't greyed out.";
     public override Type[] PatchClasses => new[] { typeof(MissionFitPatches) };
 
     internal const string ChipName = "IgiQoL_NoFit";
@@ -78,17 +78,19 @@ public sealed class MissionFit : Feature
         foreach (Transform child in tags.parent)
             if (child != tags) Dim(child);
         foreach (Transform child in tags) Dim(child);
-        var chip = MissionCardParts.AddChip(tags, "No fit", ColorHelper.reddish);
+        var chip = MissionCardParts.AddChip(tags, "No equipment", ColorHelper.reddish);
         chip.name = ChipName;
         var background = chip.GetComponent<Image>();
         background.raycastTarget = true;
-        FleetBarParts.SetTooltip(background, "No fit in your fleet",
+        FleetBarParts.SetTooltip(background, "No ship in your fleet has the equipment",
             $"None of your ships has a turret, drone bay, torpedo bay or hangar bay for {WorkName(type, layer)} work. Your flagship and fleet ships count; mercenaries don't.");
     }
 
     private static void Dim(Transform t)
     {
-        if (t != null) t.gameObject.AddComponent<CanvasGroup>().alpha = DimAlpha;
+        if (t == null) return;
+        if (!t.TryGetComponent(out CanvasGroup group)) group = t.gameObject.AddComponent<CanvasGroup>();
+        group.alpha = DimAlpha;
     }
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx) => MissionFitCheck.Run(ctx);

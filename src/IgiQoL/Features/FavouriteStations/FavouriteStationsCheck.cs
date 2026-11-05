@@ -217,10 +217,19 @@ internal static class FavouriteStationsCheck
         string second = label.text;
         yield return new WaitForSeconds(1.5f);   // the services row measures itself on its own refresh
         yield return ctx.Screenshot("airlock-favourite");
+        // First of the airlock's text buttons, and inside the action card rather than past its edge.
+        var airlock = interior.currentAirlock;
+        var rt = (RectTransform)fav.button.transform;
+        var cardCorners = new Vector3[4];
+        var buttonCorners = new Vector3[4];
+        airlock.layout.actionRow.GetWorldCorners(cardCorners);
+        rt.GetWorldCorners(buttonCorners);
+        bool placed = rt.parent == airlock.textButtons && rt.GetSiblingIndex() == 0
+            && buttonCorners[0].x >= cardCorners[0].x && buttonCorners[2].x <= cardCorners[2].x;
         fav.button.GetComponent<Button>().onClick.Invoke();
         bool removed = !FavouriteStations.IsFavourite(station);
-        string detail = $"{station.name}: '{first}' -> added={added} '{second}' -> removed={removed} '{label.text}'; active={fav.button.activeInHierarchy}";
-        if (first == "Favourite" && added && second == "Unfavourite" && removed && label.text == "Favourite" && fav.button.activeInHierarchy) ctx.Pass("airlock", detail);
+        string detail = $"{station.name}: '{first}' -> added={added} '{second}' -> removed={removed} '{label.text}'; active={fav.button.activeInHierarchy} placed={placed}";
+        if (first == "Favourite" && added && second == "Unfavourite" && removed && label.text == "Favourite" && fav.button.activeInHierarchy && placed) ctx.Pass("airlock", detail);
         else ctx.Fail("airlock", detail);
     }
 }

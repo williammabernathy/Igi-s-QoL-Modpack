@@ -22,8 +22,10 @@ public sealed class StationServices : Feature
     public StationServices() { Instance = this; }
 
     public override string Id => "StationServices";
-    public override string Title => "Station services";
-    public override string Description => "Repair, restock, sell, replace lost crew and unload brigs for your whole fleet in one click from the station's airlock screen (the buttons show up when there is something to do), or by themselves every time you dock. Repair is the hangar's paid repair, restock tops up ammo to ECHO's \"ammo minutes\" target from the armory and then the shop (plus warp fuel cells for the ship you fly, if you set a number), sell applies the Sell and Sell above N dock actions of the Item rules tab, crew replaces the crew each ship lost to hull hits (reserve, then willing prisoners, then hired here), and brigs moves your ships' prisoners to the station brig.";
+    public override string Title => "Station Services";
+    public override string Description => "Repair, restock, sell, replace lost crew and unload brigs for your whole fleet in one click from the station's airlock screen (each button appears when there is something to do and then stays in place, greyed out once it is done), or by themselves every time you dock. Repair is the hangar's paid repair, restock tops up ammo to ECHO's \"Ammo Supply\" target from the armory and then the shop (plus warp fuel cells for the ship you fly, if you set a number), sell applies the Sell and \"" + SellKeep + "\" dock actions of the Item Rules tab, crew replaces the crew each ship lost to hull hits (reserve, then willing prisoners, then hired here), and brigs moves your ships' prisoners to the station brig.";
+
+    private static string SellKeep => ItemRules.DockActionNames[(int)DockAction.SellAbove];
     public override Type[] PatchClasses => new[] { typeof(StationServicesPatches), typeof(CrewLossPatches) };
 
     public ConfigEntry<bool> RepairOnDock, RestockOnDock, SellOnDock, CrewOnDock, BrigOnDock, AirlockButtons;
@@ -45,9 +47,9 @@ public sealed class StationServices : Feature
         RepairOnDock = cfg.Bind(Id, "RepairOnDock", false, SettingInfo.Describe("Pay for repairs when you dock",
             "Starts the hangar's paid repair for every damaged ship in your fleet as soon as you dock, also while ECHO flies. Paid repair takes about 20 seconds; the free repair the station does by itself takes minutes, and ECHO waits for it. Ships the hangar is already repairing for money are skipped."));
         RestockOnDock = cfg.Bind(Id, "RestockOnDock", false, SettingInfo.Describe("Restock ammo when you dock",
-            "Tops up the ammo of every ship in your fleet when you dock, to the \"ammo minutes\" target in ECHO's Autopilot tab: from your armory first, then bought from the station's shops (credits only). Vanilla ECHO only restocks the ship you fly."));
+            "Tops up the ammo of every ship in your fleet when you dock, to the \"Ammo Supply\" target in ECHO's Autopilot tab: from your armory first, then bought from the station's shops (credits only). Vanilla ECHO only restocks the ship you fly."));
         SellOnDock = cfg.Bind(Id, "SellOnDock", false, SettingInfo.Describe("Sell by item rules when you dock",
-            "When you dock yourself, sells cargo whose Item rules dock action is Sell, and for Sell above N stores up to N and sells the rest. It sells before the game's fleet auto-deposit, so the deposit gets the room the sale frees in station storage and the armory. With ECHO on, the ECHO cargo rules feature does this instead. Favourites, mission items and the ammo a ship uses are never sold."));
+            "When you dock yourself, sells cargo whose Item Rules dock action is Sell, and for \"" + SellKeep + "\" keeps the amount you set and sells the rest. It sells before the game's fleet auto-deposit, so the deposit gets the room the sale frees in station storage and the armory. With ECHO on, the ECHO Cargo Rules feature does this instead. Favourites, mission items and the ammo a ship uses are never sold."));
         FuelCells = cfg.Bind(Id, "FuelCells", 0, SettingInfo.Describe("Warp fuel cells to keep aboard",
             "Restock (the airlock button, and on dock with \"Restock ammo when you dock\") also tops up the ship you fly to this many warp fuel cells: from your armory first, then bought, fastest cells first (Hyper, then Ion, then Plasma). Only the ship you fly burns warp fuel. A part-used cell counts as one, as it does for ECHO. 0 turns this off. ECHO by itself keeps 2 cells, and only with the Prompt Engineering warp fuel skill.",
             new AcceptableValueRange<int>(0, 50)));
@@ -56,7 +58,7 @@ public sealed class StationServices : Feature
         BrigOnDock = cfg.Bind(Id, "BrigOnDock", false, SettingInfo.Describe("Unload brigs when you dock",
             "Moves the prisoners in your ships' brigs to the station brig when you dock (also while ECHO flies), so the captives of the next boarding fit aboard instead of being left behind with \"Brig full\". Prisoners willing to join stay willing and can still be recruited, by you or by Replace crew. The station brig grows with your level; whatever doesn't fit stays aboard. With the Crew Slavery skill, prisoners aboard add to the ship's bonuses, so leave this off if you rely on that."));
         AirlockButtons = cfg.Bind(Id, "AirlockButtons", true, SettingInfo.Describe("Buttons on the airlock screen",
-            "Shows Repair fleet, Restock ammo, Sell by rules, Replace crew and Unload brigs buttons next to the airlock's own buttons while there is something for them to do. Hover a button to see exactly what it will do and what it costs."));
+            "Shows Repair fleet, Restock ammo, Sell by rules, Replace crew and Unload brigs buttons next to the airlock's own buttons. A button appears once its service has something to do and then stays in the row for the rest of your visit, greyed out when there is nothing left, so the airlock's Undock button never moves. Hover a button to see exactly what it will do and what it costs."));
     }
 
     public static string Summary(ServiceReport repair, ServiceReport restock, ServiceReport sell, ServiceReport crew = null, ServiceReport brig = null)

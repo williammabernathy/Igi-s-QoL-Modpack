@@ -27,7 +27,7 @@ public sealed class MissionDistance : Feature
     public MissionDistance() { Instance = this; }
 
     public override string Id => "MissionDistance";
-    public override string Title => "Mission distance";
+    public override string Title => "Mission Distance";
     public override string Description => "Shows how far away a mission's next location is: a jump gate icon with the number of jumps on mission board and missions window rows whose location is in another system (the system is in its tooltip), and the distance after the location on the mission details and the HUD mission tracker (\"here\", \"this system\", or the system and the number of jumps).";
     public override Type[] PatchClasses => new[] { typeof(MissionDistancePatches) };
 

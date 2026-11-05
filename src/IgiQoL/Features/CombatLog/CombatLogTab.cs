@@ -18,7 +18,7 @@ public static class CombatLogTab
     public static void Build(RectTransform content)
     {
         SettingRows.AddEntries(content, CombatLog.Instance.Id, SettingRows.Rows.Options);
-        Kit.Muted(content, "Damage between your side (ships, drones, fighters) and everyone else, as it landed: shield and armour absorbed plus hull lost, after resistances. Per second figures use the time spent fighting.");
+        Kit.Muted(content, "Damage between your side (ships, drones, fighters) and everyone else, as it landed: shield and armor absorbed plus hull lost, after resistances. Per Second figures use the time spent fighting.");
 
         var row = Kit.Row(content);
         var scopes = new List<string>();
@@ -82,6 +82,7 @@ public static class CombatLogTab
         private int version = -1;
         private float next;
         private TMP_Text empty, summary, more;
+        private string summaryTip;
         private RectTransform header;
         private readonly List<Cells> pool = new();
         internal int RowCount { get; private set; }
@@ -113,22 +114,34 @@ public static class CombatLogTab
             }
 
             float secs = fight.Duration;
-            if (summary == null) summary = Kit.Label(column, "");
-            Set(summary, $"{FormatString.FormatTime(secs)} of fighting. Dealt {GameMath.FormatNumber((float)fight.dealt)} ({GameMath.FormatNumber((float)(fight.dealt / secs))}/s), taken {GameMath.FormatNumber((float)fight.taken)} ({GameMath.FormatNumber((float)(fight.taken / secs))}/s), kills {fight.kills}.");
+            if (summary == null)
+            {
+                // Two fixed lines, so a longer figure or a narrow window never changes the height of the table below.
+                summary = Kit.Label(column, "");
+                summary.textWrappingMode = TextWrappingModes.Normal;
+                summary.GetComponent<UnityEngine.UI.LayoutElement>().preferredHeight = Mathf.Ceil(2f * 16f * TextScale.TextScale.Factor + 2f);
+            }
+            string line = $"{FormatString.FormatTime(secs)} of fighting. Dealt {GameMath.FormatNumber((float)fight.dealt)} ({GameMath.FormatNumber((float)(fight.dealt / secs))}/s), taken {GameMath.FormatNumber((float)fight.taken)} ({GameMath.FormatNumber((float)(fight.taken / secs))}/s), kills {fight.kills}.";
+            Set(summary, line);
+            if (summaryTip != line)
+            {
+                summaryTip = line;
+                Kit.Tooltip(summary, null, line);
+            }
 
             bool dealtView = view <= View.DealtToTarget;
             if (header == null)
             {
                 header = Kit.Row(column, 6f, 20f);
                 Kit.Label(header, CombatLog.ViewName(view)).color = ColorHelper.stationCardTitle;
-                Head(header, "Damage", 80f);
-                Head(header, "Share", 46f);
-                Head(header, "Per s", 64f);
-                Head(header, "Hits", 50f);
-                Head(header, "Crit", 44f);
-                Head(header, "Biggest", 66f);
-                Kit.Tooltip(Head(header, "Shd/Arm/Hull", 104f), "Shield / armour / hull", "Of each row's damage, the percent absorbed by shields, absorbed by armour, and taken off the hull.");
-                if (dealtView) Head(header, "Kills", 40f);
+                Head(header, "Damage", ColumnWidths[0]);
+                Head(header, "Share", ColumnWidths[1]);
+                Head(header, "Per Second", ColumnWidths[2]);
+                Head(header, "Hits", ColumnWidths[3]);
+                Head(header, "Crit", ColumnWidths[4]);
+                Head(header, "Biggest", ColumnWidths[5]);
+                Kit.Tooltip(Head(header, "Shield/Armor/Hull", ColumnWidths[6]), "Shield / Armor / Hull", "Of each row's damage, the percent absorbed by shields, absorbed by armor, and taken off the hull.");
+                if (dealtView) Head(header, "Kills", ColumnWidths[7]);
             }
 
             double whole = dealtView ? fight.dealt : fight.taken;
@@ -142,14 +155,14 @@ public static class CombatLogTab
                 c.row.gameObject.SetActive(true);
                 var t = c.text;
                 Set(t[0], s.label);
-                Set(t[1], GameMath.FormatNumber((float)s.total));
-                Set(t[2], CombatLog.Pct(s.total, whole) + "%");
-                Set(t[3], GameMath.FormatNumber((float)(s.total / secs)));
-                Set(t[4], s.hits.ToString());
-                Set(t[5], CombatLog.Pct(s.crits, s.hits) + "%");
-                Set(t[6], GameMath.FormatNumber((float)s.max));
-                Set(t[7], $"{CombatLog.Pct(s.shield, s.total)}/{CombatLog.Pct(s.armor, s.total)}/{CombatLog.Pct(s.hull, s.total)}");
-                if (dealtView) Set(t[8], s.kills > 0 ? s.kills.ToString() : "");
+                Set(t[1], DpsMeter.Mono(GameMath.FormatNumber((float)s.total)));
+                Set(t[2], DpsMeter.Mono(CombatLog.Pct(s.total, whole) + "%"));
+                Set(t[3], DpsMeter.Mono(GameMath.FormatNumber((float)(s.total / secs))));
+                Set(t[4], DpsMeter.Mono(s.hits.ToString()));
+                Set(t[5], DpsMeter.Mono(CombatLog.Pct(s.crits, s.hits) + "%"));
+                Set(t[6], DpsMeter.Mono(GameMath.FormatNumber((float)s.max)));
+                Set(t[7], DpsMeter.Mono($"{CombatLog.Pct(s.shield, s.total)}/{CombatLog.Pct(s.armor, s.total)}/{CombatLog.Pct(s.hull, s.total)}"));
+                if (dealtView) Set(t[8], s.kills > 0 ? DpsMeter.Mono(s.kills.ToString()) : "");
             }
             for (int i = shown; i < pool.Count; i++) pool[i].row.gameObject.SetActive(false);
             RowCount = shown;
@@ -174,7 +187,7 @@ public static class CombatLogTab
             var c = new Cells { row = r, text = new TMP_Text[dealtView ? 9 : 8] };
             c.text[0] = Kit.Label(r, "");
             c.text[0].overflowMode = TextOverflowModes.Ellipsis;
-            float[] widths = { 80f, 46f, 64f, 50f, 44f, 66f, 104f, 40f };
+            var widths = ColumnWidths;
             for (int i = 1; i < c.text.Length; i++) c.text[i] = Cell(r, "", widths[i - 1]);
             return c;
         }
@@ -184,8 +197,19 @@ public static class CombatLogTab
             if (t.text != text) t.text = text;
         }
 
-        private static TMP_Text Head(RectTransform row, string text, float width) =>
-            Kit.Fixed(row, text, width, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
+        // Column widths shared by the header and every row, in the order Damage, Share, Per second, Hits, Crit, Biggest,
+        // Shield/armor/hull, Kills.
+        private static readonly float[] ColumnWidths = { 80f, 46f, 72f, 50f, 44f, 66f, 120f, 40f };
+
+        // A header that doesn't fit at a large text size shrinks instead of ending in "...".
+        private static TMP_Text Head(RectTransform row, string text, float width)
+        {
+            var t = Kit.Fixed(row, text, width, TextAlignmentOptions.MidlineRight, ColorHelper.poiTooltipMuted);
+            t.enableAutoSizing = true;
+            t.fontSizeMin = 8f;
+            t.fontSizeMax = 12f;
+            return t;
+        }
 
         private static TMP_Text Cell(RectTransform row, string text, float width) =>
             Kit.Fixed(row, text, width, TextAlignmentOptions.MidlineRight, ColorHelper.offWhite);

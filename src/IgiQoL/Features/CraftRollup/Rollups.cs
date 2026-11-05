@@ -115,9 +115,12 @@ public static class Rollups
         return index;
     }
 
+    // Plans against what the station holds minus what other active roll-ups here still need (see Committed).
+    // A roll-up already running for this recipe is being rebuilt, so it isn't counted against itself.
     public static RollupPlan Build(Forge forge, CraftingRecipe target, int amount)
     {
-        var b = new Builder(forge, new RollupPlan { station = forge.spaceStation, target = target, amount = amount });
+        var self = Find(forge, target);
+        var b = new Builder(forge, new RollupPlan { station = forge.spaceStation, target = target, amount = amount }, self);
         b.Expand(target, amount, 0);
         b.PlanRefining();
         var plan = b.plan;
@@ -142,7 +145,8 @@ public static class Rollups
         Math.Max(1, Mathf.CeilToInt((need - pending) / (yield * mult) - Epsilon));
 
     // Ore at the station the refinery may take for a roll-up: unfavourited, not needed for missions, auto-refine allowed.
-    public static Dictionary<OreItemData, int> RefinableOre(Refinery refinery)
+    // With `exclude` set, ore that other active plans' unstarted refine steps will take is left out too.
+    public static Dictionary<OreItemData, int> RefinableOre(Refinery refinery, RollupPlan exclude = null)
     {
         var ores = new Dictionary<OreItemData, int>();
         foreach (var kv in refinery.GetAvailableItems(false, true))
@@ -151,7 +155,72 @@ public static class Rollups
             ores.TryGetValue(kv.Key, out int n);
             ores[kv.Key] = n + kv.Value;
         }
+        if (exclude == null) return ores;
+        // Ore that another plan's refine step has yet to take is spoken for.
+        foreach (var other in Active)
+        {
+            if (other == exclude || other.station != refinery.spaceStation) continue;
+            foreach (var r in other.refines)
+            {
+                if (r.started || !ores.TryGetValue(r.ore, out int n)) continue;
+                ores[r.ore] = Math.Max(0, n - r.amount);
+            }
+        }
         return ores;
+    }
+
+    // Items other active roll-ups at the station will still take from stock: the inputs of their unstarted steps,
+    // less what their unstarted and still-queued steps and refines will make. Negative means a surplus on its way.
+    // Computed from the plans on every call; nothing is held, moved or saved.
+    public static Dictionary<InventoryItemType, int> Committed(SpaceStation station, RollupPlan exclude)
+    {
+        var net = new Dictionary<InventoryItemType, int>();
+        foreach (var plan in Active)
+        {
+            if (plan == exclude || plan.station != station || station.forge == null) continue;
+            var forge = station.forge;
+            foreach (var step in plan.steps)
+            {
+                bool queued = step.started && step.job != null && forge.jobs.Contains(step.job);
+                if (!step.started)
+                {
+                    foreach (var (material, per) in step.recipe.GetIngredientMaterials())
+                    {
+                        if (per <= 0f) continue;
+                        Add(net, material.GetCanisterItem(), CraftingRecipe.CountCanistersForBatch(per, step.amount));
+                    }
+                    foreach (var (item, count) in step.recipe.GetIngredientItems()) Add(net, item, count * step.amount);
+                }
+                if (!step.started || queued)
+                {
+                    foreach (var row in step.recipe.RawResults)
+                        if (row.item != null) Add(net, ItemDefinition.TemplateOf(row.item), -Math.Max(1, row.count) * step.amount);
+                }
+            }
+            var refinery = station.refinery;
+            if (refinery == null) continue;
+            float mult = PlayerStation.GetRefineryYieldMultiplier(station);
+            var made = new float[Enum.GetValues(typeof(RefinedMaterial)).Length];
+            foreach (var r in plan.refines)
+            {
+                bool queued = r.started && r.job != null && refinery.jobs.Contains(r.job);
+                if (r.started && !queued) continue;
+                foreach (var c in r.ore.contents) made[(int)c.product] += r.amount * c.yield * mult;
+            }
+            for (int i = 0; i < made.Length; i++)
+            {
+                var canister = ((RefinedMaterial)i).GetCanisterItem();
+                if (canister != null && made[i] > 0f) Add(net, canister, -Mathf.FloorToInt(made[i] + Epsilon));
+            }
+        }
+        return net;
+    }
+
+    private static void Add(Dictionary<InventoryItemType, int> net, InventoryItemType item, int count)
+    {
+        if (item == null || count == 0) return;
+        net.TryGetValue(item, out int n);
+        net[item] = n + count;
     }
 
     public static float YieldOf(OreItemData ore, RefinedMaterial material)
@@ -168,20 +237,28 @@ public static class Rollups
         public readonly RollupPlan plan;
         private readonly Dictionary<InventoryItemType, (CraftingRecipe recipe, int per)> index;
         private readonly Dictionary<InventoryItemType, int> stock = new();
+        private readonly Dictionary<InventoryItemType, int> committed;
+        private readonly RollupPlan rebuilt;
         private readonly HashSet<CraftingRecipe> visiting = new();
 
-        public Builder(Forge forge, RollupPlan plan)
+        public Builder(Forge forge, RollupPlan plan, RollupPlan rebuilt)
         {
             this.forge = forge;
             this.plan = plan;
+            this.rebuilt = rebuilt;
             index = Index(forge);
+            committed = Committed(forge.spaceStation, rebuilt);
         }
 
-        // Takes up to `need` from what the station holds, net of what earlier branches of this plan already claimed.
+        // Takes up to `need` from what the station holds, net of what earlier branches of this plan already claimed
+        // and of what other roll-ups at the station still need.
         private int Take(InventoryItemType item, int need, bool canister)
         {
             if (!stock.TryGetValue(item, out int have))
+            {
                 have = canister ? forge.spaceStation.CountLocalItems(item) : forge.spaceStation.CountForgeItems(item);
+                if (committed.TryGetValue(item, out int held)) have = Math.Max(0, have - held);
+            }
             int used = Math.Min(have, need);
             stock[item] = have - used;
             return used;
@@ -227,7 +304,7 @@ public static class Rollups
         {
             var refinery = forge.spaceStation.refinery;
             if (refinery == null || plan.missing.Count == 0) return;
-            var ores = RefinableOre(refinery);
+            var ores = RefinableOre(refinery, rebuilt ?? plan);
             if (ores.Count == 0) return;
             float mult = PlayerStation.GetRefineryYieldMultiplier(forge.spaceStation);
             var supply = new float[Enum.GetValues(typeof(RefinedMaterial)).Length];
@@ -411,7 +488,7 @@ public static class Rollups
         if (plan.StartedCount == plan.steps.Count)
         {
             Active.Remove(plan);
-            Singleton<NotificationManager>.Instance.CreateNotification($"Roll-up finished: {RecipeName(plan.target)} x{plan.amount} is in the forge queue at {plan.station.name}")
+            Singleton<NotificationManager>.Instance.CreateNotification($"Crafting missing parts is done: {RecipeName(plan.target)} x{plan.amount} is in the forge queue at {plan.station.name}")
                 .WithColor(ColorHelper.orange75).Show();
         }
         if (changed)
@@ -487,14 +564,17 @@ public static class Rollups
         return false;
     }
 
+    // What the strip and the tooltips call a running roll-up, in the words of the button that starts it.
+    public const string RunningLabel = "Crafting missing parts";
+
     public static string Status(RollupPlan plan)
     {
         var sb = new StringBuilder();
-        sb.Append("Roll-up running: ").Append(plan.StartedCount).Append(" of ").Append(plan.steps.Count).Append(" forge jobs queued");
+        sb.Append(RunningLabel).Append(": ").Append(plan.StartedCount).Append(" of ").Append(plan.steps.Count).Append(" forge jobs queued");
         if (plan.refines.Count > 0) sb.Append(", ").Append(plan.RefinesStarted).Append(" of ").Append(plan.refines.Count).Append(" refinery jobs started");
         sb.Append(". ");
         if (plan.waiting != null) sb.Append("Waiting for ").Append(plan.waiting).Append('.');
-        else sb.Append("Parts in progress; the recipe is queued when they're done.");
+        else sb.Append("Parts in progress.");
         return sb.ToString();
     }
 

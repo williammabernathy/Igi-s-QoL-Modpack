@@ -42,7 +42,7 @@ public sealed class EventLog : Feature
     public EventLog() { Instance = this; }
 
     public override string Id => "EventLog";
-    public override string Title => "Event log";
+    public override string Title => "Event Log";
     public override string Description => "The Log tab: the game's pop-up notifications, the event lines above the HUD, ECHO's activity, arrivals, finished operations and the loot your ships pick up, with the time each happened, so you can read back what happened while you were away. Kept until you quit the game.";
     public override Type[] PatchClasses => new[] { typeof(EventLogPatches) };
 
@@ -74,17 +74,26 @@ public sealed class EventLog : Feature
         catch (Exception e) { Fail(e, nameof(OnArrived)); }
     }
 
+    // The outcome in the game's own words: the operation panel and the operation log use these same texts. A boarding
+    // is "Captured" or "Failed" there; any other outcome the game doesn't name gets a neutral word.
+    internal static string OutcomeText(Source.Dungeon.DungeonActivityLogEntry e)
+    {
+        bool boarding = !string.IsNullOrEmpty(e.targetName);
+        string key = e.outcome switch
+        {
+            Source.CompartmentSystem.MissionOutcome.FriendlyVictory => boarding ? "@DungeonOutcomeCaptured" : "@DungeonOutcomeExtracted",
+            Source.CompartmentSystem.MissionOutcome.FriendlyExtracted => "@DungeonOutcomeRetreated",
+            Source.CompartmentSystem.MissionOutcome.HostileVictory => boarding ? "@DungeonOutcomeFailed" : "@DungeonOutcomeCrewLost",
+            Source.CompartmentSystem.MissionOutcome.ShipExploded => boarding ? "@DungeonOutcomeFailed" : "@DungeonOutcomeCrewLost",
+            _ => null,
+        };
+        return key != null ? Translation.Translate(key) : "Ended";
+    }
+
     // One line per finished operation, from the entry the game adds to its own operation log.
     internal static string OperationText(Source.Dungeon.DungeonActivityLogEntry e)
     {
-        string outcome = e.outcome switch
-        {
-            Source.CompartmentSystem.MissionOutcome.FriendlyVictory => "succeeded",
-            Source.CompartmentSystem.MissionOutcome.FriendlyExtracted => "crew pulled out",
-            Source.CompartmentSystem.MissionOutcome.HostileVictory => "crew lost",
-            Source.CompartmentSystem.MissionOutcome.ShipExploded => "ship exploded",
-            _ => e.outcome.ToString(),
-        };
+        string outcome = OutcomeText(e);
         string what = !string.IsNullOrEmpty(e.targetName) ? "Boarding " + e.targetName : Translation.Translate(e.dungeonLocationName);
         // Credits found aboard (personal caches) are loot lines too, built by the "Credits" item builder; added to the
         // item count they turned 1.2M credits into "1.2M items".
@@ -101,7 +110,7 @@ public sealed class EventLog : Feature
             kinds++;
         }
         string money = credits > 0 ? ", " + Source.Util.GameMath.FormatNumber(credits) + " credits" : "";
-        return $"{(e.isAutonomous ? "ECHO: " : "")}{what} at {e.poiName}: {outcome}; {e.hostileKilled} defenders killed, {e.hostilesCaptured} captured; {e.friendlyKilled} crew killed, {e.friendlyWounded} wounded; {items} items from {kinds} loot {(kinds == 1 ? "kind" : "kinds")}{money}";
+        return $"{(e.isAutonomous ? "ECHO: " : "")}{what} at {e.poiName}: {outcome}. Defenders: {e.hostileKilled} killed, {e.hostilesCaptured} captured. Your crew: {e.friendlyKilled} killed, {e.friendlyWounded} wounded. Loot: {items} items of {kinds} {(kinds == 1 ? "kind" : "kinds")}{money}.";
     }
 
     public static void Clear()

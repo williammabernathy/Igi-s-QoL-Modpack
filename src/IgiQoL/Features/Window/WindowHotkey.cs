@@ -2,6 +2,7 @@ using System.Collections;
 using Behavior.UI.GalaxyMap;
 using Behaviour.UI;
 using Behaviour.UI.HUD;
+using Behaviour.UI.Shared;
 using Behaviour.UI.Spacestation;
 using Behaviour.UI.Tooltip;
 using Behaviour.Util;
@@ -12,7 +13,6 @@ using Source.Galaxy.POI;
 using Source.Player;
 using Source.UI.Tooltip;
 using Source.Util;
-using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -39,9 +39,9 @@ public sealed class WindowHotkey : MonoBehaviour
     }
 }
 
-// The "QoL" buttons that toggle the mod window. In space: a copy of the HUD dock button, shown while the game shows
-// its HUD, on top of the side menu column or above the Dock button (WindowFeature.Place), draggable from there.
-// Docked: a station tab like the game's Fleet button, floating above the rightmost tab.
+// The "QoL" buttons that toggle the mod window. In space: a game-style button the size of the HUD dock button, shown
+// while the game shows its HUD, on top of the side menu column or above the Dock button (WindowFeature.Place),
+// draggable from there. Docked: a station tab like the game's Fleet button, floating above the rightmost tab.
 // Both live in the game's hierarchy and die with it.
 public static class HudButton
 {
@@ -89,41 +89,31 @@ public static class HudButton
         // The side menu scene loads with the HUD but asynchronously; without it the button goes above the Dock button.
         while (SidePanel.instance == null && Time.realtimeSinceStartup < deadline) yield return null;
         if (Instance != null || HudManager.Instance == null || !WindowFeature.Instance.Active) yield break;
-        var dock = HudManager.Instance.dockButton;
+        var dock = DockRect();
         if (dock == null)
         {
-            Plugin.Log.LogInfo("[Window] no dock button to clone; hotkey only");
+            Plugin.Log.LogInfo("[Window] no dock button to place the HUD button by; hotkey only");
             yield break;
         }
         try { Create(dock); }
         catch (System.Exception e) { WindowFeature.Instance.Fail(e, nameof(HudButton)); }
     }
 
-    private static void Create(Button src)
+    // The Dock button's holder (HudDockButton since 0.8.3.5; the button itself fills it). A copy of the button won't
+    // do: its runway lights are wired up in code when the game builds it, so a clone has none and throws.
+    internal static RectTransform DockRect()
     {
-        var go = Object.Instantiate(src.gameObject, src.transform.parent);
+        var root = HudManager.Instance != null ? HudManager.Instance.DockRoot : null;
+        return root != null ? (RectTransform)root.transform : null;
+    }
+
+    private static void Create(RectTransform dock)
+    {
+        var size = dock.sizeDelta;
+        var b = UiButton.Add((RectTransform)dock.parent, "QoL", ModWindow.Toggle, ButtonRole.Plain, size.x, null, null, size.y, 14f);
+        var go = b.gameObject;
         go.name = "IgiQoL_HudButton";
         go.SetActive(HudManager.Instance.showHud);
-        // Destroyed immediately so SetTooltip below does not reuse a component that is about to go away.
-        foreach (var t in go.GetComponentsInChildren<TooltipSource>(true)) Object.DestroyImmediate(t);
-        foreach (var c in go.GetComponentsInChildren<ITooltipCardSource>(true))
-            if (c is Component comp) Object.DestroyImmediate(comp);
-        foreach (var t in go.GetComponentsInChildren<Translatable>(true)) Object.DestroyImmediate(t);
-
-        var b = go.GetComponent<Button>();
-        b.onClick = new Button.ButtonClickedEvent();
-        b.onClick.AddListener(ModWindow.Toggle);
-        var label = go.GetComponentInChildren<TMP_Text>(true);
-        if (label != null) label.text = "QoL";
-        else
-        {
-            foreach (var img in go.GetComponentsInChildren<Image>(true))
-            {
-                if (img.gameObject == go) continue;
-                img.sprite = PoiIconLibrary.Instance.Get(Kit.Icon("Info", PoiIconKeys.Captain("Command")));
-                break;
-            }
-        }
         FleetBarParts.SetTooltip(b, null, Tooltip(true));
 
         // The side menu column has a layout group; the button sits outside its flow.
@@ -135,14 +125,14 @@ public static class HudButton
         drag.onEndDrag = _ => EndDrag();
         Instance = go;
         Place();
-        Plugin.Log.LogInfo($"[Window] HUD button created under {go.transform.parent.name} (label={(label != null ? "text" : "icon")})");
+        Plugin.Log.LogInfo($"[Window] HUD button created under {go.transform.parent.name}");
     }
 
     internal static void Place()
     {
         if (Instance == null) return;
         var rt = (RectTransform)Instance.transform;
-        var dock = HudManager.Instance != null ? HudManager.Instance.dockButton : null;
+        var dock = DockRect();
         var menu = SidePanel.instance != null ? SidePanel.instance.transform.Find("SidePanelMenu") as RectTransform : null;
         if (WindowFeature.Instance.Place.Value == ButtonPlace.SideMenu && menu != null)
         {
@@ -158,13 +148,12 @@ public static class HudButton
         else
         {
             if (dock == null) return;
-            var dockRt = (RectTransform)dock.transform;
-            rt.SetParent(dockRt.parent, false);
-            rt.anchorMin = dockRt.anchorMin;
-            rt.anchorMax = dockRt.anchorMax;
-            rt.pivot = dockRt.pivot;
-            rt.sizeDelta = dockRt.sizeDelta;
-            home = dockRt.anchoredPosition + new Vector2(0f, dockRt.rect.height + 4f);
+            rt.SetParent(dock.parent, false);
+            rt.anchorMin = dock.anchorMin;
+            rt.anchorMax = dock.anchorMax;
+            rt.pivot = dock.pivot;
+            rt.sizeDelta = dock.sizeDelta;
+            home = dock.anchoredPosition + new Vector2(0f, dock.rect.height + 4f);
         }
         rt.anchoredPosition = home + Offset;
     }

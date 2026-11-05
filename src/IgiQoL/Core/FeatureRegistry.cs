@@ -14,7 +14,6 @@ public static class FeatureRegistry
         new Features.TractorCaps.TractorCaps(),
         new Features.JumpsRemaining.JumpsRemaining(),
         new Features.FleetVitals.FleetVitalsFeature(),
-        new Features.MissileRetarget.MissileRetarget(),
         new Features.DronesOnArrival.DronesOnArrival(),
         new Features.EchoGates.EchoGates(),
         new Features.EchoMissions.EchoMissions(),
@@ -32,6 +31,9 @@ public static class FeatureRegistry
         new Features.TargetPriority.TargetPriority(),
         new Features.DroneModes.DroneModes(),
         new Features.Separation.Separation(),
+        // Its self-check fires real missiles: it undocks and spawns enemies, so it runs after the checks that need to
+        // be docked or need a quiet location.
+        new Features.MissileRetarget.MissileRetarget(),
         new Features.CraftRollup.CraftRollup(),
         new Features.CombatLog.CombatLog(),
         new Features.ShipStats.ShipStats(),
@@ -52,6 +54,7 @@ public static class FeatureRegistry
         new Features.FavouriteStations.FavouriteStations(),
         new Features.EchoRetreat.EchoRetreat(),
         new Features.FleetRetreat.FleetRetreat(),
+        new Features.ConquestDetails.ConquestDetails(),
         new Features.Mods.Mods(),
     };
 

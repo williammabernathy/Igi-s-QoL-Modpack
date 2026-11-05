@@ -28,7 +28,7 @@ public sealed class OrePreference : Feature
     public OrePreference() { Instance = this; }
 
     public override string Id => "OrePreference";
-    public override string Title => "Preferred ores";
+    public override string Title => "Preferred Ores";
     public override string Description => "Pick the ores you want, and ECHO and your ships mine asteroids with those ores first instead of the nearest asteroid. ECHO also flies to a mining location in the system that still has them. Set the ores on the ECHO tab.";
     public override string SettingsTab => "ECHO";
     public override Type[] PatchClasses => new[] { typeof(OrePreferencePatches) };

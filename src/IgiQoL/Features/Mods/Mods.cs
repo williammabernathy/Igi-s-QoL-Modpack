@@ -22,7 +22,7 @@ public sealed class Mods : Feature
     public Mods() { Instance = this; }
 
     public override string Id => "Mods";
-    public override string Title => "Other mods";
+    public override string Title => "Other Mods";
     public override string Description => "The Mods tab: the settings of every other BepInEx mod you have installed, the game methods that more than one mod changes, and the mods BepInEx refused to load. The same overlap list goes to BepInEx/LogOutput.log at the main menu.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 
@@ -44,7 +44,7 @@ public sealed class Mods : Feature
             var shared = PatchOverlap.Find();
             Plugin.Log.LogInfo($"[Mods] {Others().Count} other plugin(s), {shared.Count} game method(s) patched by more than one mod, {Chainloader.DependencyErrors.Count} BepInEx load error(s)");
             foreach (var s in shared)
-                Plugin.Log.LogInfo($"[Mods] {(s.Risky ? "check" : "shared")} {s.Method}: {string.Join("; ", s.Mods)}");
+                Plugin.Log.LogInfo($"[Mods] {(s.Risky ? "risky overlap" : "shared")} {s.Method}: {string.Join("; ", s.Mods)}");
         }
         catch (Exception e) { Fail(e, nameof(LogOnce)); }
     }
@@ -60,7 +60,7 @@ public sealed class Mods : Feature
 
     private static void Build(RectTransform content)
     {
-        Kit.Heading(content, "Mod compatibility");
+        Kit.Heading(content, "Mod Compatibility");
         string game = Application.version;
         Kit.Muted(content, game == Plugin.TestedGameVersion
             ? $"Igi's QoL {PluginInfo.Version} was tested on this game version ({game})."
@@ -75,14 +75,14 @@ public sealed class Mods : Feature
         else
         {
             Kit.Muted(content, "These game methods are changed by more than one mod. That usually works: each mod's code runs in turn. " +
-                "\"Check\" marks the ones where a mod can stop the others' changes from running, through a prefix that can skip the game's code or a transpiler that rewrites it. " +
+                "\"Risky overlap\" marks the ones where a mod can stop the others' changes from running, through a prefix that can skip the game's code or a transpiler that rewrites it. " +
                 "If two of these mods misbehave together, try the game with one of them removed. Only Harmony patches are listed.");
             foreach (var s in shared)
-                Kit.Text(content, (s.Risky ? warn + "Check</color> " : "") + "<b>" + s.Method + "</b>: " + string.Join("; ", s.Mods));
+                Kit.Text(content, (s.Risky ? warn + "Risky overlap:</color> " : "") + "<b>" + s.Method + "</b>: " + string.Join("; ", s.Mods));
         }
 
         Kit.Gap(content, 10f);
-        Kit.Heading(content, "Other mods (not part of Igi's QoL)");
+        Kit.Heading(content, "Other Mods (Not Part of Igi's QoL)");
         var others = Others();
         if (others.Count == 0)
         {

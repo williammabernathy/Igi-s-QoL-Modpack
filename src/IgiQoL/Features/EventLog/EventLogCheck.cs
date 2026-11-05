@@ -76,9 +76,21 @@ internal static class EventLogCheck
         opLog.Record(op);
         opLog.entries.Remove(op);
         var opLine = EventLog.Last(LogKind.Operation);
-        string opExpected = $"ECHO: {Translation.Translate("@DungeonMiningOutpostName")} at Check Field: succeeded; 4 defenders killed, 1 captured; 2 crew killed, 3 wounded; 6 items from 1 loot kind, {Source.Util.GameMath.FormatNumber(315800)} credits";
+        string opExpected = $"ECHO: {Translation.Translate("@DungeonMiningOutpostName")} at Check Field: {Translation.Translate("@DungeonOutcomeExtracted")}. Defenders: 4 killed, 1 captured. Your crew: 2 killed, 3 wounded. Loot: 6 items of 1 kind, {Source.Util.GameMath.FormatNumber(315800)} credits.";
         if (opLine != null && opLine.text == opExpected) ctx.Pass("operation", opLine.text);
         else ctx.Fail("operation", $"got '{opLine?.text}', expected '{opExpected}'");
+
+        // Outcomes use the game's texts; one the game doesn't name falls back to a neutral word, never an enum name.
+        var probe = new Source.Dungeon.DungeonActivityLogEntry { outcome = Source.CompartmentSystem.MissionOutcome.FriendlyExtracted };
+        string retreated = EventLog.OutcomeText(probe);
+        probe.outcome = Source.CompartmentSystem.MissionOutcome.InProgress;
+        string unnamed = EventLog.OutcomeText(probe);
+        probe.outcome = Source.CompartmentSystem.MissionOutcome.FriendlyVictory;
+        probe.targetName = "Check Ship";
+        string captured = EventLog.OutcomeText(probe);
+        d = $"retreated '{retreated}', boarding win '{captured}', unnamed '{unnamed}'";
+        if (retreated == Translation.Translate("@DungeonOutcomeRetreated") && captured == Translation.Translate("@DungeonOutcomeCaptured") && unnamed == "Ended") ctx.Pass("outcome", d);
+        else ctx.Fail("outcome", d);
 
         yield return CheckLoot(ctx);
 
@@ -98,6 +110,26 @@ internal static class EventLogCheck
         d = $"rows={(list != null ? list.RowCount : -1)} notice={noticeRow} loot={lootRow} summary={summary}";
         if (list != null && noticeRow && (lootRow && summary || EventLog.Loot.Count == 0)) ctx.Pass("tab", d);
         else ctx.Fail("tab", d);
+
+        // Row heights depend on the kind of line only: they are the same after a redraw, whatever the text or width.
+        if (list != null)
+        {
+            var before1 = RowHeights(list);
+            list.Invalidate();
+            yield return null;
+            yield return null;
+            var after1 = RowHeights(list);
+            bool stable = before1.Count > 0 && before1.Count == after1.Count;
+            bool byKind = true;
+            for (int i = 0; stable && i < before1.Count; i++)
+            {
+                stable &= Mathf.Approximately(before1[i], after1[i]);
+                byKind &= Mathf.Approximately(before1[i], EventLogTab.LogList.RowHeight(LogKind.Operation)) || Mathf.Approximately(before1[i], EventLogTab.LogList.RowHeight(LogKind.Notice));
+            }
+            d = $"rows={before1.Count} first={(before1.Count > 0 ? before1[0] : -1f):0.#}->{(after1.Count > 0 ? after1[0] : -1f):0.#} one-line={EventLogTab.LogList.RowHeight(LogKind.Notice):0.#} two-line={EventLogTab.LogList.RowHeight(LogKind.Operation):0.#}";
+            if (stable && byKind) ctx.Pass("row-height", d);
+            else ctx.Fail("row-height", d);
+        }
         yield return ctx.Screenshot("window-log");
         ModWindow.Close();
 
@@ -177,6 +209,19 @@ internal static class EventLogCheck
         if (!Popouts.IsOpen(id) && ModWindow.IsOpen && ModWindow.CurrentTab == "log") ctx.Pass("popout-dock", d);
         else ctx.Fail("popout-dock", d);
         ModWindow.Close();
+    }
+
+    // The drawn height of each log line's row (not the loot summary or the footer), newest first.
+    private static List<float> RowHeights(EventLogTab.LogList list)
+    {
+        var heights = new List<float>();
+        var column = list.transform;
+        for (int i = 0; i < column.childCount; i++)
+        {
+            var row = (RectTransform)column.GetChild(i);
+            if (row.gameObject.activeSelf && row.childCount >= 3) heights.Add(row.rect.height);
+        }
+        return heights;
     }
 
     // The texts of the log lines (not the loot summary) in a LogList, in the order shown; cell 2 is the line's text.

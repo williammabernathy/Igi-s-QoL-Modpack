@@ -32,7 +32,7 @@ public sealed class EchoGates : Feature
     public EchoGates() { Instance = this; }
 
     public override string Id => "EchoGates";
-    public override string Title => "ECHO decisions";
+    public override string Title => "ECHO Decisions";
     public override string Description => "Changes when ECHO (the autopilot) picks up loot, raids, starts operations, boards ships and hires crew, where its crew comes from, and how fast it unloads cargo and gets through a station visit. The starting values match the unmodded game, except that ECHO no longer pays for crew that can't fit aboard.";
     public override string SettingsTab => "ECHO";
     public override Type[] PatchClasses => new[] { typeof(EchoGatePatches) };
@@ -71,9 +71,9 @@ public sealed class EchoGates : Feature
             "Raiding a faction's installations costs reputation with it, so ECHO only raids factions you're already at or below this reputation with. Game default: -500. A higher number (for example 0) lets ECHO raid factions you get on better with, and you lose that reputation. The Umbral transponder skips this check."));
         DungeonCrewMinimum = cfg.Bind(Id, "DungeonCrewMinimum", VanillaDungeonCrewMinimum, SettingInfo.Describe("Crew needed to start an operation",
             "ECHO only starts an operation when at least this many of your crew can take part. Pilots don't count. Game default: 3."));
-        BoardingCrewFraction = cfg.Bind(Id, "BoardingCrewFraction", VanillaBoardingCrewFraction, SettingInfo.Describe("Crew needed to board a ship (share of max)",
+        BoardingCrewFraction = cfg.Bind(Id, "BoardingCrewFraction", VanillaBoardingCrewFraction, SettingInfo.Describe("Crew needed to board a ship (share of the flagship's maximum crew)",
             "For operations aboard ships, ECHO also needs crew equal to at least this share of your flagship's maximum crew. 0.5 means half, 0.25 a quarter. Game default: 0.5."));
-        HireCrewBelowFraction = cfg.Bind(Id, "HireCrewBelowFraction", VanillaHireCrewBelowFraction, SettingInfo.Describe("Hire crew when below (share of max)",
+        HireCrewBelowFraction = cfg.Bind(Id, "HireCrewBelowFraction", VanillaHireCrewBelowFraction, SettingInfo.Describe("Hire crew when below (share of the flagship's maximum crew)",
             "ECHO flies off to hire crew when your flagship's crew falls below this share of its maximum. 0.5 means half; 0 stops these hiring trips. Game default: 0.5."));
         FastUnloading = cfg.Bind(Id, "FastUnloading", false, SettingInfo.Describe("Fast cargo unloading",
             "When ECHO unloads at a station, it moves a whole stack at a time (as much as storage has room for) instead of a few items every few seconds. A full hold empties in a few steps instead of minutes. Game default: off."));
