@@ -40,9 +40,14 @@ public static class ShipPopup
         canvas.overrideSorting = true;
         canvas.sortingOrder = 4; // above the mod window (3)
         root.gameObject.AddComponent<GraphicRaycaster>();
-        var frame = CardPopupFrame.Build(root, 460f, Kit.CloseSprite, Close);
-        frame.title.text = ship.GetShipName() + " settings";
+        var frame = CardPopupFrame.Build(root, 460f, Close);
+        frame.title.text = ship.GetShipName() + " Settings";
         Body = frame.body;
+        // Every row stays in the popup whatever the choices are (a control that doesn't apply is dimmed, not hidden),
+        // so the popup never changes height while it is open. The frame's 12 px between rows is too much for the
+        // tallest popup at 130% text, so the rows sit closer.
+        var spacing = Body.GetComponent<VerticalLayoutGroup>();
+        if (spacing != null) spacing.spacing = RowSpacing;
         string guid = ship.guid;
         var s = ShipSettings.Edit(guid);
 
@@ -61,7 +66,7 @@ public static class ShipPopup
                     ShipSettings.Save(guid);
                 });
         }
-        else Kit.Muted(Body, "Missile retargeting is turned off on the Settings tab.");
+        else Kit.Muted(Body, "Missile Retargeting is turned off on the Settings tab.");
 
         var drones = DronesOnArrival.Instance;
         if (drones != null && drones.Active)
@@ -75,21 +80,21 @@ public static class ShipPopup
                     ShipSettings.Save(guid);
                 });
         }
-        else Kit.Muted(Body, "Drones on arrival is turned off on the Settings tab.");
+        else Kit.Muted(Body, "Drones on Arrival is turned off on the Settings tab.");
 
         var droneModes = DroneModes.Instance;
         if (droneModes != null && droneModes.Active)
         {
             var row = Kit.Row(Body, 8f, 26f);
-            Kit.Tooltip(Kit.Label(row, "Drones"), null, "Follow the ship: drones without a target come back once they are further than the distance. Guard the ship: drones only take targets within the distance of the ship and stay inside it; repair drones fix the ship first. Ship's target only: combat and painter drones attack what the ship attacks and otherwise follow it; mining and salvage drones join the ship's asteroid or wreck when they can, else pick one within the distance; repair drones fix the ship first. Game toggle: the HUD's Free roam / Follow ship button decides, as in the game. Your own target clicks still reach the drones.");
+            Kit.Tooltip(Kit.Label(row, "Drone mode"), null, "Follow the ship: drones without a target come back once they are further than the distance. Guard the ship: drones only take targets within the distance of the ship and stay inside it; repair drones fix the ship first. Ship's target only: combat and painter drones attack what the ship attacks and otherwise follow it. The ship you fly usually has a target only after you click one or something shoots at it, and your other ships take theirs from their stance; mining and salvage drones join the ship's asteroid or wreck when they can, else pick one within the distance; repair drones fix the ship first. Game toggle: the Free Roam / " + Translation.Translate("@UIDroneBehaviorFollowShip") + " button on the HUD decides, as in the game. Your own target clicks still reach the drones. The number is the distance in units (2 to 40); it applies to every mode except Game toggle. It is never less than the ship's hull plus 2 units, so a big ship's drones don't sit inside it.");
             TMP_InputField radius = null;
             RectTransform anchorRow = null;
             Kit.Dropdown(row, DroneModes.ModeNames, (int)s.droneMode, i =>
             {
                 var e = ShipSettings.Edit(guid);
                 e.droneMode = (DroneMode)i;
-                radius.gameObject.SetActive(e.droneMode != DroneMode.Game);
-                anchorRow.gameObject.SetActive(e.droneMode != DroneMode.Game);
+                Dim(radius.gameObject, e.droneMode != DroneMode.Game);
+                Dim(anchorRow.gameObject, e.droneMode != DroneMode.Game);
                 ShipSettings.Save(guid);
             }, 200f);
             radius = Kit.Input(row, s.droneRadius.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
@@ -99,7 +104,7 @@ public static class ShipPopup
                 radius.SetTextWithoutNotify(e.droneRadius.ToString("0.#", CultureInfo.InvariantCulture));
                 ShipSettings.Save(guid);
             }, 50f);
-            radius.gameObject.SetActive(s.droneMode != DroneMode.Game);
+            Dim(radius.gameObject, s.droneMode != DroneMode.Game);
 
             // "The ship" in the modes above: this one, or another ship of your fleet the drones stay with.
             anchorRow = Kit.Row(Body, 8f, 26f);
@@ -127,22 +132,22 @@ public static class ShipPopup
                 ShipSettings.Edit(guid).droneAnchor = guids[i];
                 ShipSettings.Save(guid);
             }, 200f);
-            anchorRow.gameObject.SetActive(s.droneMode != DroneMode.Game);
+            Dim(anchorRow.gameObject, s.droneMode != DroneMode.Game);
         }
 
         var engagement = EngagementDistance.Instance;
         if (engagement != null && engagement.Active)
         {
             var row = Kit.Row(Body, 8f, 26f);
-            // A tooltip, not a line under the row: the popup has no scroll, and with a full target rule chain the
+            // A tooltip, not a line under the row: the popup has no scroll, and with a full set of target rules the
             // line pushed it off screen at 130% text.
-            Kit.Tooltip(Kit.Label(row, "Engagement distance"), null, "Auto: the game decides how close to get. Weapons' max range: stay as far back as the shortest-range weapon that can hit the target allows. Fixed distance: stay this many units away (6 to 30: the game never holds closer than 6 or further than 30).");
+            Kit.Tooltip(Kit.Label(row, "Engagement distance"), null, "Auto: the game decides how close to get. Weapons' max range: stay as far back as the shortest-range weapon that can hit the target allows; against a big ship that's further back than the game goes. Fixed distance: stay this many units away (6 to 30: the game never holds closer than 6 or further than 30), but never so far that a weapon can't reach. The number is only used by Fixed distance." + FormationNote(ship));
             TMP_InputField field = null;
             Kit.Dropdown(row, new[] { "Auto (game default)", "Weapons' max range", "Fixed distance" }, (int)s.engagement, i =>
             {
                 var e = ShipSettings.Edit(guid);
                 e.engagement = (EngagementMode)i;
-                field.gameObject.SetActive(e.engagement == EngagementMode.Fixed);
+                Dim(field.gameObject, e.engagement == EngagementMode.Fixed);
                 ShipSettings.Save(guid);
             });
             field = Kit.Input(row, s.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
@@ -153,15 +158,15 @@ public static class ShipPopup
                 field.SetTextWithoutNotify(e.engagementDistance.ToString("0.#", CultureInfo.InvariantCulture));
                 ShipSettings.Save(guid);
             }, 70f);
-            field.gameObject.SetActive(s.engagement == EngagementMode.Fixed);
+            Dim(field.gameObject, s.engagement == EngagementMode.Fixed);
         }
-        else Kit.Muted(Body, "Engagement distance is turned off on the Settings tab.");
+        else Kit.Muted(Body, "Engagement Distance is turned off on the Settings tab.");
 
         var separation = Separation.Instance;
         if (separation != null && separation.Active)
         {
             var row = Kit.Row(Body, 8f, 26f);
-            Kit.Tooltip(Kit.Label(row, "Keep distance from other ships"), null, separation.Default.Description.Description);
+            Kit.Tooltip(Kit.Label(row, "Keep distance from other ships"), null, separation.Default.Description.Description + FormationNote(ship));
             Kit.Dropdown(row, new[] { "Default (" + (separation.Default.Value ? "on" : "off") + ")", "On", "Off" },
                 s.separation == null ? 0 : (s.separation.Value ? 1 : 2), i =>
                 {
@@ -174,7 +179,7 @@ public static class ShipPopup
         if (retreat != null && retreat.Active)
         {
             var row = Kit.Row(Body, 8f, 26f);
-            Kit.Tooltip(Kit.Label(row, "Retreat for repairs"), null, "Fleet ships only, not the ship you fly. When a hit leaves the ship below this hull %, it leaves the fight and repairs for 120 s, then comes back, as the game does below 10%. A hired extra mercenary leaves for good, as in the game.");
+            Kit.Tooltip(Kit.Label(row, "Retreat for repairs"), null, "Fleet ships only, not the ship you fly. When a hit leaves the ship below this share of its hull, it leaves the fight and repairs for 120 s, then comes back, as the game does below 10%. A hired mercenary leaves for good, as in the game.");
             Kit.Dropdown(row, FleetRetreat.Names, Mathf.Max(0, System.Array.IndexOf(FleetRetreat.Values, s.retreatBelow)), i =>
             {
                 ShipSettings.Edit(guid).retreatBelow = FleetRetreat.Values[i];
@@ -184,12 +189,24 @@ public static class ShipPopup
 
         var targeting = TargetPriority.Instance;
         if (targeting != null && targeting.Active) AddTargeting(ship, guid, s, targeting);
-        else Kit.Muted(Body, "Target priority is turned off on the Settings tab.");
+        else Kit.Muted(Body, "Target Priority is turned off on the Settings tab.");
 
         var pins = CargoPins.Instance;
         if (pins != null && pins.Active) AddPins(ship, guid, s);
 
         frame.AddButton("Close", Close, 110f);
+        FitToScreen(frame.window);
+    }
+
+    // The popup has no scroll, so if every row together is taller than the screen (a large text size, many weapons),
+    // it is scaled down to fit instead of pushing Close off screen.
+    private static void FitToScreen(RectTransform window)
+    {
+        var canvas = window.GetComponentInParent<Canvas>();
+        if (canvas == null) return;
+        float available = ((RectTransform)canvas.rootCanvas.transform).rect.height * 0.94f;
+        float wanted = LayoutUtility.GetPreferredHeight(window);
+        window.localScale = wanted > available && wanted > 0f ? Vector3.one * (available / wanted) : Vector3.one;
     }
 
     public static void Close()
@@ -197,6 +214,18 @@ public static class ShipPopup
         if (root != null) Object.Destroy(root.gameObject);
         root = null;
         Body = null;
+    }
+
+    // The gap between the popup's rows (the game's frame uses 12).
+    internal const float RowSpacing = 6f;
+
+    // A control that doesn't apply under the current choices: dimmed and not clickable, but still in its place.
+    private static void Dim(GameObject control, bool applies)
+    {
+        var group = control.GetComponent<CanvasGroup>();
+        if (group == null) group = control.AddComponent<CanvasGroup>();
+        group.interactable = applies;
+        group.alpha = applies ? 1f : 0.45f;
     }
 
     private static readonly float?[] RepickValues = { null, 0f, 2f, 5f, 10f };
@@ -213,8 +242,8 @@ public static class ShipPopup
         then[0] = "None";
         TargetPriority.RuleNames.CopyTo(then, 1);
 
-        // The chain as three dropdowns: the first rule (or Default), then up to two "Then by" rules. "None" ends the
-        // chain; the rows after it hide but keep their choice, so turning it back on restores it.
+        // The rules as three dropdowns: the first rule (or Default), then up to two "Then by" rules. "None" ends the
+        // list; the rows after it are dimmed but keep their choice, so turning it back on restores it.
         var chain = s.targetRules;
         int first = chain.Count > 0 ? (int)chain[0] + 1 : 0;
         int second = chain.Count > 1 ? (int)chain[1] + 1 : 0;
@@ -233,25 +262,25 @@ public static class ShipPopup
                     if (third > 0) e.targetRules.Add((TargetRule)(third - 1));
                 }
             }
-            secondRow.gameObject.SetActive(first > 0);
-            thirdRow.gameObject.SetActive(first > 0 && second > 0);
+            Dim(secondRow.gameObject, first > 0);
+            Dim(thirdRow.gameObject, first > 0 && second > 0);
             ShipSettings.Save(guid);
         }
         Kit.Dropdown(row, rules, first, i => { first = i; Apply(); }, 230f);
-        const string thenTip = "Decides between enemies the rule above sees as about the same: for example less than 10 points of hull apart, 20% of the distance, or less than the lead set for \"Weakest to my weapons\" and \"Debuffed first\" on the Settings tab. None ends the chain; after the last rule, the nearest enemy wins. Re-checks walk the same chain. \"Attacking my flagship\" only pulls the ship onto whoever hits your flagship when it's the first rule.";
+        string thenTip = "Decides between enemies the rule above sees as about the same: for example less than 10 points of hull apart, 20% of the distance, or less than the lead set for \"" + TargetPriority.RuleNames[(int)TargetRule.WeakestToMyWeapons] + "\" and \"" + TargetPriority.RuleNames[(int)TargetRule.DebuffedFirst] + "\" on the Settings tab. None stops the list at the rule above; after the last rule, the nearest enemy wins. Re-checks go through the same rules. \"" + TargetPriority.RuleNames[(int)TargetRule.AttackingFlagship] + "\" only pulls the ship onto whoever hits your flagship when it's the first rule.";
         secondRow = Kit.Row(Body, 8f, 26f);
         Kit.Tooltip(Kit.Label(secondRow, "Then by"), null, thenTip);
         Kit.Dropdown(secondRow, then, second, i => { second = i; Apply(); }, 230f);
         thirdRow = Kit.Row(Body, 8f, 26f);
         Kit.Tooltip(Kit.Label(thirdRow, "Then by"), null, thenTip);
         Kit.Dropdown(thirdRow, then, third, i => { third = i; Apply(); }, 230f);
-        secondRow.gameObject.SetActive(first > 0);
-        thirdRow.gameObject.SetActive(first > 0 && second > 0);
+        Dim(secondRow.gameObject, first > 0);
+        Dim(thirdRow.gameObject, first > 0 && second > 0);
 
         row = Kit.Row(Body, 8f, 26f);
-        Kit.Tooltip(Kit.Label(row, "Re-check the target"), null, targeting.RepickSeconds.Description.Description);
+        Kit.Tooltip(Kit.Label(row, WithoutUnit(SettingInfo.Of(targeting.RepickSeconds).Label)), null, targeting.RepickSeconds.Description.Description);
         float repick = targeting.RepickSeconds.Value;
-        Kit.Dropdown(row, new[] { "Default (" + (repick > 0f ? "every " + repick.ToString("0.#", CultureInfo.InvariantCulture) + " s" : "never") + ")", "Never", "Every 2 s", "Every 5 s", "Every 10 s" },
+        Kit.Dropdown(row, new[] { "Default (" + (repick > 0f ? repick.ToString("0.#", CultureInfo.InvariantCulture) + " s" : "never") + ")", "Never", "2 s", "5 s", "10 s" },
             Mathf.Max(0, System.Array.IndexOf(RepickValues, s.repickSeconds)), i =>
             {
                 ShipSettings.Edit(guid).repickSeconds = RepickValues[i];
@@ -259,9 +288,9 @@ public static class ShipPopup
             }, 200f);
 
         row = Kit.Row(Body, 8f, 26f);
-        Kit.Tooltip(Kit.Label(row, "Finish weak targets"), null, targeting.FinishBelowPercent.Description.Description);
+        Kit.Tooltip(Kit.Label(row, WithoutUnit(SettingInfo.Of(targeting.FinishBelowPercent).Label)), null, targeting.FinishBelowPercent.Description.Description);
         int finish = targeting.FinishBelowPercent.Value;
-        Kit.Dropdown(row, new[] { "Default (" + (finish > 0 ? "below " + finish + "%" : "off") + ")", "Off", "Below 25% hull", "Below 50% hull" },
+        Kit.Dropdown(row, new[] { "Default (" + (finish > 0 ? finish + "% of hull" : "off") + ")", "Off", "25% of hull", "50% of hull" },
             Mathf.Max(0, System.Array.IndexOf(FinishValues, s.finishBelow)), i =>
             {
                 ShipSettings.Edit(guid).finishBelow = FinishValues[i];
@@ -280,7 +309,7 @@ public static class ShipPopup
         }, 70f);
 
         row = Kit.Row(Body, 8f, 26f);
-        Kit.Tooltip(Kit.Label(row, "Only attack within (units of the flagship)"), null, "Fleet ships only: they don't pick enemies further than this from the ship you fly, and drop a target that moves past it. 0 turns this off.");
+        Kit.Tooltip(Kit.Label(row, "Only attack within (units) of the flagship"), null, "Fleet ships only: they don't pick enemies further than this from the ship you fly, and drop a target that moves past it. 0 turns this off.");
         TMP_InputField leash = null;
         leash = Kit.Input(row, s.leash.ToString("0.#", CultureInfo.InvariantCulture), TMP_InputField.ContentType.DecimalNumber, v =>
         {
@@ -304,7 +333,7 @@ public static class ShipPopup
             string name = (index + 1) + ". " + item.displayName;
             if (rule != null && rule.weapon != null && rule.weapon != item.identifier) name += " (refitted)";
             row = Kit.Row(Body, 8f, 26f);
-            Kit.Tooltip(Kit.Label(row, name), null, "What this weapon shoots while the ship is fighting. Follow the ship: the ship's target, as in the game. Any other choice: the best enemy by that rule among those this weapon can hit and has in range; with none in range it follows the ship. The ship's re-check and finish settings apply to weapons too.");
+            Kit.Tooltip(Kit.Label(row, name), null, "What this weapon shoots while the ship is fighting. Follow the ship: the ship's target, as in the game, which turns the weapon on the nearest enemy it can reach while the ship's target is out of its range or one it can't hurt. Any other choice: the best enemy by that rule among those this weapon can hit and has in range; with none in range it follows the ship. The ship's re-check and finish settings apply to weapons too.");
             Kit.Dropdown(row, follow, rule != null ? (int)rule.rule + 1 : 0, i =>
             {
                 var e = ShipSettings.Edit(guid);
@@ -315,18 +344,27 @@ public static class ShipPopup
         }
     }
 
-    // The fleet stance decides when the chain gets a say: Defensive and Escort set a manual target the chain never
-    // overrides. A tooltip line, not a row: the popup has no scroll.
+    // Engagement distance and Keep distance only steer a ship that is chasing its target. The game flies the others in
+    // formation or holds them, and these settings never reach that code. A tooltip line, not a row, for the popup's height.
+    private static string FormationNote(SpaceShipData ship)
+    {
+        if (ship == GamePlayer.current.currentSpaceShip)
+            return "\n\nThe ship you fly does nothing with this while " + Translation.Translate("@UIHoldPosition") + " is switched on in the HUD (flying it by hand switches it on).";
+        return "\n\nA fleet ship only follows this while it is chasing a target. On " + Translation.Translate("@FleetStanceEscort") + " or " + Translation.Translate("@FleetStanceHoldFire") + ", with a Hold or Move order, or on " + Translation.Translate("@FleetStanceDefensive") + " until something hits it, the game flies it in formation and this does nothing.";
+    }
+
+    // The fleet stance decides when the target rules get a say: Defensive and Escort set a manual target that the rules
+    // never override. A tooltip line, not a row: the popup has no scroll.
     private static string StanceNote(SpaceShipData ship)
     {
-        if (ship == GamePlayer.current.currentSpaceShip) return "";
+        if (ship == GamePlayer.current.currentSpaceShip) return "\n\nThe ship you fly only picks targets by itself while ECHO or autoplay is flying it.";
         string name, help;
         switch (ship.fleetStance)
         {
-            case FleetStance.Aggressive: name = "Aggressive"; help = "The chain decides every pick."; break;
-            case FleetStance.Defensive: name = "Defensive"; help = "The game sets its target itself while it's being hit (whoever hits it most) or while your flagship has a target; the chain decides only when there is nothing to copy."; break;
-            case FleetStance.Escort: name = "Escort"; help = "The game copies your flagship's target; the chain decides only when the flagship has none."; break;
-            case FleetStance.HoldFire: name = "Hold fire"; help = "It doesn't pick targets at all."; break;
+            case FleetStance.Aggressive: name = Translation.Translate("@FleetStanceAggressive"); help = "Your target rules (Target choice, then the Then by rows) decide every pick."; break;
+            case FleetStance.Defensive: name = Translation.Translate("@FleetStanceDefensive"); help = "The game sets its target itself while it's being hit (whoever hits it most) or while your flagship has a target; your target rules decide only when there is nothing to copy."; break;
+            case FleetStance.Escort: name = Translation.Translate("@FleetStanceEscort"); help = "The game copies your flagship's target; your target rules decide only when the flagship has none."; break;
+            case FleetStance.HoldFire: name = Translation.Translate("@FleetStanceHoldFire"); help = "A ship on " + name + " doesn't pick targets."; break;
             default: return "";
         }
         return "\n\nThis ship's stance is " + name + ". " + help;
@@ -358,7 +396,7 @@ public static class ShipPopup
         if (names.Count == 0) names.Add("Nothing aboard");
 
         var row = Kit.Row(Body, 8f, 26f);
-        Kit.Tooltip(Kit.Label(row, "Pin an item"), null, "Pinned items stay aboard when the fleet cargo's crown button moves everything to the flagship. Pick an item aboard, or a pin to remove.");
+        Kit.Tooltip(Kit.Label(row, "Pin an item"), null, "Pinned items stay aboard when you use \"" + CargoPins.MoveAllButton() + "\" in the fleet cargo. Pick an item aboard, or a pin to remove.");
         Button toggle = null;
         var choice = Kit.Dropdown(row, names, 0, i =>
         {
@@ -381,4 +419,12 @@ public static class ShipPopup
     }
 
     private static readonly string[] MissileNames = { "Fly on", "Weapon's target", "Nearest enemy" };
+
+    // The Settings tab's label without its trailing unit ("Re-check target every (seconds)"): the popup's dropdown
+    // names the unit in each choice, and the full label doesn't fit the popup's label column.
+    private static string WithoutUnit(string label)
+    {
+        int i = label.LastIndexOf(" (", System.StringComparison.Ordinal);
+        return i > 0 && label.EndsWith(")", System.StringComparison.Ordinal) ? label.Substring(0, i) : label;
+    }
 }

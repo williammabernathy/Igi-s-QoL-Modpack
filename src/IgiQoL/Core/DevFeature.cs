@@ -122,6 +122,9 @@ public sealed class DevFeature : Feature
 
         var cleanups = new List<Action>();
         int pass = 0, fail = 0, skip = 0;
+        unityErrors.Clear();
+        unityErrorCount = 0;
+        Application.logMessageReceived += OnUnityLog;
         if (!ready)
         {
             Plugin.Log.LogInfo("CHECK Dev/ready FAIL - game not ready after 60 s");
@@ -140,12 +143,14 @@ public sealed class DevFeature : Feature
                 {
                     if (!feature.Active || !Selected(feature.Id)) continue;
                     var ctx = new SelfCheckContext { FeatureId = feature.Id };
+                    runningFeature = feature.Id;
                     yield return Protected(feature.SelfCheck(ctx), ctx);
                     pass += ctx.PassCount;
                     fail += ctx.FailCount;
                     skip += ctx.SkipCount;
                     cleanups.AddRange(ctx.Cleanups);
                 }
+                runningFeature = null;
             }
 
             if (!string.IsNullOrEmpty(DumpHierarchy.Value))
@@ -212,6 +217,15 @@ public sealed class DevFeature : Feature
             fail += devCtx.FailCount;
         }
 
+        // Exceptions the checks' own try/catch never sees: a MonoBehaviour's Update or a UI callback of the mod that
+        // throws, which Unity writes to Player.log, not to LogOutput.log.
+        Application.logMessageReceived -= OnUnityLog;
+        if (unityErrorCount == 0) { Plugin.Log.LogInfo("CHECK Dev/unity-errors PASS - no error or exception from the mod in Unity's log during the run"); pass++; }
+        else
+        {
+            Plugin.Log.LogInfo($"CHECK Dev/unity-errors FAIL - {unityErrorCount} errors or exceptions from the mod in Unity's log; first: {string.Join(" || ", unityErrors)}");
+            fail++;
+        }
         Plugin.Log.LogInfo($"Self-check complete: {pass} pass, {fail} fail, {skip} skip");
         if (QuitAfterSeconds.Value > 0)
         {
@@ -227,6 +241,26 @@ public sealed class DevFeature : Feature
         foreach (var part in only.Split(','))
             if (part.Trim() == id) return true;
         return false;
+    }
+
+    private readonly List<string> unityErrors = new();
+    private int unityErrorCount;
+    private string runningFeature;
+
+    // Errors and exceptions with the mod in the message or the stack. The first few are kept, with the check that was
+    // running and the mod's frame nearest the top of the stack.
+    private void OnUnityLog(string message, string stack, LogType type)
+    {
+        if (type != LogType.Exception && type != LogType.Error) return;
+        bool ours = (stack != null && stack.Contains("IgiQoL.")) || (message != null && message.Contains("IgiQoL."));
+        if (!ours) return;
+        unityErrorCount++;
+        if (unityErrors.Count >= 3) return;
+        string frame = null;
+        if (stack != null)
+            foreach (var line in stack.Split('\n'))
+                if (line.Contains("IgiQoL.")) { frame = line.Trim(); break; }
+        unityErrors.Add($"[{runningFeature ?? "after the checks"}] {message?.Split('\n')[0]} at {frame ?? "?"}");
     }
 
     // Runs a self-check, including the coroutines it yields, so an exception anywhere fails the check instead of

@@ -197,7 +197,7 @@ public sealed class ShipSettings
         v = record["pins"];
         if (v.IsJsonArray)
             foreach (var id in v.AsJsonArray)
-                if (id.IsString) s.pins.Add(id.AsString);
+                if (id.IsString && id.AsString.Length > 0) s.pins.Add(id.AsString);
         v = record["keepAmmo"];
         if (v.IsBoolean) s.keepAmmo = v.AsBoolean;
         return s;

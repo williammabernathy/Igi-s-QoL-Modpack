@@ -22,8 +22,8 @@ public sealed class ShipStats : Feature
     public ShipStats() { Instance = this; }
 
     public override string Id => "ShipStats";
-    public override string Title => "Ship stats on hover";
-    public override string Description => "A ship's hover card lists how much of each damage type it resists right now, buffs and debuffs included. Ships with armour also show what a hit on the armour loses in total, armour's own resistance or weakness included. Below that, every buff and debuff on the ship with its stacks and time left, what the ship is targeting, an enemy's threat list and which units are targeting the ship. The card updates twice a second while you hover it.";
+    public override string Title => "Ship Stats on Hover";
+    public override string Description => "A ship's hover card lists how much of each damage type it resists right now, buffs and debuffs included. Ships with armor also show what a hit on the armor loses in total, the armor's own resistance or weakness included. Below that, every buff and debuff on the ship with its stacks and time left, what the ship is targeting, an enemy's threat list and which units are targeting the ship. The card updates twice a second while you hover it.";
     public override Type[] PatchClasses => new[] { typeof(ShipStatsPatches) };
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx) => ShipStatsCheck.Run(ctx);
@@ -37,20 +37,20 @@ public sealed class ShipStats : Feature
 
     private static readonly List<TemporaryEffect> CardEffects = new();
     private static readonly List<ActivatedAbility> CardAbilities = new();
-    private static readonly List<KeyValuePair<AbstractUnit, float>> CardThreat = new();
+    private static readonly List<(AbstractUnit unit, float threat)> CardThreat = new();
     private static readonly List<AbstractUnit> CardAttackers = new();
     private static readonly List<string> AttackerNames = new();
     private static readonly List<int> AttackerCounts = new();
 
     // One row per damage type. The first figure is what shields and hull resist, the second what a hit on the
-    // armour loses in total; negative when debuffs or an armour weakness make the type hit harder than normal.
+    // armor loses in total; negative when debuffs or an armor weakness make the type hit harder than normal.
     internal static TooltipSection Section(AbstractUnit unit)
     {
         bool armor = Resists.HasArmor(unit);
         var section = new TooltipSection(SectionTitle);
         if (armor)
         {
-            section.count = "shield, hull | armour";
+            section.count = "shield, hull | armor";
             section.countColor = ColorHelper.poiTooltipMuted;
         }
         foreach (var type in Resists.Types)
@@ -110,19 +110,20 @@ public sealed class ShipStats : Feature
         return new TooltipRow(TargetingLabel, target != null ? Aggro.Name(target) : "nothing", null);
     }
 
-    // An NPC combat ship's threat table, highest first, each as a share of the top entry, so you can see how close
-    // another ship is to pulling it away. The unit it's attacking gets a "target" badge: the game skips entries out of
-    // its weapon or chase range first, so that's not always the top one. Null when it has no table or no entries.
+    // The threat table the ship picks its targets from, highest first, each as a share of the top entry, so you can see
+    // how close another ship is to pulling it away. The game shares one table among all ships of a faction here, and
+    // each ship weighs the entries by its distance and by how many of its allies already fight them, so the unit it's
+    // attacking (the "target" badge) isn't always the top one. Null when it has no table or no entries.
     internal static TooltipSection ThreatSection(AbstractUnit unit)
     {
         if (!Aggro.Threat(unit, CardThreat) || CardThreat.Count == 0) return null;
         var target = Aggro.Target(unit);
-        float top = CardThreat[0].Value;
-        var section = new TooltipSection(ThreatTitle) { count = "% of top", countColor = ColorHelper.poiTooltipMuted };
+        float top = CardThreat[0].threat;
+        var section = new TooltipSection(ThreatTitle) { count = "share of top entry", countColor = ColorHelper.poiTooltipMuted };
         for (int i = 0; i < CardThreat.Count && i < AggroRows; i++)
         {
-            var row = new TooltipRow(Aggro.Name(CardThreat[i].Key), Mathf.RoundToInt(CardThreat[i].Value / top * 100f) + "%", null);
-            if (CardThreat[i].Key == target) row.WithBadge("target", ColorHelper.red90);
+            var row = new TooltipRow(Aggro.Name(CardThreat[i].unit), Mathf.RoundToInt(CardThreat[i].threat / top * 100f) + "%", null);
+            if (CardThreat[i].unit == target) row.WithBadge("target", ColorHelper.red90);
             section.rows.Add(row);
         }
         AddMore(section, CardThreat.Count - section.rows.Count);

@@ -26,7 +26,7 @@ public sealed class EchoMissions : Feature
     public EchoMissions() { Instance = this; }
 
     public override string Id => "EchoMissions";
-    public override string Title => "ECHO missions";
+    public override string Title => "ECHO Missions";
     public override string Description => "How many missions ECHO takes from a mission board at once, and which kinds. ECHO only gets missions for its preferred activity (combat, mining or salvage), so only that activity's kinds matter. The starting values match the unmodded game.";
     public override string SettingsTab => "ECHO";
     public override Type[] PatchClasses => new[] { typeof(MissionBatchPatches), typeof(MissionKindPatches) };
@@ -50,6 +50,7 @@ public sealed class EchoMissions : Feature
     {
         MissionKinds.Check(ctx);
         MissionBatch.Check(ctx);
+        MissionCheck.Run(ctx);
         yield return Tab(ctx);
     }
 
@@ -108,7 +109,7 @@ public static class MissionKinds
     // courier switch already covers. Id = MissionGenerator.identifier (its class name).
     public static readonly MissionKind[] All =
     {
-        new("BountyHunt", GameplayType.Combat, "Combat: Eliminate Pirate Presence / Eliminate (faction) forces",
+        new("BountyHunt", GameplayType.Combat, "Combat: Eliminate Pirate Presence or Eliminate (faction) forces",
             "Fly to a location and destroy the enemy ships there. Short."),
         new("ClearSalvageField", GameplayType.Combat, "Combat: Reclaim Salvage Rights",
             "Clear the guards and turrets from a wreck field. Short."),

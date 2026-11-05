@@ -1,121 +1,123 @@
-# Common questions
+# Common Questions
 
-These are short answers to questions players ask about the Conquest stage (level 28 and up): the 30% sector-control mission, the war map, battles and captures, faction wealth and warships, and stations. Each answer ends with a link to the section that has the full numbers and how they were read from the game code. Values are for game version 0.8.3.4. Terms are in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
+These are short answers to questions players ask about the Conquest stage (level 28 and up): the 30% sector-control mission, the war map, battles and captures, faction wealth and warships, and stations. Each answer ends with a link to the section that has the full numbers and how they were read from the game code. Values were read from game version 0.8.3.4, and the code behind each answer was compared with the 0.8.3.5 source. Terms are in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
-## The 30% sector-control mission
+## The 30% Sector-Control Mission
 
-### What counts toward the 30%?
+### What Counts Toward the 30%?
 
 Your chosen faction needs to own 30% of the systems in the Conquest sector (Ara Martis). Only systems owned by exactly that faction count, and its headquarters counts. Allies, rival factions and unowned systems do not. The total includes every system in the sector, owned or not, and every rival's headquarters. The Darkspace region, the staging sectors and the Frontier are not in it.
 
-The sector has 70 to 84 systems, fixed when the galaxy is created. The number you need:
+The world generator gives the sector 70 to 84 systems, but a save checked in play had 88, so your total may be higher. The number of systems the faction must own is:
 
-| Total systems | 70 | 71 to 73 | 74 to 76 | 77 to 80 | 81 to 83 | 84 |
-|---|---|---|---|---|---|---|
-| Systems the faction must own | 21 | 22 | 23 | 24 | 25 | 26 |
+| Total systems | 70 | 71 to 73 | 74 to 76 | 77 to 80 | 81 to 83 | 84 to 86 | 87 to 90 |
+|---|---|---|---|---|---|---|---|
+| Systems the faction must own | 21 | 22 | 23 | 24 | 25 | 26 | 27 |
 
 To find your own total, divide the faction's system count on the galaxy map by its Area Conquered percentage.
 
-Details: [What the objective counts](sector-control.md#what-the-objective-counts).
+Details: [What the Objective Counts](sector-control.md#what-the-objective-counts).
 
-### How often does the 30% progress update, and when do I have to be at 30%?
+### How Often Does the 30% Progress Update, and When Do I Have to Be at 30%?
 
-Once an hour. The percentage is stored when the "Conquest Update" countdown on the galaxy map runs out (and again at once when a system is abandoned, which a hub kill does), so both the "Area Conquered" row (press E on the galaxy map, Factions tab, click the faction) and the mission's objective line lag the map by up to an hour. A siege capture or a fleet claiming an unowned system shows up late.
+The percentage updates once an hour. The game stores it when the "Conquest Update" countdown on the galaxy map runs out. It is stored again at once when a system is abandoned, which a hub kill does. Both the "Area Conquered" row and the mission's objective line therefore lag the map by up to an hour. To find the row, press E on the galaxy map, open the Factions tab and click the faction. A siege capture, or a fleet claiming an unowned system, shows up late.
 
-The percentage can also go back down, because every update recomputes it from the current owners. Nothing latches it. It only has to read 30% or more at the moment you talk to the faction's commander in its headquarters. After that the mission completes and later drops do not matter. If it hit 30% at one update and is gone at the next, you still succeed if you are already standing at the commander.
+The percentage can also go back down, because every update recomputes it from the current owners. Nothing locks it in once it reaches 30%. It only has to read 30% or more at the moment you talk to the faction's commander in its headquarters. After that the mission completes, and later drops do not matter. If it reached 30% at one update and has dropped by the next, you still succeed if you are already standing at the commander.
 
-Details: [What the objective counts](sector-control.md#what-the-objective-counts).
+Details: [What the Objective Counts](sector-control.md#what-the-objective-counts).
 
-### What is the best way to finish the 30% mission?
+### What Is the Best Way to Finish the 30% Mission?
 
-Let your faction's own fleets take the easy systems, help on the hard ones, and time your hand-in. You cannot hold systems yet, so everything you do nudges a war that NPC (non-player character) factions fight on their own. A condensed plan:
+Let your faction's own fleets take the easy systems, help on the harder ones, and time your hand-in. You cannot hold systems yourself yet, so everything you do nudges a war that NPC (non-player character) factions fight on their own. The three major factions are Kolyatov Collective, Stellar Industries and Luminate Combine. Here is a short plan:
 
 1. Pick a faction that is not your enemy, has a headquarters, and borders Darkspace Compact systems.
-2. Look at the neighbors of its frontline. A neighbor with no resident fleet and a Defense row of 1,600 or less is a one-fleet job: a full 2000-point fleet starts an attack at 1.15 times the target's strength but captures only at 1.25 times the Defense number. The faction takes it on its own, so leave it. A fleet that starts on a system at 1,600 to 1,739 usually ends the siege without a capture and is blocked from that system for an hour.
-3. For a neighbor with a resident 2000-point fleet, do 5 war effort missions at your faction's hub next to it within 3 hours, picking missions whose reward line names the target faction ("-10% for X next system"). That removes about 144 to 403 attacker points to start an attack (156 to 438 to capture). It does not remove the fleet.
-4. Kill a hub only where the system can convert: the target borders one of your faction's systems, your faction has idle fleets within 4 jumps, the old owner has no idle fleet inside the system, no rival borders it, and the owner is already your enemy. Then fly in and kill the hub parts. The system is abandoned and your faction's nearby fleet claims it at its next planning pass. Skip the Defense stations.
-5. Time it against the Conquest Update card. A hub kill shows in Area Conquered at once, but a siege capture or a fleet's claim shows only at the next update, so finish captures well before the countdown ends. Be at the commander in the headquarters as soon as the objective shows 30% or more.
+2. Look at the neighbours of its frontline. A neighbour with no resident fleet and a Defense row of about 1,739 or less is a job for one fleet. A full 2000-point fleet starts an attack at 1.15 times the target's next-battle strength, a figure the game never shows (see [the glossary](glossary.md#conquest-map)). It captures the system once it has killed the defenders and broken the hub with about 313 points left. The faction takes such a system on its own, so leave it.
+3. For a neighbour with a resident 2000-point fleet, do 5 war effort missions at your faction's hub next to it, each within 3 hours of the one before. Pick missions whose reward line names the target faction, for example "-10% for X next system". That lowers the points attackers need to start an attack by about 144 to 403, and the station fires at half strength through the siege. It does not remove the fleet.
+4. Kill a hub only where the system can convert to your faction. The owner must already be your enemy, and the target must border one of your faction's systems. Your faction needs a free fleet within 4 jumps, meaning one that is idle and not heading to a refit, a distress call or an assault. The old owner must have no idle fleet inside the system, and no other faction's fleet may land first. Then fly in and kill the hub parts. The system is abandoned, and the first fleet to land claims it. Your faction's fleet claims it at its next planning pass (within 600 s). Skip the Defense stations.
+5. Time it against the Conquest Update card. A hub kill shows in Area Conquered at once. A siege capture or a fleet's claim shows only at the next update, so finish captures well before the countdown ends. Be at the commander in the headquarters as soon as the objective shows 30% or more.
 
-Do not wipe a rival major's fleets. A wiped fleet frees a slot, which halves its build costs and triples build speed, and a major at 2 fleets or fewer gets a 1500-point Great Gate reinforcement.
+Do not wipe a rival major's fleets. A wiped fleet frees a slot, which halves its build costs and triples its build speed. A major with 2 fleets or fewer also gets a 1500-point Great Gate reinforcement.
 
-Details: [A step-by-step plan](sector-control.md#a-step-by-step-plan).
+Details: [A Step-by-Step Plan](sector-control.md#a-step-by-step-plan).
 
-### What are all the ways I can push my faction's share?
+### What Are All the Ways I Can Push My Faction's Share?
+
+ECHO is your ship's AI companion. In this table, a "non-idle" mission is one you fly yourself, not one ECHO completes while you are away.
 
 | Lever | Effect |
 |---|---|
-| Kill a resident fleet or garrison ships | Every point removed from the target's next-battle strength cuts what attackers must bring by 1.15. A resident 2000-point fleet turns a target from assault-only into one a single fleet can start and, at a Defense number of 1,600 or less, finish. |
-| War effort penalty on the target | Removes 125 to 350 from the target's station term: about 144 to 403 attacker points to start an attack and 156 to 438 to capture. Needs 5 non-idle missions in 3 hours. |
-| Kill the hub | Abandons the system. A fleet of your faction takes it only if your faction borders it, has idle fleets within 4 jumps and the old owner has no idle fleet inside. Needs the owner to be your enemy already. |
-| War effort bonus at your frontline hubs | Up to +250 to 700 of Defense, which protects systems your faction already has. Needs 10 missions at the system, or 20 at a neighbor, in 3 hours. |
-| Embassy missions | 80,000 to 120,000 wealth each. Only helps rebuild a lost fleet; does not raise a major's fleet cap. |
-| Kill enemy warship deliveries | Removes a ship the enemy already paid for. Rarely moves a system count. |
+| Kill a resident fleet or garrison ships | Every point removed from the target's next-battle strength cuts what attackers must bring by 1.15 points. Killing a resident 2000-point fleet turns a target that needed an assault into one that a single fleet can start. It also leaves 2000 fewer points of defenders to kill before the hub. |
+| War effort penalty on the target | Removes 125 to 350 from the target's station term. That lowers the points attackers need to start an attack by about 144 to 403, and the station fires at half strength through the siege. It takes 5 non-idle missions, each within 3 hours of the one before. |
+| Kill the hub | Abandons the system. A fleet of your faction takes it only if your faction borders it, has a free fleet within 4 jumps, and no other fleet lands or already stands there first. The owner must already be your enemy. |
+| War effort bonus at your frontline hubs | Adds up to +250 to 700 of Defense, which protects systems your faction already has. It takes 10 non-idle missions at the system, or 20 at a neighbour, each within 3 hours of the one before. |
+| Embassy missions | 80,000 to 120,000 wealth each. They only help rebuild a lost fleet and do not raise a major's fleet cap. |
+| Kill enemy warship deliveries | Destroys a ship the enemy has already paid for. It rarely changes how many systems anyone holds. |
 
-Details: [What moves your faction's share](sector-control.md#what-moves-your-factions-share).
+Details: [What Moves Your Faction's Share](sector-control.md#what-moves-your-factions-share).
 
-### What can go wrong when I try to help?
+### What Can Go Wrong When I Try to Help?
 
-- A hub kill with no besieger of your faction nearby gives the system to whoever claims it first. Only factions that own a neighboring system consider it (a faction with no border looks at any open system), and a claim by an arriving fleet needs no siege and no wait. The old owner's own idle fleet standing in the system claims it back at the next planning pass, so the hub kill is wasted there.
-- A hub kill during a rival's siege hands the system to that rival if the siege is in its hub stage.
-- You cannot shoot a hub of a faction that is not your enemy. Making it one costs about 4,500 reputation (-1,000 for the force-attack, -3,500 for the kill), which is enough to push most factions under -500.
-- Pushing a faction to 0 systems is only a delay. It sits out 5 conquest updates, then its fleets start claiming again.
-- When your faction passes 10%, the smaller majors that border it can start attacking it. Once it is larger than Darkspace, every NPC faction that borders it prefers it as a target.
+- A hub kill with no hub-stage siege by your faction gives the system to the first fleet that lands. Only factions that own a neighbouring system consider it. A faction with no frontline looks at any open system. A claim by an arriving fleet needs no siege and no wait. A fleet already flying in to attack the system, or a nearer fleet of another faction, lands before yours. The old owner's own idle fleet standing in the system claims it back at the next planning pass, so the hub kill is wasted there.
+- A hub kill during a rival's siege hands the system to that rival at once if the siege is in its hub stage. If claiming is unlocked for you, you are offered the claim first.
+- You cannot shoot a hub of a faction that is not your enemy. Making it one costs about 4,500 reputation (-1,000 for the force-attack and -3,500 for the kill), which is enough to push most factions under -500.
+- Pushing a faction down to 0 systems only delays it. It sits out 5 conquest updates, then its fleets start claiming systems again.
+- When your faction passes 10%, the smaller major factions that border it can start attacking it. Once it is larger than Darkspace, every NPC faction that borders it prefers it as a target.
 - War effort needs a mission from a hub in a war-zone system. Embassy missions give wealth only, and a mission at another faction's hub strengthens that faction's stations.
-- For the three majors, wealth and fleets do not raise the fleet cap. It rises only with systems held: 6 at 15, 7 at 30.
+- For Kolyatov, Stellar and Luminate, wealth and fleets do not raise the fleet cap. It rises only with systems held: to 6 at 15 systems and to 7 at 30.
 
 Details: [Pitfalls](sector-control.md#pitfalls).
 
-### Why is my faction's share not growing on its own?
+### Why Is My Faction's Share Not Growing on Its Own?
 
-The game has no growth rate to read. It only has limits on what NPC fleets will attack. A lone 2000-point fleet starts an attack only at 1.15 times a target's next-battle strength or better, so it can start on anything up to about 1,739. It captures only if its remaining points are at least 1.25 times the Defense number when the siege ends, which for 2000 points means a Defense number of 1,600 or less. Between the two the siege ends in a skirmish or a repelled attack. Above 1,739 the faction needs an assault of at least 2 ready fleets, and it runs one assault at a time. Travel is 60 s plus 150 s per jump, a siege stage takes at least 600 s, and planning runs every 600 s.
+The game has no growth rate to read. It only has limits on what NPC fleets will attack. A single 2000-point fleet acting alone starts an attack only at 1.15 times a target's next-battle strength or better, so it can start on anything up to about 1,739. It captures the system once it has killed every defender and broken the hub's structure inside the 30-minute stage, with about 313 points still left. That is 1.25 times the 250 floor that the Defense number drops to. A siege that runs out of time first ends in a skirmish or a repelled attack. Above 1,739 the faction needs an assault of at least 2 ready fleets, and it runs one assault at a time. Travel takes 60 s plus 150 s per jump, a siege stage takes at least 600 s, and planning runs every 600 s.
 
-A faction holding under 10% of the sector only targets unowned systems or owners at 10% or more (if that leaves no target at all, it targets everything). At the start none of the three majors is at 10%, so they ignore each other and go after Darkspace and unowned systems. A resident fleet in a system also pushes it above the single-fleet limit, so those systems wait for an assault.
+A faction holding under 10% of the sector only targets unowned systems or owners at 10% or more. If that leaves no target at all, it targets everything. At the start, none of the three majors is at 10%, so they ignore each other and go after Darkspace and unowned systems. A resident fleet in a system also pushes it above the single-fleet limit, so those systems wait for an assault.
 
-Details: [What the war does without you](sector-control.md#what-the-war-does-without-you).
+Details: [What the War Does Without You](sector-control.md#what-the-war-does-without-you).
 
-### Can I hold or claim systems before level 60?
+### Can I Hold or Claim Systems Before Level 60?
 
-No. The game refuses with "Claiming systems unlocks with Beyond the Front". Fielding your own fleets, building outposts or Defense stations and the empire level tab unlock with that mission too, which opens at level 60 once you have finished one 30% mission ([gate](../expansion/README.md)). Until then you can run Conquest missions, let ECHO run idle ones, attack stations and ships live, intercept fleets and deliveries, and join a smaller faction's war.
+No. The game refuses with "Claiming systems unlocks with Beyond the Front". Fielding your own fleets, building outposts or Defense stations, and the Empire Level tile on the Faction overview unlock with that mission too. The mission opens at level 60 once you have finished one 30% mission ([the gate](../expansion/README.md)). Until then you can run Conquest missions, let ECHO run idle ones, attack stations and ships live, intercept fleets and deliveries, and join a smaller faction's war.
 
-Details: [What you can and cannot do](sector-control.md#what-you-can-and-cannot-do).
+Details: [What You Can and Cannot Do](sector-control.md#what-you-can-and-cannot-do).
 
-## Starting the mission and choosing a faction
+## Starting the Mission and Choosing a Faction
 
-### Spoiler: How do I get the 30% mission?
+### Spoiler: How Do I Get the 30% Mission?
 
-1. Accept the story step at level 28 (it ends with a talk to the Canisec Commander), then find the three embassies and talk to their representatives. A representative offers to align you with that faction.
-2. The faction's first mission has four steps: go to its embassy gate, talk to the commander at its headquarters, earn 10 contribution points by running missions for it, and talk to the commander again. The points count only while that third step is current, so missions finished before you talk to the commander do not count. A Conquest mission from its hub or embassy adds 3 to 6 points (1 to 3 if ECHO completes it idle), doubled when the mission's enemy is a conquest faction other than the two raider factions, plus a bonus from your conquest rank. That is usually 2 to 4 missions, or 1 to 2 when the doubling applies. It pays 2,000,000 credits and 60 Vanguard Marks.
+1. Accept the story step at level 28. It ends with a talk to the Canisec Commander. Then find the three embassies and talk to their representatives. A representative offers to align you with that faction.
+2. The faction's first mission has four steps: go to its embassy gate, talk to the commander at its headquarters, earn 10 contribution points by running missions for it, and talk to the commander again. The points count only while that third step is current, so missions finished before you talk to the commander do not count. A Conquest mission from its hub or embassy adds 3 to 6 points (1 to 3 if ECHO completes it idle). The amount is doubled when the mission's enemy is a conquest faction other than the Corsair Syndicate and Meridia's Chosen, and a bonus from your conquest rank is added. That is usually 2 to 4 missions, or 1 to 2 when the doubling applies. The first mission pays 2,000,000 credits and 60 Vanguard Marks.
 3. The second mission has the 30% step and a report-back step. It cannot be abandoned and has no time limit. It pays 400 Vanguard Marks, 10,000,000 credits and 1 skill point. If the faction is already at 30%, the percentage step is done the moment the mission starts.
 
-Details: [Getting the mission](sector-control.md#spoiler-getting-the-mission).
+Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission).
 
-### Spoiler: Why does the representative refuse to align me?
+### Spoiler: Why Does the Representative Refuse to Align Me?
 
-The offer is refused if the faction is your enemy, or while the faction has no headquarters. The game counts a faction as your enemy when you are at war with it or your reputation with it is below -500, which is the Wary level or worse (Neutral covers -499 to 1,499). Raise your standing with that faction first, or pick another one.
+The offer is refused if the faction is your enemy, or while the faction has no headquarters. The game counts a faction as your enemy when you are at war with it or your reputation with it is below -500. That is the Wary level or worse (Neutral covers -499 to 1,499). Raise your standing with that faction first, or pick another one.
 
-Details: [Getting the mission](sector-control.md#spoiler-getting-the-mission).
+Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission).
 
-### Spoiler: Is the faction choice permanent?
+### Spoiler: Is the Faction Choice Permanent?
 
-Not by the game's own words. The "Sector Control" mission description says "The choice of faction is not permanent", and the confirmation dialog says "You are not permanently bound to them and may work with others later." The code only shows a yes/no prompt, so how you would change the choice is not verified. The game tracks your standing with all conquest factions all the time and accepts any of the three 30% missions as the requirement for what follows.
+Not by the game's own words. The "Sector Control" mission description says "The choice of faction is not permanent", and the confirmation dialog says "You are not permanently bound to them and may work with others later." The game only shows a yes/no prompt, so how you would change the choice is not verified. The game always tracks your standing with all conquest factions and accepts any of the three 30% missions as the requirement for what follows.
 
-Details: [Getting the mission](sector-control.md#spoiler-getting-the-mission).
+Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission).
 
-### Spoiler: Can I work on more than one faction's chain?
+### Spoiler: Can I Work on More Than One Faction's Chain?
 
-Yes. You can start the chain for more than one faction, and finishing any one of the three 30% missions is enough. The cheapest route is whichever of your factions the war favors. Check each faction's Area Conquered row on the Factions tab (press E on the galaxy map) before you commit.
+Yes. You can start the missions for more than one faction, and finishing any one of the three 30% missions is enough. The cheapest route is whichever of your factions the war favors. Check each faction's Area Conquered row on the Factions tab (press E on the galaxy map) before you commit.
 
-Details: [Getting the mission](sector-control.md#spoiler-getting-the-mission), [A step-by-step plan](sector-control.md#a-step-by-step-plan).
+Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission), [A Step-by-Step Plan](sector-control.md#a-step-by-step-plan).
 
-### Spoiler: What are the three kinds of "contribution"?
+### Spoiler: What Are the Three Kinds of "Contribution"?
 
-The game uses the word for three separate counters. "Your Contribution" on the Faction overview is your conquest standing with a faction, and it sets your conquest rank. The 10 points in the first mission are a counter that runs for that one step only; the same mission amounts also add to "Your Contribution". "Wealth your missions brought" is what your embassy missions delivered to a faction, and it matters for joining a smaller faction's war.
+The game uses the word for three separate counters. "Your Contribution" on the Faction overview is your conquest standing with a faction, and it sets your conquest rank. The 10 points in the first mission are a counter that runs for that one step only. The same mission amounts also add to "Your Contribution". "Wealth your missions brought" is what your embassy missions delivered to a faction, and it matters for joining a smaller faction's war.
 
-Details: [Getting the mission](sector-control.md#spoiler-getting-the-mission), [Joining a faction's war](faction-economy.md#joining-a-factions-war).
+Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission), [Joining a Faction's War](faction-economy.md#joining-a-factions-war).
 
-## The system tooltip, war effort and fleet labels
+## The System Tooltip, War Effort and Fleet Labels
 
-### What does the Defense number on a system tooltip mean?
+### What Does the Defense Number on a System Tooltip Mean?
 
 It is the strength the defenders put into a siege round, in the same unit as ship points. An unowned system shows 0. The number is the sum of three terms:
 
@@ -125,27 +127,29 @@ Defense = station firepower term
         + points of every defending fleet in the system
 ```
 
-The station term uses the hub and every Defense station of the owner that is not wrecked. It has a floor of 250, and firepower above 700 does not count, so extra turret platforms past that only add hull. A Defense station here is a station type that holds a garrison, not the Defense number. Garrisons run 270 to 900 points per station by tier. A full NPC fleet is 2000 points. As an illustration: a hub with 480 firepower, one tier-3 Defense station with a platform of two medium turrets (160 firepower, 540-point garrison) and one full fleet give min(480 + 160, 700) + 540 + 2000 = about 3,180.
+The station term uses the hub and every Defense station of the owner that is not wrecked. It has a floor of 250, and firepower above 700 does not count, so extra turret platforms past that only add hull. A Defense station is a type of station that holds a garrison. It is not the same thing as the Defense number. Garrisons run 270 to 900 points per station, depending on tier. A full NPC fleet is 2000 points.
 
-NPC factions do not compare against this number. They use next-battle strength, which the game never shows: the weakest Defense station's strength if there are any, otherwise the full Defense number, plus same-faction fleets already on the way. The tooltip number is usually the upper bound. The exception is a system that is settling after a change of owner: the row halves the station profile, but a Defense station's own strength is not halved.
+For example, take a hub with 480 firepower, one tier-3 Defense station with a platform of two medium turrets (160 firepower, 540-point garrison) and one full fleet. The Defense number is min(480 + 160, 700) + 540 + 2000 = about 3,180.
 
-Details: [What the Defense number means](war.md#what-the-defense-number-means), [What NPC factions use instead of the Defense number](war.md#what-npc-factions-use-instead-of-the-defense-number).
+NPC factions do not compare against this number. They use next-battle strength, which the game never shows. Next-battle strength is the weakest Defense station's strength if there are any, otherwise the full Defense number, plus same-faction fleets already on the way. The tooltip number is usually the upper bound. The exception is a system that is settling after a change of owner: the row halves the station profile, but a Defense station's own strength is not halved.
 
-### How do I lower or raise a system's Defense?
+Details: [What the Defense Number Means](war.md#what-the-defense-number-means), [What NPC Factions Use Instead of the Defense Number](war.md#what-npc-factions-use-instead-of-the-defense-number).
+
+### How Do I Lower or Raise a System's Defense?
 
 To lower it:
 
-- Apply a war effort penalty. At the maximum it halves the station term.
-- Destroy defender ships or fleets. Their points come off one for one, and intercepting fleets still traveling removes the relief term.
+- Apply a war effort penalty. At the maximum, it halves the station term.
+- Destroy defender ships or fleets. Their points come off one for one. Intercepting fleets that are still traveling also removes the points they would add to the defense as relief.
 - Destroy turret platforms or the core by hand. The parts must be fully destroyed.
 - Attack within a few hours of a capture. The station profile (hub and Defense stations, hull and firepower) is halved while the system is settling.
-- A hub siege that breaks station structure lowers the station term toward the 250 floor.
+- Break the station structure (the hull total the attackers wear down; see the [glossary](glossary.md)) in a hub siege. That lowers the station term toward the 250 floor.
 
-To raise it, use a war effort bonus (up to x2 on the station term) or add turret platforms, which only helps up to 700 firepower.
+To raise it, use a war effort bonus (up to double the station term) or add turret platforms, which only help up to 700 firepower.
 
-Details: [Ways to lower or raise Defense](war.md#ways-to-lower-or-raise-defense).
+Details: [Ways to Lower or Raise Defense](war.md#ways-to-lower-or-raise-defense).
 
-### What is war effort and what does it do?
+### What Is War Effort and What Does It Do?
 
 War effort is a multiplier on a system's station firepower, raised by Conquest missions you complete. The tooltip shows it as "Your war effort", green for a bonus and red for a penalty, with the time left.
 
@@ -153,48 +157,62 @@ War effort is a multiplier on a system's station firepower, raised by Conquest m
 multiplier = max(0, 1 + bonus - penalty)
 ```
 
-Each non-idle mission adds 0.1. At the mission's system it adds to the bonus if the system is owned by the mission's faction. Each neighboring system owned by that faction gets half of that bonus. Each neighbor owned by the mission's enemy faction gets the same step as a penalty. The bonus caps at +1.0 (x2) and the penalty at 0.5 (x0.5). Each side has one timer of 3 hours, and every new step resets it. When it runs out, the whole bonus or penalty clears at once.
+Each non-idle mission adds a step of 0.1:
 
-Idle missions done by ECHO use a step of 0.1 x (1 + 0.2 x points in ECHO The Conqueror). The multiplier applies to the station term of the Defense number and to the Combat Power, Drone Power and Torpedo Power of station parts while you are fighting at a hub or Defense station there.
+- At the mission's system, the step goes to the bonus if the mission's faction owns that system.
+- Each neighbouring system owned by that faction gets half of that bonus.
+- Each neighbouring system owned by the mission's enemy faction gets the same step as a penalty.
 
-Details: [War effort](war.md#war-effort), [War effort on station weapons](war-stations.md#war-effort-on-station-weapons).
+The bonus caps at +1.0 (a multiplier of 2) and the penalty at 0.5 (a multiplier of 0.5). Each side has one timer of 3 hours, and every new step resets it. When the timer runs out, the whole bonus or penalty clears at once.
 
-### What does "Reinforcing" on a fleet mean?
+Idle missions done by ECHO use a step of 0.1 x (1 + 0.2 x points in the "ECHO The Conqueror" skill). The multiplier applies to the station term of the Defense number. While you are fighting at a hub or Defense station, it also applies to the Combat Power, Drone Power and Torpedo Power of that station's parts.
 
-It means the fleet is moving to a frontline system, or is retreating. An idle fleet that is not on the frontline gets the label when it is sent to the best-scoring frontline system. Every retreating fleet shows it too, on the way to its retreat site and while it rests there, and so do warship deliveries. A fleet retreats when it drops below 35% of its target points and shows "Reinforcing" until it is back to 75%.
+Details: [War Effort](war.md#war-effort), [War Effort on Station Weapons](war-stations.md#war-effort-on-station-weapons).
 
-Details: [Fleet labels on the map](war.md#fleet-labels-on-the-map), [Retreats, recovery and distress](war.md#retreats-recovery-and-distress).
+### What Does "Reinforcing" on a Fleet Mean?
 
-### What do the other fleet labels mean?
+It means the fleet is moving to a frontline system, or is retreating. A frontline system is one of the faction's systems that touches an enemy or unowned war-zone system. An idle fleet that is not on the frontline gets the label when it is sent to the best-scoring frontline system. Every retreating fleet shows it too, both on the way to its retreat site and while it rests there. Warship deliveries show it as well. A fleet retreats when it drops below 35% of its target points and shows "Reinforcing" until it is back to 75%.
+
+Details: [Fleet Labels on the Map](war.md#fleet-labels-on-the-map), [Retreats, Recovery and Distress](war.md#retreats-recovery-and-distress).
+
+### What Do the Other Fleet Labels Mean?
 
 | Label | Meaning |
 |---|---|
-| Attacking | Sent to take a system, or an assault launching, or a supporter joining a battle |
-| Gathering for an assault | Fleets heading to or waiting at the staging system of an assault |
-| Holding position | Idle on a frontline system; also the default after a battle or a finished refit |
-| Guarding faction space | Leftover fleets spread over the faction's station systems |
-| Responding to a distress call | Sent to a besieged or raided system the faction owns |
-| Defending the system / Defending an outpost from raiders | Idle in a system where its owner is under a Defense station or hub siege (not a fleet clash), or where an outpost is being raided |
-| Raiding an outpost | Sent to raid an economic outpost |
-| Refitting - {time} left | Being refitted, 300 s per refit |
+| Attacking | The fleet was sent to take a system, an assault is launching, or the fleet is joining a battle as a supporter. |
+| Gathering for an assault | The fleet is heading to, or waiting at, the staging system of an assault. |
+| Holding position | The fleet is idle on a frontline system. It is also the label a fleet gets by default after a battle or a finished refit. |
+| Guarding faction space | The faction's remaining fleets are spread over its station systems. |
+| Responding to a distress call | The fleet was sent to a besieged or raided system that the faction owns. |
+| Defending the system / Defending an outpost from raiders | The fleet is idle in a system where its owner is under a Defense station or hub siege (not a fleet clash), or where an outpost is being raided. |
+| Raiding an outpost | The fleet was sent to raid an economic outpost. |
+| Refitting - {time} left | The fleet is being refitted. A refit takes 300 s. |
 
-Details: [Fleet labels on the map](war.md#fleet-labels-on-the-map).
+Details: [Fleet Labels on the Map](war.md#fleet-labels-on-the-map).
 
-## Battles, sieges and captures
+## Battles, Sieges and Captures
 
-### How do battles and sieges resolve?
+### How Do Battles and Sieges Resolve?
 
-There are four kinds of fight: a fleet clash against a defending fleet (600 s cap), a siege of one Defense station (1800 s), a siege of the hub (1800 s) and a raid on an economic outpost (900 s). When you are not there, they run as simulated rounds every 60 s, and the fight is judged at the cap instead of running one more round, so a siege gets at most 29 rounds, a clash 9 and a raid 14. Each side deals about 4% to 6% of its own strength per round, and damage is spent on that side's ships at random, with cheaper ships picked more often. Over a full siege each side deals about 1.45 times its own strength in total.
+There are four kinds of fight: a fleet clash against a defending fleet (600 s cap), a siege of one Defense station (1800 s), a siege of the hub (1800 s) and a raid on an economic outpost (900 s). When you are not there, they run as simulated rounds every 60 s. The fight is judged at the cap instead of running one more round, so a siege gets at most 29 rounds, a clash 9 and a raid 14. Each side deals about 4% to 6% of its own strength per round. Damage is spent on that side's ships at random, with cheaper ships picked more often. Over a full siege each side deals about 1.45 times its own strength in total.
 
-Each round the attacker's strength is also scaled by a hull edge of up to plus or minus 15%, from the gap between the two sides' average hull ratings.
+Each round, the attacker's strength is also scaled by a hull edge of up to plus or minus 15%. The edge comes from the gap between the two sides' average hull ratings.
 
 If you are at the battle, the game spawns the real ships and the clock stops. The fight ends when one side has no ships left in the zone.
 
-Details: [Types and stages](war.md#types-and-stages), [One round](war.md#one-round), [Hull edge](war.md#hull-edge).
+Details: [Types and Stages](war.md#types-and-stages), [One Round](war.md#one-round), [Hull Edge](war.md#hull-edge).
 
-### How is a system captured?
+### How Is a System Captured?
 
-A hub siege ends in capture early if all of these hold: 600 s have passed, the system is not a headquarters or your capital, the station structure is at 0, no garrison ships or defending fleets are left, and the attackers have at least 1.25 times the current Defense number in points. At the 1800 s cap:
+A hub siege ends in an early capture if all of these hold:
+
+- 600 s have passed.
+- The system is not a headquarters or your capital.
+- The station structure is at 0.
+- No garrison ships or defending fleets are left.
+- The attackers have at least 1.25 times the current Defense number in points.
+
+Otherwise the siege is judged at the 1800 s cap:
 
 ```
 structure broken, capturable, points >= 1.25 x Defense  ->  Captured
@@ -202,75 +220,97 @@ points >= Defense                                       ->  Skirmish
 otherwise                                               ->  Repelled
 ```
 
-On capture, the defending NPC fleets are wiped, the old owner's Defense stations are destroyed, the hub and economic outposts flip to the attacker, war effort clears, and the settling timer starts.
+When a system is captured, the defending NPC fleets are wiped and the old owner's Defense stations are destroyed. The hub and economic outposts pass to the attacker. War effort clears, and the settling timer starts.
 
-Details: [How a siege ends](war.md#how-a-siege-ends), [Capture by siege](war.md#capture-by-siege).
+Details: [How a Siege Ends](war.md#how-a-siege-ends), [Capture by Siege](war.md#capture-by-siege).
 
-### What happens in a system right after it changes hands?
+### What Happens in a System Right After It Changes Hands?
 
 For the first 2 conquest updates (1 to 2 hours) the system is in unrest and pays no taxes. For about 5 to 6 hours after the change, it is settling: the station profile of the hub and every Defense station (hull and firepower) is halved. That shows in the Defense number and in a hub siege, but not in a Defense station's own siege. The 250 floor is not halved. That makes the hours after a capture the easiest time to attack the hub again.
 
-Details: [Settling and unrest](war.md#settling-and-unrest).
+Details: [Settling and Unrest](war.md#settling-and-unrest).
 
-### What happens if I destroy a hub?
+### What Happens if I Destroy a Hub?
 
-The system is abandoned and has no owner. If a siege is in its hub stage, the game gives the system to that siege's lead attacker. Otherwise the system is unowned until a fleet claims it, with no siege and no wait. Only factions that own a neighboring system consider an unowned system (a faction with no border looks at any open system). A fleet already standing in it counts first, so the old owner's idle fleet in the system claims it straight back at the next planning pass. When a fleet claims a system that a different faction abandoned, that faction's Defense stations in it are destroyed first. The code does not check for a headquarters here, so destroying a headquarters hub abandons it (not verified in play).
+The system is abandoned and has no owner, and every fight there ends. Who gets it, in order:
 
-Hub parts take x20 hit points (x30 at a headquarters). Part kills cost 5 reputation each if you are at -500 or lower with the owner, and 100 each otherwise. A hub is not a faction station, so the -5,000 station penalty does not apply.
+1. If a siege is in its hub stage, its lead attacker takes the system at once, unless that attacker is a raider faction. Fights in any other stage just end.
+2. With claiming unlocked, you are offered the claim first instead, and no fleet can claim the system while the offer is open. If you decline, the system goes to the hub siege's lead attacker if that fleet is still there. If you take it, the old owner's Defense stations are destroyed and your reputation with that faction drops to Hostile.
+3. Otherwise the system stays unowned until a fleet lands. A fleet already flying in to attack it claims it on landing. In every other case, each faction that owns a neighbouring system sends the fleet that its planning picks at its next planning pass (within 600 s, or at once for a faction that was in a fight there), and the first to land wins. A fleet already standing in the system claims it at once, so the old owner's idle fleet there takes it straight back. A faction with no frontline looks at any open system.
 
-Details: [Unowned and abandoned systems](war.md#unowned-and-abandoned-systems), [What moves your faction's share](sector-control.md#what-moves-your-factions-share).
+When a fleet claims a system that a different faction abandoned, that faction's Defense stations in it are destroyed first. In your player sector the system goes back on sale instead. The game does not check for a headquarters here, so destroying a headquarters hub abandons it (not verified in play).
 
-### How do NPC factions pick targets?
+Hub parts have 20 times the normal hit points (30 times at a headquarters). Part kills cost 5 reputation each if you are at -500 or lower with the owner, and 100 each otherwise. A hub is not a faction station, so the -5,000 station penalty does not apply.
 
-Idle fleets decide in a fixed order: retreat if below 35%, refit if due, answer a distress call, attack, join an assault, raid, then rally to the frontline and guard. A fleet attacks alone only at 1.15 times the target's next-battle strength or better. Among valid targets it prefers:
+Details: [Unowned and Abandoned Systems](war.md#unowned-and-abandoned-systems), [What Moves Your Faction's Share](sector-control.md#what-moves-your-factions-share).
+
+### How Do NPC Factions Pick Targets?
+
+Idle fleets decide in a fixed order: retreat if below 35%, refit if due, answer a distress call, attack, join an assault, raid, then rally to the frontline and guard. A fleet attacks alone only at 1.15 times the target's next-battle strength or better. Among valid targets, it prefers these, in this order:
 
 1. A target it is already standing in.
 2. The owner with the most war-zone systems (unowned systems rank above any owner).
 3. The lowest next-battle strength.
 4. The fewest jumps.
 
-Attacks go to the contested neighbors of a frontline system, up to 4 jumps away (a faction with no frontline looks at any open target up to 60 jumps away). A faction holding under 10% of the war zone only considers unowned targets or owners at 10% or more, unless that leaves nothing. When no single fleet is enough, 2 or more ready fleets gather at a staging system next to the target, merge and attack. A faction runs one assault at a time.
+Attacks go to the contested neighbours of a frontline system, up to 4 jumps away. A faction with no frontline looks at any open target up to 60 jumps away. A faction holding under 10% of the war zone only considers unowned targets or owners at 10% or more, unless that leaves nothing. When no single fleet is enough, 2 or more ready fleets gather at a staging system next to the target, merge and attack. A faction runs one assault at a time.
 
-Details: [Choosing a target](war.md#choosing-a-target), [Assaults](war.md#assaults).
+Fleets decide one after another in the order of the faction's fleet list, and each target is taken by one fleet. An unowned system counts as next-battle strength 0, so any fleet may go for it. A fleet already standing in a system picks that system first.
 
-### How strong are the fleets and systems I face?
+Details: [Choosing a Target](war.md#choosing-a-target), [Assaults](war.md#assaults).
 
-NPC warships are built at the higher of your effective level and the highest system level, plus 6. At level 28 systems start at level 32 to 36, so the first fleets are up to level 42 (your level plus up to 14). Systems rise toward your level every hour and never drop, and once they sit about 4 above you, fleets are about your level plus 10. At level 30, an enemy 5 levels above you has x1.56 damage and x1.57 HP; 10 levels above has x2.44 and x2.53 (the [scaling table](../basics/scaling.md#how-much-tougher-is-an-enemy-five-or-ten-levels-higher)). A fleet is refitted once it is 3 or more levels behind, so old fleets mostly sit 0 to 2 levels behind between hourly ticks, and further behind for a few ticks after the NPC level rises. Fleets are 2000 points regardless of your level.
+### What Do the Clocks in the War Do?
 
-Details: [Fleet levels](war.md#fleet-levels), [What you face](sector-control.md#what-you-face).
+There are three clocks, and the game shows only one of them:
 
-## Faction wealth and warships
+- The "Conquest Update" card counts down 3600 s. Then it recalculates Area Conquered, raises each system's control level (an internal counter), counts down settling and rebuilds damaged stations.
+- The hourly economy tick (not shown) pays taxes and the home subsidy, queues builds and assigns fleet orders.
+- The planning pass (not shown) assigns fleet orders for every faction every 600 s, and at once for the factions of a battle that just ended.
 
-### Where does a faction's wealth come from?
+The card's tooltip says factions "rethink their strategy", but the conquest update itself never assigns fleet orders. The three timers run on separate phases.
+
+Details: [Cadence](war.md#cadence).
+
+### How Strong Are the Fleets and Systems I Face?
+
+NPC warships are built at the higher of your effective level and the highest system level, plus 6. At level 28, systems start at level 32 to 36, so the first fleets are up to level 42 (your level plus up to 14). Systems rise toward your level every hour and never drop. Once they sit about 4 above you, fleets are about your level plus 10.
+
+At level 30, an enemy 5 levels above you has 1.56 times your damage and 1.57 times your HP. An enemy 10 levels above has 2.44 times the damage and 2.53 times the HP (see the [scaling table](../basics/scaling.md#how-much-tougher-is-an-enemy-five-or-ten-levels-higher)). A fleet is refitted once it is 3 or more levels behind, so old fleets mostly sit 0 to 2 levels behind between hourly updates, and further behind for a few updates after the NPC level rises. Fleets are 2000 points regardless of your level.
+
+Details: [Fleet Levels](war.md#fleet-levels), [What You Face](sector-control.md#what-you-face).
+
+## Faction Wealth and Warships
+
+### Where Does a Faction's Wealth Come From?
 
 | Source | Amount |
 |---|---|
-| Taxes | 5,000 to 15,000 per owned system per hour, doubled in the war zone, 0 while the system is in unrest |
+| Taxes | 5,000 to 15,000 per owned system per hour, doubled in the war zone, and none while the system is in unrest |
 | Trade deliveries | 10% of the cargo value of a finished delivery, 14% when it goes to an embassy |
 | Intertrade sales | 10% of the sale value |
-| Home subsidy | Kolyatov, Stellar, Luminate and Darkspace: 120,000 x (1 - share / (1/3)) per hour, never below 0 |
+| Home subsidy | Kolyatov, Stellar, Luminate and Darkspace: 120,000 x (1 - share / (1/3)) per hour, never below 0, where share is the faction's share of the war zone |
 | Your embassy missions | 80,000 to 120,000 each (halved if idle) |
-| Raids | What a completed raid takes from a victim |
+| Raids | Whatever a completed raid takes from its victim |
 
 The home subsidy is 120,000 at 0% of the war zone, 84,000 at 10%, 48,000 at 20% and 0 at 33.3% or more. On average a faction earns 10,000 per system per hour outside the war zone and 20,000 inside it.
 
-Details: [Where a faction's wealth comes from](faction-economy.md#where-a-factions-wealth-comes-from), [Catch-up mechanics](faction-economy.md#catch-up-mechanics).
+Details: [Where a Faction's Wealth Comes From](faction-economy.md#where-a-factions-wealth-comes-from), [Catch-Up Mechanics](faction-economy.md#catch-up-mechanics).
 
-### What do factions spend wealth on?
+### What Do Factions Spend Wealth on?
 
 | Spending | Cost |
 |---|---|
 | New economic outpost | 50,000 |
 | Defense station | 100,000 |
 | Station upgrades | 15,000 / 25,000 / 50,000 / 100,000, from tier 1 / 2 / 3 / 4 |
-| Warships | 750 to 30,000 per hull by size (see below); half price while under the fleet cap |
+| Warships | 750 to 30,000 per hull, by size (see below); half price while under the fleet cap |
 | Great Gate fleets | Full roster price, when the faction is eligible to pay |
 
-Ships cost wealth only, no materials. Cutting ore or goods supply does not slow warship production.
+Ships cost wealth only and need no materials, so cutting ore or goods supply does not slow warship production.
 
-Details: [What factions spend wealth on](faction-economy.md#what-factions-spend-wealth-on).
+Details: [What Factions Spend Wealth On](faction-economy.md#what-factions-spend-wealth-on).
 
-### How is wealth affected by a raid?
+### How Is Wealth Affected by a Raid?
 
 A completed raid moves wealth from the victim to the raider:
 
@@ -281,29 +321,29 @@ wealth drained = the smaller of
 raider earns   = wealth drained + 10% of the value of the materials taken
 ```
 
-An NPC raider also takes half of every stack in the station's storage (rounded down per stack; the materials vanish). The raided outpost pauses production for 3600 s and cannot be raided again for 14,400 s. Defense stations cannot be raided. A faction with a big stockpile loses only about one and a half hours of income per raid. Raids do not touch the warship queue or deliveries.
+An NPC raider also takes half of every stack in the station's storage, rounded down per stack, and those materials vanish. The raided outpost pauses production for 3600 s and cannot be raided again for 14,400 s. Defense stations cannot be raided. A faction with a big stockpile loses only about one and a half hours of income per raid. Raids do not touch the warship queue or deliveries.
 
-Raids on your own stations: an NPC raid drains no wealth and takes no materials from you, and the raider earns nothing, but the station still pauses and gets the cooldown. If your own empire fleet raids an NPC station (Beyond the Front), it takes 10% of each stack instead of half, and you are paid 10 credits per point of wealth the raid earns.
+Raids on your own stations work differently. An NPC raid drains no wealth and takes no materials from you, and the raider earns nothing, but the station still pauses and gets the cooldown. If your own empire fleet raids an NPC station (Beyond the Front), it takes 10% of each stack instead of half, and you are paid 10 credits per point of wealth the raid earns.
 
-Details: [Raids and the economy](faction-economy.md#raids-and-the-economy).
+Details: [Raids and the Economy](faction-economy.md#raids-and-the-economy).
 
-### How is wealth affected by killing a warship delivery or a convoy?
+### How Is Wealth Affected by Killing a Warship Delivery or a Convoy?
 
-Killing a warship delivery removes one ship for good. The faction paid for it when it was queued, nothing is refunded, and there is no loot because it carries no cargo. The planner re-queues the missing points at its next 600 s pass.
+Killing a warship delivery removes one ship for good. The faction paid for it when it was queued, nothing is refunded, and there is no loot because the ship carries no cargo. The faction queues the missing points again at its next 600 s planning pass.
 
 Killing a cargo convoy cuts the run's trade or sales income in proportion to the ships you kill. Killing every ship ends the run with no income booked, and the next run goes out normally. That is minor next to taxes. Each convoy ship drops 40% to 60% of each non-ammo cargo stack as loot under your name.
 
 If the faction is not your enemy, opening fire costs -1,000 reputation per ship and each kill another -3,500 while you are Wary or better. If it is already your enemy, it costs nothing.
 
-Details: [Intercepting deliveries and convoys](faction-economy.md#intercepting-deliveries-and-convoys).
+Details: [Intercepting Deliveries and Convoys](faction-economy.md#intercepting-deliveries-and-convoys).
 
-### Do my embassy missions help a faction?
+### Do My Embassy Missions Help a Faction?
 
 Yes. Each one adds 80,000 to 120,000 wealth to that faction (halved for idle ones), and the faction gets it whether or not you later fight it. A full 2000-point fleet costs roughly 40,000 to 130,000 at full price (not verified). The wealth helps rebuild a lost fleet at once. It does nothing for a faction whose fleets are already full, and it does not raise the fleet cap of Kolyatov, Stellar or Luminate. To slow a faction, stop doing its embassy missions.
 
-Details: [Your embassy missions feed the faction](faction-economy.md#your-embassy-missions-feed-the-faction), [Ways to slow a faction](faction-economy.md#ways-to-slow-a-faction).
+Details: [Your Embassy Missions Feed the Faction](faction-economy.md#your-embassy-missions-feed-the-faction), [Ways to Slow a Faction](faction-economy.md#ways-to-slow-a-faction).
 
-### How are warships built?
+### How Are Warships Built?
 
 A faction queues a ship at a Construction Yard with a free slot, paying wealth up front. Yards are never built in war-zone systems. Each hull's price depends on its size, at 50 wealth per price point:
 
@@ -317,64 +357,84 @@ A faction queues a ship at a Construction Yard with a free slot, paying wealth u
 | 6 | 30,000 | 15,000 |
 
 ```
-duration = (300 + 1.2 x hull points) / speed
+duration = (300 + 1.2 x ship points) / speed
 speed    = (3 if under the fleet cap, else 1) / yard build-time multiplier
 ```
 
-Yard tiers run 1 to 5. Tier 1 has 1 slot at x1.0 build time, tier 5 has 3 slots at x0.5. For each free slot the planner takes the first that applies: a garrison shortfall at a Defense station, the fleet furthest below 35% of its target, founding a new fleet, or topping up the fleet furthest below 100%. A finished ship flies for 30 s + 30 s per jump. A fleet of 2000 points costs roughly 40,000 to 130,000 at full price (not verified).
+Yard tiers run 1 to 5. Tier 1 has 1 slot at 1.0 times the build time, and tier 5 has 3 slots at 0.5 times the build time. For each free slot, the faction picks the first of these that applies:
 
-Details: [How warships get built](faction-economy.md#how-warships-get-built), [Construction Yards](faction-economy.md#construction-yards).
+1. A garrison shortfall at a Defense station.
+2. The fleet furthest below 35% of its target.
+3. Founding a new fleet.
+4. Topping up the fleet furthest below 100%.
 
-### How many fleets can a faction field?
+A finished ship flies for 30 s plus 30 s per jump. A fleet of 2000 points costs roughly 40,000 to 130,000 at full price (not verified).
 
-For Kolyatov, Stellar, Luminate and the Corsair Syndicate when it holds a war-zone system, the cap is the smaller of 8 and 5 + (war-zone systems held / 15, rounded down). That is 5 below 15 systems, 6 at 15 to 29, and so on. The Darkspace Compact is fixed at 5 until the expansion war opens ([gate](../expansion/README.md)). Corsairs with no war-zone system have 2. Mindus Holdings, Steel Vultures and Stranded field nothing without a war-zone system; with one, their cap is set by the embassy wealth you deliver: 3 below 2,250,000, 4 from 2,250,000, 5 from 3,000,000. For the others, wealth does not raise the cap, only systems held do. While a faction has fewer fleet slots in use than its cap, every ship costs half and builds three times faster.
+Details: [How Warships Get Built](faction-economy.md#how-warships-get-built), [Construction Yards](faction-economy.md#construction-yards).
 
-Details: [Fleet caps](faction-economy.md#fleet-caps), [The under-cap discount](faction-economy.md#the-under-cap-discount).
+### How Many Fleets Can a Faction Field?
 
-### What happens when I destroy a Construction Yard?
+For Kolyatov, Stellar, Luminate and the Corsair Syndicate (when it holds a war-zone system), the cap is the smaller of 8 and 5 + (war-zone systems held / 15, rounded down). That is 5 below 15 systems, 6 at 15 to 29, and so on. Other factions work differently:
 
-It is wrecked, 10% of its storage becomes loot, and it costs reputation: -5,000 with the faction, or -1,000 if you are already Hostile or worse (-5,000 or lower). The wreck is removed when you leave the system or load the game; until then the planner still counts it as a yard. The ships already in its queue are not cancelled. Once the wreck is removed, each queue entry counts the yard as having 1 slot, so only one entry per destroyed yard progresses at a time, and the ships deliver as normal.
+- The Darkspace Compact is fixed at 5 until the expansion war opens ([the gate](../expansion/README.md)).
+- The Corsair Syndicate with no war-zone system has 2.
+- Mindus Holdings, Steel Vultures and Stranded field nothing without a war-zone system. With one, their cap is set by the embassy wealth you deliver: 3 below 2,250,000, 4 from 2,250,000 and 5 from 3,000,000.
 
-The planner builds a replacement on its next hourly step if wealth is at least 50,000. It takes 3600 s and comes back at tier 1, so a destroyed tier-5 yard returns at about a sixth of the throughput. A faction with 7 or more extractors may have a second yard that keeps working.
+For the factions whose cap follows systems held, wealth does not raise it. While a faction has fewer fleet slots in use than its cap, every ship costs half and builds three times faster.
 
-Details: [What happens when you destroy a yard](faction-economy.md#what-happens-when-you-destroy-a-yard).
+Details: [Fleet Caps](faction-economy.md#fleet-caps), [The Under-Cap Discount](faction-economy.md#the-under-cap-discount).
 
-### What slows a faction down, and what does not work?
+### What Happens When I Destroy a Construction Yard?
+
+The yard is wrecked, 10% of its storage becomes loot, and it costs reputation: -5,000 with the faction, or -1,000 if you are already Hostile or worse (-5,000 or lower). The wreck is removed when you leave the system or load the game. Until then, the faction still counts it as a yard. The ships already in its queue are not cancelled. Once the wreck is removed, each queue entry counts the yard as having 1 slot, so only one entry per destroyed yard progresses at a time, and the ships deliver as normal.
+
+The faction builds a replacement at its next hourly economy tick if its wealth is at least 50,000. The replacement takes 3600 s and comes back at tier 1, so a destroyed tier-5 yard returns at about a sixth of the throughput. A faction with 7 or more extractors may have a second yard that keeps working.
+
+Details: [What Happens When You Destroy a Yard](faction-economy.md#what-happens-when-you-destroy-a-yard).
+
+### What Slows a Faction Down, and What Does Not Work?
 
 Ranked by production removed per reputation spent:
 
-1. Kill warship deliveries of a faction that is already your enemy. No reputation cost.
-2. Destroy its only Construction Yard. New builds stop until the replacement is done (about 1 to 2 hours) and throughput can drop to a sixth.
-3. Destroy its Defense stations. The garrison is lost and the faction pays 100,000 and 3600 s for a replacement.
-4. Capture war-zone systems. The faction loses about 20,000 wealth per hour per system, and a captured system pays no taxes for its next one or two hourly tax payments (the 1 to 2 hours of unrest).
+1. Kill warship deliveries of a faction that is already your enemy. This costs no reputation.
+2. Destroy its only Construction Yard. New builds stop until the replacement is done (about 1 to 2 hours), and throughput can drop to a sixth.
+3. Destroy its Defense stations. The garrison is lost, and the faction pays 100,000 and 3600 s for a replacement.
+4. Capture war-zone systems. The faction loses about 20,000 wealth per hour per system. A captured system also pays no taxes for its next one or two hourly tax payments, which is the 1 to 2 hours of unrest.
 
-What does not work: attacking ore or material supply (ships cost wealth only), raiding a yard (it pauses station jobs, not the warship queue), and destroying a yard while expecting its queue to stop. Wiping fleets makes replacement cheaper and faster. Taking Kolyatov, Stellar, Luminate or Darkspace below a third of the war zone raises its home subsidy. Yardless Corsairs and Canisec are limited only by wealth.
+These do not work:
 
-Details: [Ways to slow a faction](faction-economy.md#ways-to-slow-a-faction), [What does not work](faction-economy.md#what-does-not-work).
+- Attacking ore or material supply. Ships cost wealth only.
+- Raiding a yard. It pauses station jobs, not the warship queue.
+- Destroying a yard and expecting its queue to stop.
+- Wiping fleets, which makes replacement cheaper and faster.
 
-### How do I join a smaller faction's war?
+Taking Kolyatov, Stellar, Luminate or Darkspace below a third of the war zone also raises its home subsidy. Corsairs and Canisec have no yards and are limited only by wealth.
 
-A faction with an embassy and no headquarters can be joined once your embassy missions have brought it 1,500,000 wealth, or once you pay a 10,000,000 credit donation. The payment does not add to the faction's wealth. These are Mindus Holdings (the Mining Guild), Steel Vultures (the Salvage Guild), the Corsair Syndicate and Stranded. On joining, the faction gets 1,000,000 wealth, fleets seeded to full at that system, a Defense station with a garrison if there is a slot, and a yard if it has none in home space. For Mindus, Steel Vultures and Stranded the same embassy wealth sets their fleet cap (3 to 5), so feeding them wealth raises it.
+Details: [Ways to Slow a Faction](faction-economy.md#ways-to-slow-a-faction), [What Does Not Work](faction-economy.md#what-does-not-work).
 
-Details: [Joining a faction's war](faction-economy.md#joining-a-factions-war).
+### How Do I Join a Smaller Faction's War?
 
-## Stations, garrisons and reputation
+A faction with an embassy and no headquarters can be joined once your embassy missions have brought it 1,500,000 wealth, or once you pay a 10,000,000 credit donation. The payment does not add to the faction's wealth. These factions are Mindus Holdings (the Mining Guild), Steel Vultures (the Salvage Guild), the Corsair Syndicate and Stranded. When you join, the faction gets 1,000,000 wealth, and its fleets are filled to full strength at that system. It also gets a Defense station with a garrison if there is a free slot, and a yard if it has none in home space. For Mindus Holdings, Steel Vultures and Stranded, the same embassy wealth sets their fleet cap (3 to 5), so feeding them wealth raises it.
 
-### How tough are hubs and Defense stations?
+Details: [Joining a Faction's War](faction-economy.md#joining-a-factions-war).
 
-They take much more damage than a mission station. The multiplier on part hit points depends on where the part is:
+## Stations, Garrisons and Reputation
+
+### How Tough Are Hubs and Defense Stations?
+
+A hub or Defense station takes much more damage than a mission station. The multiplier on part hit points depends on where the part is:
 
 | Where | Multiplier |
 |---|---|
-| A hub in a headquarters system | x30 |
-| A hub in any other war-zone system | x20 |
-| A faction Defense station in a war-zone system | x20 |
+| A hub in a headquarters system | 30 times |
+| A hub in any other war-zone system | 20 times |
+| A faction Defense station in a war-zone system | 20 times |
 
-At level 60 that is about x36.2 in a hub or Defense station and x54.3 in a headquarters hub. A faction Construction Yard or Refinery in a war-zone system has none of that, even though the Defense station beside it does.
+At level 60 that is about 36.2 times in a hub or Defense station and 54.3 times in a headquarters hub. A faction Construction Yard or Refinery in a war-zone system has no multiplier, even though the Defense station beside it does.
 
-Details: [How tough a hub or Defense station is](war-stations.md#how-tough-a-hub-or-defense-station-is).
+Details: [How Tough a Hub or Defense Station Is](war-stations.md#how-tough-a-hub-or-defense-station-is).
 
-### What do Defense stations and garrisons do?
+### What Do Defense Stations and Garrisons Do?
 
 A Defense station holds a garrison and fires on enemies. Garrison size follows its tier:
 
@@ -383,11 +443,11 @@ A Defense station holds a garrison and fires on enemies. Garrison size follows i
 | Garrison ships | 3 | 4 | 5 | 6 | 8 |
 | Garrison budget (points) | 270 | 405 | 540 | 720 | 900 |
 
-The garrison counts in full toward a system's Defense number, summed across every Defense station there. In practice garrisons are refilled only by warships built at yards. A system holds at most 2 faction stations of any type. In a live fight at the station, the garrison ships spawn as real ships, and ships you kill are removed from it. A faction builds one Defense station at a time, at 100,000 wealth and 3600 s, on a frontline system.
+The garrison counts in full toward a system's Defense number, summed across every Defense station there. In practice, garrisons are refilled only by warships built at yards. A system holds at most 2 faction stations of any type. In a live fight at the station, the garrison ships spawn as real ships, and ships you kill are removed from the garrison. A faction builds one Defense station at a time, on a frontline system, at a cost of 100,000 wealth and 3600 s.
 
-Details: [Defense stations and garrisons](war-stations.md#defense-stations-and-garrisons), [Defense stations](faction-economy.md#defense-stations).
+Details: [Defense Stations and Garrisons](war-stations.md#defense-stations-and-garrisons), [Defense Stations](faction-economy.md#defense-stations).
 
-### What does destroying a station cost in reputation?
+### What Does Destroying a Station Cost in Reputation?
 
 | Action | Reputation with that faction |
 |---|---|
@@ -396,12 +456,12 @@ Details: [Defense stations and garrisons](war-stations.md#defense-stations-and-g
 | Destroying a Construction Yard | -5,000, or -1,000 if already Hostile or worse |
 | Force-attacking a ship of a faction that is not your enemy | -1,000 per ship, then -3,500 more per kill while you are Wary or better |
 
-A station destroyed only by the simulation costs you nothing, and no station or part cost applies while a Decoy Transponder is active ([gate](../late-game/README.md)). A full Large conquest layout has 45 parts, so wrecking a friendly station can cost several thousand reputation in part kills before the 5,000 for the station itself.
+A station destroyed only by the simulation costs you nothing. No station or part cost applies while a Decoy Transponder is active ([the gate](../late-game/README.md)). A full Large conquest layout has 45 parts, so wrecking a friendly station can cost several thousand reputation in part kills before the 5,000 for the station itself.
 
-Details: [Reputation cost of destroying stations](war.md#reputation-cost-of-destroying-stations), [Reputation and force attacks](../basics/stations.md#reputation-and-force-attacks).
+Details: [Reputation Cost of Destroying Stations](war.md#reputation-cost-of-destroying-stations), [Reputation and Force Attacks](../basics/stations.md#reputation-and-force-attacks).
 
-### Does damage to a war-zone station last?
+### Does Damage to a War-Zone Station Last?
 
-Not unless you take the hub. Stations rebuild from their seed at full HP: about an hour of game time after you leave, and every conquest update rebuilds every station except the one you are at and abandoned hulks. A hub is also rebuilt when a system is claimed, but a siege capture does not rebuild it; it waits for the hourly rebuild. Killing parts is therefore temporary unless the hub itself is lost.
+Not unless you take the hub. Stations rebuild at full HP from the same generated layout. This happens about an hour of game time after you leave, and every conquest update rebuilds every station except the one you are at and abandoned hubs (hubs with no owner). A hub is also rebuilt when a system is claimed, but a siege capture does not rebuild it. It waits for the hourly rebuild. Killing parts is therefore temporary unless the hub itself is lost.
 
-Details: [How long damage lasts in a war zone](war-stations.md#how-long-damage-lasts-in-a-war-zone).
+Details: [How Long Damage Lasts in a War Zone](war-stations.md#how-long-damage-lasts-in-a-war-zone).

@@ -26,7 +26,7 @@ public static class ItemRules
 {
     public const string FeatureKey = "ItemRules";
     public static string ImportPath => Paths.ConfigPath + "/IgiQoL/item-rules.json";
-    public static readonly string[] DockActionNames = { "Game default", "Keep aboard", "Sell", "Sell above N" };
+    public static readonly string[] DockActionNames = { "Game default", "Keep aboard", "Sell", "Sell, keep up to" };
 
     public static ItemRule Default { get; private set; } = new();
     public static readonly Dictionary<ItemCategory, ItemRule> ByCategory = new();

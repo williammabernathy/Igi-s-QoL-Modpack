@@ -241,7 +241,8 @@ internal static class MissionSortCheck
             if (row.barFill != null) narrowest = Mathf.Min(narrowest, ((RectTransform)row.barFill.parent).rect.width);
         }
         string detail = $"{good} rows right, {bad} wrong, {jumpChips} jump chips, {unknown} without a level, narrowest bar {narrowest:0} px";
-        if (bad == 0 && good > 0 && narrowest >= 40f) ctx.Pass("window-chips-" + sort, detail);
+        // The same floor as Mission distance's row check: about 58 px of bar without a chip since the game's 16 px scrollbar.
+        if (bad == 0 && good > 0 && narrowest >= 30f) ctx.Pass("window-chips-" + sort, detail);
         else ctx.Fail("window-chips-" + sort, detail);
     }
 

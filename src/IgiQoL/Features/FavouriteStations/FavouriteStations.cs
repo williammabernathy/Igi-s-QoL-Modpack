@@ -29,8 +29,8 @@ public sealed class FavouriteStations : Feature
     public FavouriteStations() { Instance = this; }
 
     public override string Id => "FavouriteStations";
-    public override string Title => "Favourite stations";
-    public override string Description => "A list of the stations you pick on the Stations tab: what each one has, your storage there, the jumps to it and a Travel to button, plus a search through their storage. Add a station with Shift-click on the galaxy map, the Favourite button in its airlock, or the search on the tab.";
+    public override string Title => "Favourite Stations";
+    public override string Description => "A list of the stations you pick on the Stations tab: what each one has, your storage there, the jumps to it and a Travel to button, plus a search through their storage. Add a Station with Shift-click on the galaxy map, the Favourite button in its airlock, or the search on the tab.";
     public override Type[] PatchClasses => new[] { typeof(FavouriteStationsPatches) };
 
     public const string TabId = "stations";

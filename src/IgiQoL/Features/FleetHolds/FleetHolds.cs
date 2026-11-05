@@ -27,7 +27,7 @@ public sealed class FleetHolds : Feature
     public FleetHolds() { Instance = this; }
 
     public override string Id => "FleetHolds";
-    public override string Title => "Shared fleet holds";
+    public override string Title => "Shared Fleet Holds";
     public override string Description => "When one of your ships can't fit the loot its tractor beam is reaching for, it hands cargo to another ship of your fleet at the same location that has room (the flagship first), so it keeps collecting. Without this, a single full ship makes ECHO fly the whole fleet home even when the others have space.";
     public override Type[] PatchClasses => new[] { typeof(FleetHoldsPatches) };
 

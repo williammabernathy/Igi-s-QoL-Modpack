@@ -1,10 +1,10 @@
-# Developer harness
+# Developer Harness
 
-The `[Dev]` section of `igi.qol.cfg` turns the game into a test runner: it loads a save by itself, runs every feature's self-check, writes `CHECK` lines to `BepInEx/LogOutput.log`, takes screenshots and quits. It's off by default and doesn't count as a player feature (the startup line counts it as the one disabled feature).
+The `[Dev]` section of `igi.qol.cfg` turns the game into a test runner. It loads a save by itself, runs every feature's self-check, writes `CHECK` lines to `BepInEx/LogOutput.log`, takes screenshots and quits. It's off by default and doesn't count as a player feature. The startup line counts it as the one disabled feature.
 
-Point it at a copy of a save, never at a save you care about. While it's on it suppresses autosaves, but the checks still change the loaded game (credits, cargo, crew) until their cleanups undo it at the end of the run. Settings the checks change aren't written to `igi.qol.cfg`.
+Point it at a copy of a save, never at a save you care about. While the harness is on, it suppresses autosaves. The checks still change the loaded game (credits, cargo, crew) until their cleanups undo the changes at the end of the run. Settings that the checks change aren't written to `igi.qol.cfg`.
 
-## A run
+## A Run
 
 ```mermaid
 flowchart LR
@@ -16,6 +16,29 @@ flowchart LR
     F --> G["Self-check complete"]
     G -->|QuitAfterSeconds| H[Game quits]
 ```
+
+`tools/Harness` does steps 1 to 5 below for you. It copies the save, sets the `[Dev]` keys, starts the game through Steam and waits for it to quit. It then prints the counts and every FAIL, keeps the log in `artifacts/harness/`, puts the `[Dev]` keys back and deletes the copy. Close the game first.
+
+```bash
+dotnet run --project tools/Harness -- --save autosave-0 --name igiqol-dev
+dotnet run --project tools/Harness -- --save vgmod-dev --name igiqol-combat --only DroneModes --runs 3
+```
+
+Options:
+
+- `--only` sets `OnlyChecks`.
+- `--skips` also prints the SKIP lines.
+- `--keep` leaves the save copy in place.
+- `--timeout` is how many seconds one run may take (default 1200).
+- `--game` and `--saves` override the folders. The defaults are the paths below, or Steam's default library on Windows.
+- `--name` defaults to `igiqol-dev` and can't be the same as `--save`.
+- `--runs` above 1 repeats the run and lists every check whose result changed between runs, which is how a check that passes or fails by chance shows up.
+
+The `[Dev]` keys have to be in `igi.qol.cfg` already, so start the game once with the mod first. The tool changes `Enabled`, `AutoLoadSave`, `SelfCheck`, `OnlyChecks` and `QuitAfterSeconds`, and writes back the old values afterwards. It doesn't turn `Screenshot` on.
+
+The tool exits with 1 when a run has a FAIL, doesn't reach `Self-check complete`, or has a check that changed between runs. It exits with 2 when the options are wrong, a file is missing or the game is already running.
+
+By hand:
 
 1. Copy a save to a name of its own:
 
@@ -35,8 +58,8 @@ flowchart LR
    Copy-Item $newest.FullName "$S\igiqol-dev.save"; Copy-Item ($newest.FullName -replace '\.save$', '.meta') "$S\igiqol-dev.meta"
    ```
 
-   Some checks need things in the save: a fleet ship besides the flagship, a station with a hangar and a mission board, an asteroid field in the system. Without them those checks SKIP with the reason.
-2. In `BepInEx/config/igi.qol.cfg`, `[Dev]`: `Enabled = true`, `AutoLoadSave = igiqol-dev`, `SelfCheck = true`, `QuitAfterSeconds = 10`.
+   Some checks need things in the save: a fleet ship besides the flagship, a station with a hangar and a mission board, and an asteroid field in the system. Without them, those checks SKIP and give the reason.
+2. In the `[Dev]` section of `BepInEx/config/igi.qol.cfg`, set `Enabled = true`, `AutoLoadSave = igiqol-dev`, `SelfCheck = true` and `QuitAfterSeconds = 10`.
 3. Start the game through Steam (`steam -applaunch 3471800` on Linux, or Play in the Steam library) and wait for `Self-check complete` in `LogOutput.log`. A full run takes a little over five minutes.
 4. Read the results:
 
@@ -46,22 +69,30 @@ flowchart LR
 
    In PowerShell: `Select-String -Path "$G\BepInEx\LogOutput.log" -Pattern "startup:|switched off|Self-check complete|CHECK .* (FAIL|SKIP)"`.
 
-   On the reference save (a copy of an autosave that loads next to a station with hostiles about), a full run ends with `Self-check complete: 279 pass, 0 fail, 17 skip`. The skips each need a situation the save doesn't reach:
-   - `EchoGates/dungeon-min`: a dungeon at the location.
-   - `EchoMissions/kinds`: a flagship whose preferred activity is combat.
-   - `EchoMissions/missions-at-once`: a board offer ECHO would take (on this save the board offers a mission that's too risky or needs a loadout the flagship lacks).
-   - `EchoPriority/dropdown-to-list`: the game's Autopilot tab in the scene.
-   - `EchoCargo/live-keep`, `sell-first`, `data-echo`, `storage-echo` and `armory-echo`: being docked at that point of the run. All five run in a run limited to `OnlyChecks = EchoCargo`, which starts docked; `live-keep` also needs droppable cargo.
-   - `DroneModes/gatherer-assist`: a ship with a salvage module.
-   - `CraftRollup/parts-to-storage` and `refine-to-storage`: being docked at the forge's station with room in the flagship's hold, and no forge or refinery jobs of your own queued there.
-   - `OrePreference/locations`: mining locations that differ in their ores.
-   - `Loadouts/no-mercenary-reason`: a hired mercenary.
-   - `RefineryFilter/filter`: a station with a refinery.
-   - `MissionDistance/tracker`: an accepted mission with a location.
-   - `MissionDistance/board-far`: a station board within 3 jumps that holds a mission outside this system.
+   No single save reaches every check, so run on two saves:
+   - a copy of your newest autosave, which has your current game (the Conquest war, your stations and missions);
+   - a save whose fleet has a second ship with weapons, for the fleet checks of Target Priority and Keep distance (`TargetPriority/live-fleet`, `flagship-assist`, `Separation/live` and `other-ships`). Those checks skip on a save without such a ship.
 
-   `Separation/push` and `apart` skip instead when another ship sits where the check would place the fleet ship; the reason names it.
-5. Set `Enabled = false` again and delete the copy. Steam Cloud sometimes restores a deleted save; delete it again if it comes back.
+   Two saves were used for the 2026-11-04 review: a copy of that day's autosave, and an older save with an armed fleet ship. Full runs on them ended with `343 pass, 0 fail, 28 skip` and `351 pass, 0 fail, 21 skip`. After the game's 0.8.3.5 update (2026-11-05), the same two saves ended with `344 pass, 2 fail, 25 skip` and `351 pass, 0 fail, 21 skip`. The two fails are `CraftRollup/run` and `parts-to-storage` on the 2026-11-05 autosave; they come and go between runs of that save and failed the same way on 0.8.3.4 that morning. The skip count moves by a few between runs of the same save. Some checks skip when the fleet kills an enemy mid-check, or when another ship sits where the check would place one.
+
+   Skips name what the save lacks, for example:
+
+   - a dungeon at the location;
+   - a combat flagship (`EchoMissions/kinds`);
+   - a board offer ECHO would take;
+   - the game's Autopilot tab;
+   - a hired mercenary;
+   - a refinery;
+   - a mission board within 3 jumps with a mission in another system;
+   - fleet or delivery icons in the galaxy map's view.
+
+   The five `EchoCargo` docked checks skip in a full run, because the flagship is in space by then. They run in a run limited to `OnlyChecks = EchoCargo`, which starts docked. `Separation/push`, `apart` and `own-target` skip when another ship sits where the check would place one, and the reason names that ship. A check that needs a fight and finds that the fleet has killed everything spawns enemies (`SelfCheckContext.SpawnEnemies`). It skips with the counts when none arrive.
+
+   The last line before `Self-check complete` is `CHECK Dev/unity-errors`. The harness listens to Unity's own log while it runs, and this check fails on any error or exception with the mod in its message or stack, naming the check that was running. Those errors are mostly exceptions in a `MonoBehaviour` update or a UI callback. No check's own try/catch sees them, and Unity writes them to `Player.log`, not to `LogOutput.log`.
+
+   `ConquestDetails/hub-kill-siege` and `hub-kill-race` are the last ConquestDetails checks because they change the war for the rest of the run. Each one abandons a system the way a destroyed hub does, runs the game's fleet planning pass for every faction, and compares two things with the prediction on the hub card: the faction the game hands the system to, or the faction it sends first. When no fleet in the save is free, `hub-kill-race` first moves one NPC fleet out of no fight into a system of its faction next to the target, and the line says so ("staged: ..."). The harness never saves, so the change ends with the run.
+
+5. Set `Enabled = false` again and delete the copy. Steam Cloud sometimes restores a deleted save. If it comes back, delete it again.
 
 Each check writes one line:
 
@@ -90,7 +121,7 @@ CHECK StationServices/sell-above-fleet PASS - keep=8 quote=896 run=896 credits +
 | `ProfileEnemies` | `12` | Hostile ships the profile spawns; 0 profiles wherever the save is, without a fight |
 | `EchoSoakSeconds` | `0` | After the checks, switch ECHO on for this long, log its status every 15 s (`[Dev] soak` lines) and the whole event log at the end |
 
-## Writing a self-check
+## Writing a Self-Check
 
 Override `SelfCheck` in the feature. It's a coroutine, so it can wait for the game:
 
@@ -120,15 +151,24 @@ public override IEnumerator SelfCheck(SelfCheckContext ctx)
 | `SelfCheckContext.SpawnEnemies(count)` | Hostile small combat ships at the current location, as the console's SpawnEnemy does |
 | `SelfCheckContext.SpawnAsteroid(position, ore)`, `RemoveAsteroid(data)` | A test asteroid with one surface ore |
 
-An exception inside a check, also inside a coroutine it yields, fails the check (`CHECK <Feature>/exception FAIL`) and the run goes on with the next feature.
+An exception inside a check, including one inside a coroutine that the check yields, fails the check (`CHECK <Feature>/exception FAIL`). The run goes on with the next feature.
 
-Check behaviour the player sees: credits moved, cargo counts, the target picked, a row on a tab. A check that only proves a method was called or a setting was stored catches nothing. Skip with a reason when the save can't exercise the check, rather than passing.
+Check behaviour the player sees: credits moved, cargo counts, the target picked, a row on a tab. A check that only proves a method was called or a setting was stored catches nothing. When the save can't exercise a check, skip with a reason rather than passing.
 
-## Data dumps
+Ways the existing checks reach the game's real paths, instead of calling the mod's own code and checking its answer:
+
+- Input: move the real cursor with `Mouse.current.WarpCursorPosition(point)` and wait two frames, because Unity's `Input.mousePosition` follows a frame later. Then queue an event with `InputSystem.QueueStateEvent(Mouse.current, new MouseState { position, scroll })` or a keyboard state. The event arrives at the next input update, before any `Update`. `ConquestDetails/popout-wheel` and `detail-key` do this. When the game window doesn't have focus (for example a run started while you work in another window), the Input System disables the keyboard and drops its events. `detail-key` therefore sets `InputSystem.settings.backgroundBehavior` to `IgnoreFocus` for its frames and puts it back afterwards, and its line says whether the window had focus.
+- Damage: call the target's own `TakeDamage(new DamageData(attacker) { power, hitTransform, hitCoordinates })`, so every prefix, postfix and game reaction on the way runs (`TargetPriority/flagship-assist`, `CombatLog/dealt`).
+- Missiles: spawn a launcher's `missilePrefab` through `ProjectilePool.Spawn`, as `MissileTurret` does (since 0.8.3.5 the pool puts a missile in flight, and a missile made with `Instantiate` never tracks), and call its `Initialize` with a turret's tracking point and `new DamageData(turret)`. Then switch or kill targets (`MissileRetarget/switch`, `nearest-kill`). Pooled missiles are reused after they land, so a check tells its own apart by their zero damage. A missile aims where its target will be when it arrives (the target's velocity times the flight time). Compare its `targetPosition` with that lead point, not with the target's position.
+- The war: abandon a system with `ConquestOwnership.Abandon` and run `ConquestFleetPlanner.PlanBetweenTicks` for every faction economy to see what the game's own planner does (`ConquestDetails/hub-kill-race`). These can't be undone, so such checks run last in their feature.
+- Layout: read rectangles with `RectTransform.GetWorldCorners` (screen pixels on the overlay canvases) and text widths with `TMP_Text.GetPreferredValues`. For a label that shrinks to fit, measure `textBounds` after `ForceMeshUpdate()`. Compare positions before and after a refresh to catch rows that move (`Operations/running-layout`, `StationServices/airlock-stable`, `FleetStrip/slots`).
+- A situation the save lacks can sometimes be made for the check and put back in a `finally`. Examples are a fleet ship lent the Aggressive stance, a shorter forge popup (`CraftRollup/panel-layout-short`), a remembered slider value (`Operations/crew-slider`), and a wreck or asteroid spawned clear of the hull (`DroneModes/gatherer-guard`). Unity objects that a list rebuilds can be destroyed while a check waits. Keep what you measured, not the object (`Contacts/loot-row-layout`).
+
+## Data Dumps
 
 Two dumps read any value the game holds, without new code.
 
-- `DumpGameData = true` writes the 15 content registries (items, recipes, equipment and item builders, ships, drones, station parts, modules, defensive turrets, aspects, hazards, crew types, skill trees and nodes, dungeons) to `dumps/<game version>/`, about 9.5 MB, in under a second.
+- `DumpGameData = true` writes the 15 content registries (items, recipes, equipment and item builders, ships, drones, station parts, modules, defensive turrets, aspects, hazards, crew types, skill trees and nodes, dungeons) to `dumps/<game version>/`, about 10 MB, in under a second.
 - `DumpStatics` takes your own comma-separated list of static members, `TypeName.member` with an optional `:depth` (default 3), for example `Faction.all:2`.
 
 Each file starts with a `# <Type>.<member> game <version> depth <n>` line, then has one line per value: element key, field path, value, tab-separated, sorted:
@@ -138,7 +178,7 @@ CanisterOxide	identifier	CanisterOxide
 CanisterOxide	displayName	@RPCanisterRefinedOxide
 ```
 
-Grep it to find a number (`grep _range dumps/0.8.3.4/InventoryItemType.allItems.txt`) or compare two game versions with `VersionDiff data` ([building.md](../building.md#after-a-game-update)). The walk follows fields, not properties. It expands game components on prefabs, including sibling components (`definition.@LaserTurret._range`), lists the first 64 entries of each collection, and prints other Unity objects by name.
+Grep it to find a number (`grep _range dumps/<game version>/InventoryItemType.allItems.txt`) or compare two game versions with `VersionDiff data` ([building.md](../building.md#after-a-game-update)). The walk follows fields, not properties. It expands game components on prefabs, including sibling components (`definition.@LaserTurret._range`), lists the first 64 entries of each collection, and prints other Unity objects by name.
 
 ## Profiling
 

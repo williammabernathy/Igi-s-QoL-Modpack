@@ -23,8 +23,8 @@ public sealed class UsedIn : Feature
     public UsedIn() { Instance = this; }
 
     public override string Id => "UsedIn";
-    public override string Title => "Used in";
-    public override string Description => "Item tooltips list the forge recipes you can craft that use the item, with how many one craft takes. The Stat reference tab searches the full list.";
+    public override string Title => "Used in (Forge Recipes)";
+    public override string Description => "Item tooltips get a \"Used in:\" list of the forge recipes you can craft that use the item, with how many of it one craft takes. The Stat Reference tab searches the full list.";
     public override Type[] PatchClasses => new[] { typeof(UsedInPatches) };
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx) => UsedInCheck.Run(ctx);

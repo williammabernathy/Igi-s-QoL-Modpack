@@ -22,7 +22,7 @@ public sealed class RefineryFilter : Feature
     public RefineryFilter() { Instance = this; }
 
     public override string Id => "RefineryFilter";
-    public override string Title => "Refinery filter";
+    public override string Title => "Refinery Filter";
     public override string Description => "Click a material in the refinery's left column to show only the ore that refines into it, best yield first. Click it again to show all ore.";
     public override Type[] PatchClasses => new[] { typeof(RefineryFilterPatches) };
 

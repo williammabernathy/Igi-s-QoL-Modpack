@@ -17,8 +17,8 @@ public sealed class FleetRetreat : Feature
     public FleetRetreat() { Instance = this; }
 
     public override string Id => "FleetRetreat";
-    public override string Title => "Retreat for repairs";
-    public override string Description => "Lets each fleet ship leave a fight for repairs at a higher hull % than the game's 10%, so it loses less crew to hull hits. It repairs and comes back as it does in the game. Set it per ship with the last button on the ship's row in the fleet panel.";
+    public override string Title => "Retreat for Repairs";
+    public override string Description => "Lets each fleet ship leave a fight for repairs at a higher share of its hull than the game's 10%, so it loses less crew to hull hits. It repairs and comes back as it does in the game. Set it per ship with the last button on the ship's row in the fleet panel.";
     public override Type[] PatchClasses => new[] { typeof(RetreatPatch) };
 
     public static readonly int?[] Values = { null, 20, 30, 50, 75 };

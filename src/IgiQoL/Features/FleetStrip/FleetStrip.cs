@@ -30,8 +30,8 @@ public sealed class FleetStrip : Feature
     public FleetStrip() { Instance = this; }
 
     public override string Id => "FleetStrip";
-    public override string Title => "Fleet command strip";
-    public override string Description => "Adds a row of buttons under each ship in the fleet panel (bottom left): stop, hold position, regroup, combat stance, auto-tractor, drones, cargo, and the ship's own settings.";
+    public override string Title => "Fleet Command Strip";
+    public override string Description => "Adds a row of buttons under each ship in the fleet panel (bottom left): Stop, Hold, Regroup, the four stances (Hold Fire, Aggressive, Defensive, Escort), the tractor beam, the Drone Bay, Cargo, and the ship's own settings. A button that doesn't apply to a ship stays in its place, dimmed.";
     public override Type[] PatchClasses => new[] { typeof(FleetStripPatches) };
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
@@ -108,6 +108,57 @@ public sealed class FleetStrip : Feature
             if (tiles == 11 && Mathf.Approximately(top, barsBottom - FleetStripRow.StripGap) && bottom >= -rowHeight) ctx.Pass("layout", detail);
             else ctx.Fail("layout", detail);
 
+            // The strip's Hold tile is the fleet Hold order and says so in the game's own words, like the HUD's bar.
+            var holdTip = strip.hold.GetComponent<Behaviour.UI.Tooltip.TooltipSource>();
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            string gameHold = Translation.Translate("@FleetCommandHold", kb == null ? "C" : kb[UnityEngine.InputSystem.Key.C].displayName);
+            string holdBody = holdTip == null ? null : holdTip.BodyText;
+            string holdDetail = $"game text '{gameHold}', tile tooltip '{holdBody}'";
+            if (holdBody != null && gameHold.Length > 0 && holdBody.StartsWith(gameHold, StringComparison.Ordinal) && holdBody.Contains("holds only the ship you fly")) ctx.Pass("hold-label", holdDetail);
+            else ctx.Fail("hold-label", holdDetail);
+
+            // Every order tile shows the game's text for its order, with the key the fleet bar binds to it.
+            var specs = new (Button tile, string key, UnityEngine.InputSystem.Key hotkey)[]
+            {
+                (strip.stop, "@FleetCommandStop", UnityEngine.InputSystem.Key.X), (strip.regroup, "@FleetCommandRegroup", UnityEngine.InputSystem.Key.V),
+                (strip.holdFire, "@FleetCommandStanceHoldFire", UnityEngine.InputSystem.Key.F1), (strip.aggressive, "@FleetCommandStanceAggressive", UnityEngine.InputSystem.Key.F2),
+                (strip.defensive, "@FleetCommandStanceDefensive", UnityEngine.InputSystem.Key.F3), (strip.escort, "@FleetCommandStanceEscort", UnityEngine.InputSystem.Key.F4),
+            };
+            int matching = 0;
+            string firstBad = null;
+            foreach (var spec in specs)
+            {
+                string expected = Translation.Translate(spec.key, FleetStripRow.KeyName(spec.hotkey));
+                var body = spec.tile.GetComponent<Behaviour.UI.Tooltip.TooltipSource>()?.BodyText;
+                if (body != null && expected.Length > 0 && body.StartsWith(expected, StringComparison.Ordinal)) matching++;
+                else firstBad ??= spec.key;
+            }
+            string tractorBody = strip.tractor.GetComponent<Behaviour.UI.Tooltip.TooltipSource>()?.BodyText;
+            string tractorOn = Translation.Translate("@FleetCargoTractorTipOn"), tractorOff = Translation.Translate("@FleetCargoTractorTipOff");
+            string tipDetail = $"{matching}/{specs.Length} order tiles match the game text{(firstBad == null ? "" : ", first wrong " + firstBad)}; tractor tile '{tractorBody}' (game: '{tractorOn}' / '{tractorOff}')";
+            if (matching == specs.Length && tractorOn.Length > 0 && (tractorBody == tractorOn || tractorBody == tractorOff)) ctx.Pass("tile-labels", tipDetail);
+            else ctx.Fail("tile-labels", tipDetail);
+
+            // A tile stays in its slot whether or not it applies to the ship: the strip never shifts when a state changes.
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+            var slots = rt.GetComponentsInChildren<FleetStripRow.TileSlot>(true);
+            var enabledX = new float[slots.Length];
+            for (int i = 0; i < slots.Length; i++) { slots[i].Enable(true); enabledX[i] = ((RectTransform)slots[i].transform).anchoredPosition.x; }
+            for (int i = 0; i < slots.Length; i++) slots[i].Enable(false);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+            float maxShift = 0f;
+            int hidden = 0;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                maxShift = Mathf.Max(maxShift, Mathf.Abs(((RectTransform)slots[i].transform).anchoredPosition.x - enabledX[i]));
+                if (!slots[i].gameObject.activeSelf) hidden++;
+            }
+            string slotDetail = $"{slots.Length} tiles, {hidden} hidden, largest x shift between all enabled and all disabled {maxShift:0.##}";
+            if (slots.Length == 11 && hidden == 0 && maxShift < 0.01f) ctx.Pass("slots", slotDetail);
+            else ctx.Fail("slots", slotDetail);
+            strip.settings.GetComponent<FleetStripRow.TileSlot>().Enable(true);
+
             var data = new PointerEventData(EventSystem.current) { button = PointerEventData.InputButton.Left };
             var handled = ExecuteEvents.ExecuteHierarchy(strip.settings.gameObject, data, ExecuteEvents.pointerClickHandler);
             if (handled == strip.settings.gameObject) ctx.Pass("click", "tile consumed the click");
@@ -125,7 +176,6 @@ public sealed class FleetStripRow : MonoBehaviour
 
     public FleetPanelRow row;
     public Button stop, hold, regroup, holdFire, aggressive, defensive, escort, tractor, drones, cargo, settings;
-    public Image tractorIcon;
     public RectTransform strip;
 
     private readonly List<SpaceShip> one = new(1);
@@ -134,7 +184,7 @@ public sealed class FleetStripRow : MonoBehaviour
     private DroneBayModule droneBay;
     // What the tiles last showed, so unchanged state costs nothing.
     private FleetStance lastStance = (FleetStance)(-1);
-    private int lastDeployed = -1;
+    private int lastDeployed = -1, lastTractorOff = -1;
 
     public void Build(FleetPanelRow owner)
     {
@@ -151,23 +201,49 @@ public sealed class FleetStripRow : MonoBehaviour
         strip.anchoredPosition = new Vector2(4f, FleetRowLayout.BarsBottom(row) - StripGap);
         strip.sizeDelta = new Vector2(-8f, 16f);
 
-        stop = Tile(PoiIconKeys.Fleet("Stop"), ColorHelper.fleetCommandStopIcon, "Stop", OnStop);
-        hold = Tile(PoiIconKeys.Fleet("HoldPosition"), ColorHelper.fleetCommandHoldIcon, "Hold position", OnHold);
-        regroup = Tile(PoiIconKeys.Fleet("Regroup"), ColorHelper.fleetCommandRegroupIcon, "Regroup on flagship", OnRegroup);
-        holdFire = Tile(PoiIconKeys.Fleet("HoldFire"), ColorHelper.fleetCommandHoldFireIcon, "Hold fire", OnHoldFire);
-        aggressive = Tile(PoiIconKeys.Fleet("Aggressive"), ColorHelper.fleetCommandAggressiveIcon, "Aggressive", OnAggressive);
-        defensive = Tile(PoiIconKeys.Fleet("Defend"), ColorHelper.fleetCommandDefensiveIcon, "Defensive", OnDefensive);
-        escort = Tile(PoiIconKeys.Fleet("Escort"), ColorHelper.fleetCommandEscortIcon, "Escort", OnEscort);
-        tractor = Tile(PoiIconKeys.Fleet("Tractor"), ColorHelper.offWhite, "Auto-tractor on/off", OnTractor);
-        drones = Tile(Kit.Icon("Ability", "Fleet.Drones", "Fleet.Drone", "Fleet.Hangar"), ColorHelper.offWhite, "Deploy or recall drones", OnDrones);
-        cargo = Tile(PoiIconKeys.Fleet("FleetCargo"), ColorHelper.offWhite, "Cargo", OnCargo);
+        stop = Tile(PoiIconKeys.Fleet("Stop"), ColorHelper.fleetCommandStopIcon, CommandTooltip("@FleetCommandStop", UnityEngine.InputSystem.Key.X), OnStop);
+        hold = Tile(PoiIconKeys.Fleet("HoldPosition"), ColorHelper.fleetCommandHoldIcon, HoldTooltip(), OnHold);
+        regroup = Tile(PoiIconKeys.Fleet("Regroup"), ColorHelper.fleetCommandRegroupIcon, CommandTooltip("@FleetCommandRegroup", UnityEngine.InputSystem.Key.V), OnRegroup);
+        holdFire = Tile(PoiIconKeys.Fleet("HoldFire"), ColorHelper.fleetCommandHoldFireIcon, CommandTooltip("@FleetCommandStanceHoldFire", UnityEngine.InputSystem.Key.F1), OnHoldFire);
+        aggressive = Tile(PoiIconKeys.Fleet("Aggressive"), ColorHelper.fleetCommandAggressiveIcon, CommandTooltip("@FleetCommandStanceAggressive", UnityEngine.InputSystem.Key.F2), OnAggressive);
+        defensive = Tile(PoiIconKeys.Fleet("Defend"), ColorHelper.fleetCommandDefensiveIcon, CommandTooltip("@FleetCommandStanceDefensive", UnityEngine.InputSystem.Key.F3), OnDefensive);
+        escort = Tile(PoiIconKeys.Fleet("Escort"), ColorHelper.fleetCommandEscortIcon, CommandTooltip("@FleetCommandStanceEscort", UnityEngine.InputSystem.Key.F4), OnEscort);
+        tractor = Tile(PoiIconKeys.Fleet("Tractor"), ColorHelper.offWhite, TractorTooltip(false), OnTractor);
+        drones = Tile(Kit.Icon("Ability", "Fleet.Drones", "Fleet.Drone", "Fleet.Hangar"), ColorHelper.offWhite, DroneTooltip(false), OnDrones);
+        cargo = Tile(PoiIconKeys.Fleet("FleetCargo"), ColorHelper.offWhite, Translation.Translate("@FleetRowCargoGaugeTitle"), OnCargo);
         settings = Tile(Kit.Icon("Info", PoiIconKeys.RouteUi("Edit")), ColorHelper.offWhite, "Ship settings", OnSettings);
-        tractorIcon = tractor.transform.Find("Icon").GetComponent<Image>();
         Refresh();
     }
 
+    // The game's text for a fleet order, with the key the HUD's fleet bar binds to it. That key orders every selected
+    // ship; this tile orders only its own ship.
+    internal static string CommandTooltip(string key, UnityEngine.InputSystem.Key hotkey) =>
+        Translation.Translate(key, KeyName(hotkey)) + "\n\nThis button orders only this ship. The hotkey orders every selected ship.";
+
+    // The game's own tractor tile text (its cargo window uses the same two lines); the tile toggles that state.
+    internal static string TractorTooltip(bool off) => Translation.Translate(off ? "@FleetCargoTractorTipOff" : "@FleetCargoTractorTipOn");
+
+    // What a click does now: the game's own words for it (Drone Bay, Deploy, Return).
+    internal static string DroneTooltip(bool deployed) =>
+        Translation.Translate("@EquipSlotDroneBay") + ": " + Translation.Translate(deployed ? "@UIDroneReturn" : "@UIDroneDeploy");
+
+    // The game's own text for the Hold order, as its fleet bar shows it (the hotkey name goes into the text), then what
+    // the tile does here. The HUD's Hold position switch is a different control that reaches only the ship you fly.
+    internal static string HoldTooltip() =>
+        Translation.Translate("@FleetCommandHold", HoldKeyName()) +
+        "\n\nHolds this ship only: it stays at its spot until you give it another order or the fleet travels. The Hold position switch on the HUD holds only the ship you fly.";
+
+    internal static string HoldKeyName() => KeyName(UnityEngine.InputSystem.Key.C);
+
+    // The key's name as the game's fleet bar shows it.
+    internal static string KeyName(UnityEngine.InputSystem.Key key)
+    {
+        var keyboard = UnityEngine.InputSystem.Keyboard.current;
+        return keyboard == null ? key.ToString() : keyboard[key].displayName;
+    }
+
     private Button Tile(string key, Color tint, string tooltip, Action onClick) =>
-        Kit.Tile(strip, key, tint, 16f, () => onClick(), tooltip);
+        Slot(Kit.Tile(strip, key, tint, 16f, () => onClick(), tooltip), tint);
 
     private SpaceShip Ship()
     {
@@ -237,14 +313,15 @@ public sealed class FleetStripRow : MonoBehaviour
             tractorModule = ship == null ? null : ship.GetModule<TractorModule>();
             droneBay = ship == null ? null : ship.GetModule<DroneBayModule>();
         }
+        // Every tile keeps its slot: one that doesn't apply to this ship is dimmed and can't be clicked, as the HUD's fleet bar does.
         bool fleet = ship != null && ship.autoActions is WingmanActions;
-        SetActive(stop, fleet);
-        SetActive(hold, fleet);
-        SetActive(regroup, fleet);
-        SetActive(holdFire, fleet);
-        SetActive(aggressive, fleet);
-        SetActive(defensive, fleet);
-        SetActive(escort, fleet);
+        Enable(stop, fleet);
+        Enable(hold, fleet);
+        Enable(regroup, fleet);
+        Enable(holdFire, fleet);
+        Enable(aggressive, fleet);
+        Enable(defensive, fleet);
+        Enable(escort, fleet);
         // SetTileState recolours the border (a Find and an array each); only when the state changed.
         if (data != null && data.fleetStance != lastStance)
         {
@@ -255,9 +332,17 @@ public sealed class FleetStripRow : MonoBehaviour
             FleetBarParts.SetTileState(escort, stance == FleetStance.Escort ? FleetTileState.Active : FleetTileState.Normal);
         }
         bool manage = data != null && PlayerCargo.CanManage(data);
-        SetActive(tractor, manage && tractorModule != null);
-        if (data != null) tractorIcon.color = data.tractorOff ? ColorHelper.fleetTractorOff : ColorHelper.fleetTractorOn;
-        SetActive(drones, droneBay != null);
+        if (data != null)
+        {
+            int off = data.tractorOff ? 1 : 0;
+            if (off != lastTractorOff)
+            {
+                lastTractorOff = off;
+                tractor.GetComponent<TileSlot>().SetTint(off == 1 ? ColorHelper.fleetTractorOff : ColorHelper.fleetTractorOn);
+                FleetBarParts.SetTooltip(tractor, null, TractorTooltip(off == 1));
+            }
+        }
+        Enable(tractor, manage && tractorModule != null);
         if (droneBay != null)
         {
             int deployed = droneBay.AreDronesDeployed() ? 1 : 0;
@@ -265,15 +350,49 @@ public sealed class FleetStripRow : MonoBehaviour
             {
                 lastDeployed = deployed;
                 FleetBarParts.SetTileState(drones, deployed == 1 ? FleetTileState.ToggledOn : FleetTileState.Normal);
+                FleetBarParts.SetTooltip(drones, null, DroneTooltip(deployed == 1));
             }
         }
-        SetActive(cargo, manage && !row.isFlagship);
+        Enable(drones, droneBay != null);
+        Enable(cargo, manage && !row.isFlagship);
+        Enable(settings, true);
     }
 
-    private static void SetActive(Button tile, bool on)
+    private static void Enable(Button tile, bool on) => tile.GetComponent<TileSlot>().Enable(on);
+
+    // A tile's icon colour and whether it is enabled, so a change is applied once.
+    internal sealed class TileSlot : MonoBehaviour
     {
-        var go = tile.gameObject;
-        if (go.activeSelf != on) go.SetActive(on);
+        public Button button;
+        public Image icon;
+        public Color tint;
+        // -1 unknown, 0 disabled, 1 enabled.
+        public int state = -1;
+
+        public void SetTint(Color color)
+        {
+            tint = color;
+            state = -1;
+        }
+
+        public void Enable(bool on)
+        {
+            int want = on ? 1 : 0;
+            if (state == want) return;
+            state = want;
+            button.interactable = on;
+            icon.color = on ? tint : tint * ColorHelper.panelButtonDisabled;
+        }
+    }
+
+    // The tile's own slot data: set up when the tile is built.
+    private Button Slot(Button tile, Color tint)
+    {
+        var slot = tile.gameObject.AddComponent<TileSlot>();
+        slot.button = tile;
+        slot.icon = tile.transform.Find("Icon").GetComponent<Image>();
+        slot.tint = tint;
+        return tile;
     }
 }
 

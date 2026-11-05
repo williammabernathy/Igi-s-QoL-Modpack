@@ -20,7 +20,7 @@ public sealed class EchoOperations : Feature
     public EchoOperations() { Instance = this; }
 
     public override string Id => "EchoOperations";
-    public override string Title => "ECHO's operations";
+    public override string Title => "ECHO's Operations";
     public override string Description => "The stealth, ammo and buyout choices for operations that ECHO starts on its own.";
     public override string SettingsTab => "Operations";
     public override Type[] PatchClasses => new[] { typeof(EchoOperationsPatch) };
@@ -32,14 +32,14 @@ public sealed class EchoOperations : Feature
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
-        StealthMode = cfg.Bind(Id, "StealthMode", EchoStealth.Vanilla, SettingInfo.Describe("Stealth",
-            "How ECHO's boarding crew advance. Silent: slower and weaker (-20% attack) but fewer casualties and fewer alerts. Balanced: normal. Aggressive: +20% attack but enemies notice much sooner. 'Same as yours' uses whatever you last picked yourself (game default).",
+        StealthMode = cfg.Bind(Id, "StealthMode", EchoStealth.Vanilla, SettingInfo.Describe("ECHO: Stealth",
+            "How the boarding crew of operations that ECHO starts advance. Silent: slower and weaker (-20% attack) but fewer casualties and fewer alerts. Balanced: normal. Aggressive: +20% attack but enemies notice much sooner. 'Same as yours' uses whatever Stealth you last picked yourself (game default).",
             "Same as yours", "Silent", "Balanced", "Aggressive"));
-        AmmoType = cfg.Bind(Id, "AmmoType", EchoAmmo.Vanilla, SettingInfo.Describe("Ammo",
-            "Ammo ECHO's boarding crew use. Standard: normal against everyone. Armour piercing: strong against armored crew (Marines, Gunners) and does the most damage to the ship. Hollow: weak against armored crew, least damage to the ship, more noise. 'Same as yours' uses whatever you last picked yourself (game default).",
-            "Same as yours", "Standard", "Armour piercing", "Hollow"));
-        AutoBuyOut = cfg.Bind(Id, "AutoBuyOut", false, SettingInfo.Describe("Accept buyouts automatically",
-            "During an operation, defenders sometimes offer to switch to your side for credits. When on, ECHO accepts these offers if you can pay. Without this, ECHO never accepts them. Game default: off."));
+        AmmoType = cfg.Bind(Id, "AmmoType", EchoAmmo.Vanilla, SettingInfo.Describe("ECHO: Ammo",
+            "The ammo that the boarding crew of operations ECHO starts use. Standard: normal damage against every crew type. Armor Piercing: strong against armored crew (Marines, Gunners) and does the most structural damage to the ship. Hollow: normal against unarmored crew, less effective against armored crew, and does the least structural damage. 'Same as yours' uses whatever Ammo you last picked yourself (game default).",
+            "Same as yours", "Standard", "Armor Piercing", "Hollow"));
+        AutoBuyOut = cfg.Bind(Id, "AutoBuyOut", false, SettingInfo.Describe("ECHO: Auto Accept Buyouts",
+            "During an operation, defenders sometimes offer to switch to your side for credits (a buyout offer). When on, ECHO accepts these offers in operations it starts, if you can pay. When off, ECHO never accepts them. Game default: off."));
     }
 
     public void Apply(DungeonOptions options)

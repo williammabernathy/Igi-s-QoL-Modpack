@@ -8,7 +8,7 @@ namespace IgiQoL;
 [BepInPlugin("igi.qol", "Igi's QoL Modpack", PluginInfo.Version)]
 public class Plugin : BaseUnityPlugin
 {
-    public const string TestedGameVersion = "0.8.3.4";
+    public const string TestedGameVersion = "0.8.3.5";
 
     public static Plugin Instance;
     public static ManualLogSource Log;

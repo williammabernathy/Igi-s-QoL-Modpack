@@ -82,11 +82,13 @@ public static class Kit
     public static TMP_Text Label(RectTransform parent, string text, float size = 12f) =>
         FleetBarParts.AddFlexibleLine(parent, text, size, ColorHelper.offWhite);
 
+    // A grey wrapping paragraph. It takes the column's width and its height from the wrapped text; if the layout is
+    // a frame behind (a resize), the text is clipped to its box instead of running over the next element.
     public static TMP_Text Muted(RectTransform parent, string text)
     {
         var t = FleetBarParts.AddFlexibleLine(parent, text, 11f, ColorHelper.poiTooltipMuted);
         t.textWrappingMode = TextWrappingModes.Normal;
-        t.overflowMode = TextOverflowModes.Overflow;
+        t.overflowMode = TextOverflowModes.Masking;
         return t;
     }
 
@@ -200,7 +202,7 @@ public static class Kit
 
     public static TMP_InputField Input(RectTransform parent, string text, TMP_InputField.ContentType type, Action<string> onEndEdit, float width = 160f)
     {
-        var field = UiSearchField.Build(parent, "", ColorHelper.panelHeaderBlue, 12f);
+        var field = UiSearchField.Build(parent, "", 12f);
         field.contentType = type;
         field.SetTextWithoutNotify(text);
         field.onEndEdit.AddListener(v => onEndEdit(v));
@@ -210,8 +212,9 @@ public static class Kit
 
     public static TMP_InputField Search(RectTransform parent, string placeholder, Action<string> onChanged, float width = 300f)
     {
-        var field = UiSearchField.Build(parent, placeholder, ColorHelper.panelHeaderBlue, 12f);
+        var field = UiSearchField.Build(parent, placeholder, 12f);
         UiSearchField.AddLens(field, 12f, 22f);
+        UiSearchField.AddRightClickClear(field);
         field.onValueChanged.AddListener(v => onChanged(v));
         CaptainCards.SetFixedSize((RectTransform)field.transform, width, 24f);
         return field;
@@ -242,6 +245,4 @@ public static class Kit
             if (key != null && lib.Has(key)) return key;
         return fallback;
     }
-
-    public static Sprite CloseSprite => PoiIconLibrary.Instance.Get(PoiIconKeys.Fleet("Close"));
 }

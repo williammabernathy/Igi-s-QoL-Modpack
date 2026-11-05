@@ -93,9 +93,9 @@ public sealed class CombatLog : Feature
     public CombatLog() { Instance = this; }
 
     public override string Id => "CombatLog";
-    public override string Title => "DPS parser";
-    public override string Description => "Records the damage your ships, drones and fighters deal and take: by weapon, damage type, ship and enemy type, split into shield, armour and hull, with hits, crits and kills. See it on the DPS parser tab.";
-    public override string SettingsTab => "DPS parser";
+    public override string Title => "DPS Parser";
+    public override string Description => "Records the damage your ships, drones and fighters deal and take: by weapon, damage type, ship and enemy type, split into shield, armor and hull, with hits, crits and kills. See it on the DPS Parser tab.";
+    public override string SettingsTab => "DPS Parser";
     public override Type[] PatchClasses => new[] { typeof(CombatLogPatches) };
 
     public ConfigEntry<int> FightGapSeconds;
@@ -122,15 +122,15 @@ public sealed class CombatLog : Feature
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
-        FightGapSeconds = cfg.Bind(Id, "FightGapSeconds", 15, SettingInfo.Describe("Seconds without damage that end a fight",
-            "A hit after this many quiet seconds starts a new fight in the log.", new AcceptableValueRange<int>(5, 120)));
+        FightGapSeconds = cfg.Bind(Id, "FightGapSeconds", 15, SettingInfo.Describe("End a fight after this many quiet seconds",
+            "A hit after this many seconds without damage starts a new fight in the log.", new AcceptableValueRange<int>(5, 120)));
         WriteFile = cfg.Bind(Id, "WriteFile", false, SettingInfo.Describe("Write each fight to a file",
             "When a fight ends, append its damage tables to BepInEx/config/IgiQoL/combat-log.txt."));
     }
 
     public override void OnActivated()
     {
-        ModWindow.AddTab(this, "combat", "DPS parser", 7, CombatLogTab.Build);
+        ModWindow.AddTab(this, "combat", "DPS Parser", 7, CombatLogTab.Build);
         DpsMeter.Register(this);
         GameEvents.SaveLoaded += Reset;
         Plugin.Instance.StartCoroutine(WriteFinishedFights());
@@ -207,7 +207,9 @@ public sealed class CombatLog : Feature
         recorded = Session.taken - sessionBefore;
         takenRow = Find(View.TakenByWeapon, weaponKey);
         d = $"recorded {recorded:0.0} ({takenRow?.label}: +{(takenRow?.total ?? 0) - before:0.0}), flagship lost {lost:0.0}";
-        if (takenRow != null && takenRow.total > before && Math.Abs(recorded - lost) < 0.5 && lost > 0) ctx.Pass("taken", d);
+        // The pool is net of anything that answers a hit on the flagship in the same call (an ability or effect that
+        // restores a little shield or armor), so allow 1% next to the half point of rounding.
+        if (takenRow != null && takenRow.total > before && Math.Abs(recorded - lost) < Math.Max(0.5, lost * 0.01) && lost > 0) ctx.Pass("taken", d);
         else ctx.Fail("taken", d);
 
         CombatLogTab.scope = -1;
@@ -425,7 +427,7 @@ public sealed class CombatLog : Feature
             if (rows.Count == 0) continue;
             sb.Append("-- ").Append(ViewName(v)).Append('\n');
             foreach (var s in rows)
-                sb.Append($"  {s.label,-48} {s.total,12:0} {s.hits,6} hits {100.0 * s.crits / Math.Max(1, s.hits),5:0}% crit  shield/armour/hull {Pct(s.shield, s.total)}/{Pct(s.armor, s.total)}/{Pct(s.hull, s.total)}\n");
+                sb.Append($"  {s.label,-48} {s.total,12:0} {s.hits,6} hits {100.0 * s.crits / Math.Max(1, s.hits),5:0}% crit  shield/armor/hull {Pct(s.shield, s.total)}/{Pct(s.armor, s.total)}/{Pct(s.hull, s.total)}\n");
         }
         return sb.ToString();
     }

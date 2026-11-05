@@ -31,20 +31,38 @@ public static class MissionBatch
         }
     }
 
-    // Missions ECHO would work on (IdleManager.GetIdleMission's test), complete or not.
+    // Missions ECHO would work on (IdleManager.GetIdleMission's test), complete or not. Courier missions only count
+    // while the Autopilot tab allows them: with courier missions off ECHO never works on one, so one you accepted
+    // yourself must not use up a place or hide the missions behind it.
     public static int Held()
     {
         int n = 0;
+        bool courier = GamePlayer.current.autopilotSettings.allowCourierMissions;
         foreach (var m in GamePlayer.current.missions)
-            if (m.CanBeIdled() && m.CanBeIdleCompleted() && !IdleManager.MissionIsUnreachable(m)) n++;
+            if ((courier || m.gameplayType != GameplayType.Cargo) && m.CanBeIdled() && m.CanBeIdleCompleted() && !IdleManager.MissionIsUnreachable(m)) n++;
         return n;
     }
+
+    // The first mission ECHO can work on that is not a courier mission: the one tracked on the HUD, else the first
+    // held. Used in place of the game's pick when that pick is a courier mission and courier missions are off.
+    public static Mission FirstWorkable()
+    {
+        var tracked = Singleton<FocusedMissionHandler>.HasInstance ? Singleton<FocusedMissionHandler>.Instance.focusedMission : null;
+        if (Workable(tracked)) return tracked;
+        foreach (var m in GamePlayer.current.missions)
+            if (Workable(m)) return m;
+        return null;
+    }
+
+    private static bool Workable(Mission m) =>
+        m != null && m.gameplayType != GameplayType.Cargo && m.CanBeIdled() && m.CanBeIdleCompleted() && !IdleManager.MissionIsUnreachable(m);
 
     // The nearest mission in this system that still has work at a location other than here and isn't a station visit,
     // passing the same tests ECHO applies before it flies to a mission. Null when there is none.
     public static Mission NextOpen()
     {
         var here = MapPointOfInterest.current;
+        float now = EchoPriority.EchoTrace.Now;
         var system = GamePlayer.current.currentSystem;
         Vector2 from = here != null ? here.GetWorldPosition() : (Vector2)Fleet.Flagship.transform.position;
         bool courier = GamePlayer.current.autopilotSettings.allowCourierMissions;
@@ -56,6 +74,7 @@ public static class MissionBatch
             if (m.gameplayType == GameplayType.Cargo && !courier) continue;
             var poi = m.GetActivePoi(forEcho: true);
             if (poi == null || poi == here || poi is SpaceStation || poi.hidden || poi.system != system) continue;
+            if (EchoPriority.EchoTrace.IsEmpty(poi, now)) continue;
             if (IdleManager.MissionIsUnreachable(m) || IdleManager.MissionDungeonExceedsRisk(m) || !IdleManager.ShipHasLoadoutForMission(m)) continue;
             float d = Vector2.Distance(from, poi.GetWorldPosition());
             if (d < bestDistance)
@@ -252,6 +271,25 @@ internal static class MissionBatchPatches
         catch (Exception e) { F.Fail(e, nameof(MissionBatchPatches)); }
     }
 
+    // The game's pick can be a courier mission you accepted yourself while courier missions are off on the Autopilot
+    // tab. It then declines to work on missions at all (DecideMissionActivity) yet still flies to the courier's
+    // station (TravelToMissionStation). With courier missions off ECHO leaves them alone and works on the next mission.
+    // A finished courier mission at this station is still turned in.
+    [HarmonyPostfix]
+    [HarmonyPriority(Priority.Last)]
+    [HarmonyPatch(typeof(IdleManager), nameof(IdleManager.GetIdleMission))]
+    internal static void GetIdleMissionNoCourierPostfix(ref Mission __result)
+    {
+        if (!F.Active || __result == null || __result.gameplayType != GameplayType.Cargo) return;
+        try
+        {
+            if (GamePlayer.current.autopilotSettings.allowCourierMissions) return;
+            if (__result.isComplete && __result.GetActivePoi(forEcho: true) == MapPointOfInterest.current) return;
+            __result = MissionBatch.FirstWorkable();
+        }
+        catch (Exception e) { F.Fail(e, nameof(MissionBatchPatches)); }
+    }
+
     private static bool claiming;
 
     // The game turns in one mission per decision (about 10 s each); with several finished missions aboard, the rest
@@ -288,6 +326,7 @@ internal static class MissionBatchPatches
             if (GamePlayer.current.autopilotSettings.noTravel || MissionBatch.NeedsStation(__instance)) return true;
             var next = MissionBatch.NextOpen();
             if (next == null) return true;
+            EchoPriority.EchoTrace.Step = "Missions ECHO takes at once: on to the next open mission instead of a station";
             __instance.SetIdleCombatMode(Fleet.Flagship, enable: false);
             if (__instance.TryLootBeforeLeaving()) return false;
             if (!Singleton<TravelManager>.Instance.CanWeTravel())

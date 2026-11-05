@@ -176,7 +176,7 @@ internal static class DevProfile
             sb.AppendLine($"  {s.label}: {Ms(s.ticks) / n:0.0000} / {s.calls / n:0.0} / {Ms(s.ticks) * 1000.0 / s.calls:0.0} / {Ms(s.maxTicks) * 1000.0:0}");
         }
 
-        var game = new List<KeyValuePair<string, (long ticks, int calls)>>(SimMarker.Totals);
+        var game = new List<KeyValuePair<string, (long ticks, int calls, long bytes)>>(SimMarker.Totals);
         game.Sort((a, b) => b.Value.ticks.CompareTo(a.Value.ticks));
         sb.AppendLine("game SimMarker sections (ms / frame, calls / frame; nested sections include their children):");
         foreach (var kv in game)

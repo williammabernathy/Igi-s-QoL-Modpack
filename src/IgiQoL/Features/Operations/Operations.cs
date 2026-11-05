@@ -29,10 +29,10 @@ public sealed class Operations : Feature
     public Operations() { Instance = this; }
 
     public override string Id => "Operations";
-    public override string Title => "Operations tab";
-    public override string Description => "The Operations tab: your starting choices for operations, ECHO's choices, and the operations running now.";
+    public override string Title => "Operations";
+    public override string Description => "Adds the Operations tab: your starting choices for operations, ECHO's choices, and the operations running now.";
     public override string SettingsTab => "Operations";
-    public override Type[] PatchClasses => new[] { typeof(DungeonPanelPatch), typeof(PriorityCompartmentPatch) };
+    public override Type[] PatchClasses => new[] { typeof(DungeonPanelPatch), typeof(PriorityCompartmentPatch), typeof(CrewSliderPatch) };
 
     public ConfigEntry<bool> PlayerAutoBuyOut;
     public ConfigEntry<string> BoardingCompartment, InstallationCompartment;
@@ -42,14 +42,14 @@ public sealed class Operations : Feature
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
-        PlayerAutoBuyOut = cfg.Bind(Id, "PlayerAutoBuyOut", false, SettingInfo.Describe("Accept buyouts automatically",
-            "Ticks 'Auto Accept Buyouts' on the operation panel whenever you start a new operation. The game remembers your stealth, ammo and movement choices between operations, but not this one. Buyouts are offers from defenders to switch to your side for credits."));
+        PlayerAutoBuyOut = cfg.Bind(Id, "PlayerAutoBuyOut", false, SettingInfo.Describe("Auto Accept Buyouts",
+            "Ticks Auto Accept Buyouts on the operation panel whenever you start a new operation. The game remembers your Stealth, Ammo and Automatic movement choices between operations, but not this one. Buyouts are offers from defenders to switch sides for credits."));
         var names = new List<string> { NoCompartment };
         names.AddRange(Enum.GetNames(typeof(CompartmentType)));
-        BoardingCompartment = cfg.Bind(Id, "BoardingCompartment", NoCompartment, SettingInfo.Describe("Boardings",
+        BoardingCompartment = cfg.Bind(Id, "BoardingCompartment", NoCompartment, SettingInfo.Describe("Priority compartment: boardings",
             "The compartment your crew make for first when a boarding of a ship starts, yours and ECHO's: the first compartment of that type in the ship, as if you had clicked it on the operation screen. You can still click another one. A ship without that compartment gets no priority. None: the game default, no priority.",
             new AcceptableValueList<string>(names.ToArray())));
-        InstallationCompartment = cfg.Bind(Id, "InstallationCompartment", NoCompartment, SettingInfo.Describe("Installations",
+        InstallationCompartment = cfg.Bind(Id, "InstallationCompartment", NoCompartment, SettingInfo.Describe("Priority compartment: installations",
             "The same for operations at installations, where your crew go in on foot instead of by boarding pod: outposts, research stations, derelicts, ruins and the like. None: the game default, no priority.",
             new AcceptableValueList<string>(names.ToArray())));
     }
@@ -59,30 +59,32 @@ public sealed class Operations : Feature
         ModWindow.AddTab(this, "operations", "Operations", 20, BuildOperations);
     }
 
-    // Display names in StealthMode / AmmoType declaration order, and the explanations the game's own tooltips give.
+    // Display names in StealthMode / AmmoType declaration order. The explanations are the game's own tooltip texts.
     public static readonly string[] StealthNames = { "Silent", "Balanced", "Aggressive" };
-    public static readonly string[] AmmoNames = { "Standard", "Armour piercing", "Hollow" };
-    public const string StealthHelp = "How your boarding crew advance. Silent: slower and weaker (-20% attack) but fewer casualties and fewer alerts. Balanced: normal. Aggressive: +20% attack but enemies notice much sooner.";
-    public const string AmmoHelp = "Standard: normal against everyone. Armour piercing: strong against armored crew (Marines, Gunners) and does the most damage to the ship. Hollow: weak against armored crew, least damage to the ship, more noise.";
-    public const string AutoMoveHelp = "Your crew move through the ship's compartments on their own. Turn off to move them yourself.";
+    public static readonly string[] AmmoNames = { "Standard", "Armor Piercing", "Hollow" };
+    public static string StealthHelp => Translation.Translate("@BoardingStealthDescription") + "\n\n" + Translation.Translate("@BoardingStealthDescriptionSilent")
+        + "\n" + Translation.Translate("@BoardingStealthDescriptionBalanced") + "\n" + Translation.Translate("@BoardingStealthDescriptionAggressive");
+    public static string AmmoHelp => Translation.Translate("@BoardingAmmoDescription") + "\n\n" + Translation.Translate("@BoardingAmmoDescriptionStandard")
+        + "\n" + Translation.Translate("@BoardingAmmoDescriptionArmourPiercing") + "\n" + Translation.Translate("@BoardingAmmoDescriptionHollow");
+    public static string AutoMoveHelp => Translation.Translate("@DungeonAutoMovementDescription");
 
     private void BuildOperations(RectTransform content)
     {
-        Kit.Heading(content, "Operations you start");
+        Kit.Heading(content, "Operations You Start");
         Kit.Muted(content, "What the operation panel starts with. The game remembers these between operations; changing them here is the same as changing them on the panel.");
 
         var row = Kit.Row(content);
-        Kit.Tooltip(Kit.Label(row, "Stealth"), "Stealth", StealthHelp);
+        Kit.Tooltip(Kit.Label(row, Translation.Translate("@BoardingStealth")), Translation.Translate("@BoardingStealth"), StealthHelp);
         Kit.Dropdown(row, StealthNames, (int)GameplayerPrefs.GetDungeonStealthMode(),
             i => GameplayerPrefs.SetDungeonStealthMode((StealthMode)i), 200f);
 
         row = Kit.Row(content);
-        Kit.Tooltip(Kit.Label(row, "Ammo"), "Ammo", AmmoHelp);
+        Kit.Tooltip(Kit.Label(row, Translation.Translate("@BoardingAmmo")), Translation.Translate("@BoardingAmmo"), AmmoHelp);
         Kit.Dropdown(row, AmmoNames, (int)GameplayerPrefs.GetDungeonAmmoType(),
             i => GameplayerPrefs.SetDungeonAmmoType((AmmoType)i), 200f);
 
         row = Kit.Row(content);
-        Kit.Tooltip(Kit.Label(row, "Automatic movement"), "Automatic movement", AutoMoveHelp);
+        Kit.Tooltip(Kit.Label(row, Translation.Translate("@DungeonAutoMovement")), Translation.Translate("@DungeonAutoMovement"), AutoMoveHelp);
         Kit.Toggle(row, null, GameplayerPrefs.GetDungeonAutoMove(), v => GameplayerPrefs.SetDungeonAutoMove(v));
 
         row = Kit.Row(content);
@@ -97,14 +99,14 @@ public sealed class Operations : Feature
             Kit.Muted(content, "Used when ECHO starts an operation on its own. 'Same as yours' copies your choice from the section above.");
             SettingRows.AddEntries(content, echo.Id, SettingRows.Rows.Options);
         }
-        else Kit.Muted(content, "ECHO's operations are turned off on the Settings tab, so ECHO uses the game's normal choices: your stealth and ammo from above, and it never accepts buyouts.");
+        else Kit.Muted(content, "ECHO's Operations are turned off on the Settings tab, so ECHO uses the game's normal choices: your stealth and ammo from above, and it never accepts buyouts.");
 
-        Kit.Heading(content, "Priority compartment");
+        Kit.Heading(content, "Priority Compartment");
         Kit.Muted(content, "The compartment your crew go for first when an operation starts, yours and ECHO's, as if you had clicked it on the operation screen. You can still click another one. The game doesn't remember a priority between operations, and the rooms differ from site to site, so this picks by kind of room.");
         AddCompartmentRow(content, BoardingCompartment, BoardingTypes());
         AddCompartmentRow(content, InstallationCompartment, InstallationTypes());
 
-        Kit.Heading(content, "Running operations");
+        Kit.Heading(content, "Running Operations");
         Kit.Muted(content, "Operations in progress, yours and ECHO's. Changes here apply to the running operation at once.");
         var column = Kit.Column(content);
         column.gameObject.AddComponent<OperationsList>();
@@ -182,6 +184,7 @@ public sealed class Operations : Feature
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
         CheckPlayerBuyOut(ctx);
+        CheckCrewSliders(ctx);
         CheckExitStates(ctx);
         CheckPriority(ctx);
 
@@ -196,6 +199,7 @@ public sealed class Operations : Feature
         yield return ctx.Screenshot("window-operations");
 
         yield return CheckExitButton(ctx);
+        yield return CheckRunningLayout(ctx);
     }
 
     // The running list is the tab's last section; scroll to the end so a screenshot shows it, not just its heading.
@@ -302,6 +306,53 @@ public sealed class Operations : Feature
         else ctx.Fail("exit-states", string.Join("; ", fails));
     }
 
+    // A running operation's row must hold still while its phase, its text and its exit button change, and no text of it may
+    // be cut off. Positions and widths are measured in the real list, before, during and after the change.
+    private IEnumerator CheckRunningLayout(SelfCheckContext ctx)
+    {
+        var ops = CurrentOperations();
+        DungeonType type = DungeonType.PirateBase;
+        bool found = false;
+        foreach (DungeonType t in Enum.GetValues(typeof(DungeonType)))
+        {
+            var def = DungeonDefinition.Get(t);
+            if (def != null && def.approachStyle != ApproachStyle.Pods) { type = t; found = true; break; }
+        }
+        if (ops == null || !found)
+        {
+            ctx.Skip("running-layout", ops == null ? "no DungeonManager" : "no walk-approach dungeon definition");
+            yield break;
+        }
+        var op = new DungeonOperation(null, new DungeonLocationData { dungeonType = type }, new DungeonOptions(), false);
+        ops.Add(op);
+        try
+        {
+            ModWindow.Open("operations");
+            yield return null;
+            yield return null;
+            var list = ModWindow.IsOpen ? ModWindow.Content.GetComponentInChildren<OperationsList>() : null;
+            if (list == null) { ctx.Fail("running-layout", "no running-operations list in the window"); yield break; }
+            list.Refresh();
+            string before = list.LayoutSnapshot();
+            string cutBefore = list.CutOff();
+            op.phase = MissionPhase.Extraction;
+            list.Refresh();
+            string during = list.LayoutSnapshot();
+            op.phase = MissionPhase.Approach;
+            list.Refresh();
+            string after = list.LayoutSnapshot();
+            bool still = before == during && before == after && before.Length > 0;
+            string detail = still ? $"{type}: positions and widths equal across Approach, Extraction and Approach again ({before})" : $"before: {before} during: {during} after: {after}";
+            if (still && cutBefore.Length == 0) ctx.Pass("running-layout", detail);
+            else ctx.Fail("running-layout", cutBefore.Length > 0 ? detail + " | cut off: " + cutBefore : detail);
+        }
+        finally
+        {
+            op.phase = MissionPhase.Approach;
+            ops.Remove(op);
+        }
+    }
+
     // A walk-approach operation with no ship (its tick returns at once) in the real list: the row's Abandon button
     // asks first, "Keep going" leaves it running, "Abandon" ends it and the row goes.
     private IEnumerator CheckExitButton(SelfCheckContext ctx)
@@ -400,6 +451,44 @@ public sealed class Operations : Feature
             PlayerAutoBuyOut.Value = savedEntry;
         }
     }
+
+    // A remembered slider value above the crew aboard: the label must show what the slider will send (the slider's
+    // own clamped value), not the remembered number.
+    private static void CheckCrewSliders(SelfCheckContext ctx)
+    {
+        DungeonPanel panel = null;
+        foreach (var p in Resources.FindObjectsOfTypeAll<DungeonPanel>())
+            if (p.gameObject.scene.IsValid()) { panel = p; break; }
+        var ship = GamePlayer.current?.currentSpaceShip;
+        if (panel == null || panel.crewSliderPrefab == null || ship == null) { ctx.Skip("crew-slider", $"panel {panel != null}, flown ship {ship != null}"); return; }
+        if (DungeonPanel.IsOpen || panel._sim != null) { ctx.Skip("crew-slider", "the operation panel is in use"); return; }
+        string type = null;
+        int aboard = 0;
+        foreach (var kv in ship.crewData.crew)
+            if (kv.Value > 0 && kv.Key != "Pilot") { type = kv.Key; aboard = kv.Value; break; }
+        if (type == null) { ctx.Skip("crew-slider", "no crew aboard the flown ship"); return; }
+        string key = PlayerPrefKeys.DungeonCrewSliderPrefix.ToString() + type;
+        bool had = PlayerPrefs.HasKey(key);
+        int saved = PlayerPrefs.GetInt(key, 0);
+        try
+        {
+            PlayerPrefs.SetInt(key, aboard + 5);
+            panel.BuildCrewEntries();
+            CrewSliderEntry entry = null;
+            foreach (var e in panel._crewEntries)
+                if (e.crewTypeId == type) entry = e;
+            string shown = entry != null ? entry.valueLabel.text : "no entry";
+            string detail = $"{type}: aboard {aboard}, remembered {aboard + 5}, slider {(entry != null ? entry.assigned : -1)}, label {shown}";
+            if (entry != null && entry.assigned == aboard && shown == aboard.ToString()) ctx.Pass("crew-slider", detail);
+            else ctx.Fail("crew-slider", detail);
+        }
+        finally
+        {
+            panel.ClearCrewEntries();
+            if (had) PlayerPrefs.SetInt(key, saved);
+            else PlayerPrefs.DeleteKey(key);
+        }
+    }
 }
 
 [HarmonyPatch]
@@ -418,6 +507,28 @@ internal static class DungeonPanelPatch
                 __instance.autoAcceptBuyOutToggle.SetIsOnWithoutNotify(true);
         }
         catch (Exception e) { F.Fail(e, nameof(DungeonPanelPatch)); }
+    }
+}
+
+// The game fills an operation's crew slider with the value you last left it on and prints that number, even when the
+// ship you fly now has fewer of that crew. The slider itself stops at what's aboard, and that's what the operation
+// takes; the label now says the same.
+[HarmonyPatch]
+internal static class CrewSliderPatch
+{
+    private static Operations F => Operations.Instance;
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(CrewSliderEntry), nameof(CrewSliderEntry.Init))]
+    private static void InitPostfix(CrewSliderEntry __instance)
+    {
+        if (!F.Active) return;
+        try
+        {
+            string text = __instance.assigned.ToString();
+            if (__instance.valueLabel != null && __instance.valueLabel.text != text) __instance.valueLabel.text = text;
+        }
+        catch (Exception e) { F.Fail(e, nameof(CrewSliderPatch)); }
     }
 }
 
@@ -457,7 +568,7 @@ public sealed class OperationsList : MonoBehaviour
     private sealed class OpRow
     {
         public DungeonOperation op;
-        public TMP_Text summary;
+        public TMP_Text summary, time, counts;
         public Kit.Choice stealth, ammo;
         public Button autoMove, buyOut;
         public Button exit;
@@ -553,19 +664,24 @@ public sealed class OperationsList : MonoBehaviour
         {
             var op = ops[i];
             var r = new OpRow { op = op };
+            if (i > 0) Kit.Gap(column, 6f);
             var line1 = Kit.Row(column, 6f, 22f);
             r.summary = Kit.Label(line1, "", 12f);
             r.exit = Kit.TextButton(line1, "Abandon", () => OnExit(op), 80f);
             r.exitLabel = r.exit.GetComponentInChildren<TMP_Text>();
             Kit.Tooltip(r.exit.targetGraphic, "Extract or abandon", ExitHelp);
             r.shown = ExitAction.Abandon;
-            var line2 = Kit.Row(column, 6f, 26f);
-            Kit.Label(line2, "Stealth");
-            r.stealth = Kit.Dropdown(line2, Operations.StealthNames, (int)op.options.stealthMode, v => SetStealth(op, (StealthMode)v), 110f);
-            Kit.Label(line2, "Ammo");
-            r.ammo = Kit.Dropdown(line2, Operations.AmmoNames, (int)op.options.ammoType, v => SetAmmo(op, (AmmoType)v), 130f);
-            r.autoMove = Kit.Toggle(line2, "Auto movement", op.options.autoMove, v => SetAutoMove(op, v));
-            r.buyOut = Kit.Toggle(line2, "Auto buyouts", op.options.autoAcceptBuyOut, v => SetBuyOut(op, v));
+            var line2 = Kit.Row(column, 6f, 22f);
+            r.time = Kit.Fixed(line2, "", 100f, TextAlignmentOptions.Left, ColorHelper.poiTooltipMuted);
+            r.counts = Kit.Label(line2, "", 12f);
+            var line3 = Kit.Row(column, 6f, 26f);
+            Kit.Fixed(line3, Translation.Translate("@BoardingStealth"), 72f, TextAlignmentOptions.Left, ColorHelper.offWhite);
+            r.stealth = Kit.Dropdown(line3, Operations.StealthNames, (int)op.options.stealthMode, v => SetStealth(op, (StealthMode)v), 110f);
+            Kit.Fixed(line3, Translation.Translate("@BoardingAmmo"), 56f, TextAlignmentOptions.Left, ColorHelper.offWhite);
+            r.ammo = Kit.Dropdown(line3, Operations.AmmoNames, (int)op.options.ammoType, v => SetAmmo(op, (AmmoType)v), 130f);
+            var line4 = Kit.Row(column, 6f, 22f);
+            r.autoMove = Kit.Toggle(line4, Translation.Translate("@DungeonAutoMovement"), op.options.autoMove, v => SetAutoMove(op, v));
+            r.buyOut = Kit.Toggle(line4, Translation.Translate("@BoardingAutoAcceptBuyout"), op.options.autoAcceptBuyOut, v => SetBuyOut(op, v));
             rows.Add(r);
         }
     }
@@ -599,7 +715,7 @@ public sealed class OperationsList : MonoBehaviour
         if (s != null && s != op.options) s.autoAcceptBuyOut = v;
     }
 
-    private void Refresh()
+    internal void Refresh()
     {
         for (int i = 0; i < rows.Count; i++)
         {
@@ -607,19 +723,31 @@ public sealed class OperationsList : MonoBehaviour
             var op = r.op;
             // The game's pixel font has no middle dot, so the separators are plain ASCII.
             string text = MapPointOfInterest.GetDungeonPoiName(op.location.dungeonType, op.location.faction)
-                + " | " + (op.isAutonomous ? "ECHO" : "You") + " | " + op.phase;
-            var sim = op.simulation;
-            if (sim != null)
-                text += " | " + GameMath.FormatTime((int)sim.elapsed, true) + "/" + GameMath.FormatTime((int)sim.estimatedDuration, true)
-                    + " | kills " + sim.hostileKilled + " | lost " + sim.friendlyKilled + " | wounded " + sim.friendlyWounded;
+                + " | " + (op.isAutonomous ? "ECHO" : "You") + " | " + PhaseText(op.phase);
             if (r.summary.text != text) r.summary.text = text;
 
+            // Time and counters sit in their own second line, the time in a cell of fixed width, so a longer number
+            // never pushes the rest of the line.
+            var sim = op.simulation;
+            string time = "", counts = "";
+            if (sim != null)
+            {
+                time = Translation.Translate("@BoardingElapsed", GameMath.FormatTime((int)sim.elapsed, true), GameMath.FormatTime((int)sim.estimatedDuration, true));
+                counts = Translation.Translate("@DungeonStatEnemiesDefeated", sim.hostileKilled) + " | " + Translation.Translate("@DungeonStatCrewKIA", sim.friendlyKilled)
+                    + " | " + Translation.Translate("@DungeonStatCrewWounded", sim.friendlyWounded);
+            }
+            if (r.time.text != time) r.time.text = time;
+            if (r.counts.text != counts) r.counts.text = counts;
+
+            // The button keeps its place in the row whatever the state, so the line never changes width.
             var exit = ExitFor(op);
             if (exit != r.shown)
             {
                 r.shown = exit;
-                r.exit.gameObject.SetActive(exit != ExitAction.None);
-                if (exit != ExitAction.None) r.exitLabel.text = ExitText(exit);
+                bool on = exit != ExitAction.None;
+                // The game's button fades itself while it isn't interactable (UiButtonFx).
+                r.exit.interactable = on;
+                if (on) r.exitLabel.text = ExitText(exit);
             }
 
             // Follow changes made elsewhere (the vanilla panel edits the same options object).
@@ -631,5 +759,58 @@ public sealed class OperationsList : MonoBehaviour
             var buyState = r.buyOut.GetComponent<Kit.ToggleState>();
             if (buyState.on != o.autoAcceptBuyOut) Kit.SetToggle(r.buyOut, o.autoAcceptBuyOut);
         }
+    }
+
+    // The game's own words for where an operation is: its approach and extraction texts, and the mission list's.
+    private static string PhaseText(MissionPhase phase) => Translation.Translate(phase switch
+    {
+        MissionPhase.Approach => "@DungeonApproaching",
+        MissionPhase.Extraction => "@DungeonExtraction",
+        MissionPhase.Complete => "@MissionUiComplete",
+        _ => "@MissionUiInProgress",
+    });
+
+    // Where each control of each row is and how wide it is, for the self-check that rows hold still.
+    internal string LayoutSnapshot()
+    {
+        Canvas.ForceUpdateCanvases();
+        LayoutRebuilder.ForceRebuildLayoutImmediate(column);
+        var sb = new System.Text.StringBuilder();
+        var corners = new Vector3[4];
+        void Add(string name, Component c)
+        {
+            var rt = (RectTransform)c.transform;
+            rt.GetWorldCorners(corners);
+            sb.Append(name).Append(' ').Append(corners[0].x.ToString("0.#")).Append('+').Append((corners[2].x - corners[0].x).ToString("0.#")).Append("; ");
+        }
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var r = rows[i];
+            sb.Append('#').Append(i).Append(' ');
+            Add("summary", r.summary);
+            Add("exit", r.exit);
+            Add("time", r.time);
+            Add("counts", r.counts);
+            Add("stealth", r.stealth.root.transform);
+            Add("ammo", r.ammo.root.transform);
+            Add("move", r.autoMove);
+            Add("buyout", r.buyOut);
+        }
+        return sb.ToString();
+    }
+
+    // The measured width of the row's name line against the text it holds, for the self-check that nothing is cut off.
+    internal string CutOff()
+    {
+        var cut = new System.Text.StringBuilder();
+        foreach (var r in rows)
+        {
+            foreach (var t in new[] { r.summary, r.time, r.counts })
+            {
+                float need = t.GetPreferredValues(t.text).x, have = ((RectTransform)t.transform).rect.width;
+                if (have > 0f && need > have + 0.5f) cut.Append('\'').Append(t.text).Append("' needs ").Append(need.ToString("0")).Append(" of ").Append(have.ToString("0")).Append("; ");
+            }
+        }
+        return cut.ToString();
     }
 }

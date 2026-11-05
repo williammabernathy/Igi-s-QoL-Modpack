@@ -20,9 +20,9 @@ using Object = UnityEngine.Object;
 
 namespace IgiQoL.Features.CargoPins;
 
-// Pinned item types stay aboard a fleet ship when the fleet cargo's "move all to flagship" button (the gold crown)
-// empties it. That button is the only caller of PlayerCargo.MoveAll, so ECHO's unload, the fleet auto-deposit and the
-// Deposit button are untouched.
+// Pinned item types stay aboard a fleet ship when the fleet cargo's "Move all fleet cargo to the flagship" button (the
+// gold crown) empties it. That button is the only caller of PlayerCargo.MoveAll, so ECHO's unload, the fleet auto-deposit
+// and the Deposit button are untouched.
 public sealed class CargoPins : Feature
 {
     public static CargoPins Instance;
@@ -30,8 +30,8 @@ public sealed class CargoPins : Feature
     public CargoPins() { Instance = this; }
 
     public override string Id => "CargoPins";
-    public override string Title => "Pinned cargo";
-    public override string Description => "Pin item types to a fleet ship so the fleet cargo's move-all-to-flagship button (the gold crown) leaves them aboard; everything else still moves in one click. Hover over a stack in a fleet ship's cargo and press the pin key, or use the ship's settings popup, which also has a switch to keep the ammo the ship fires.";
+    public override string Title => "Pinned Cargo";
+    public override string Description => "Pin item types to a fleet ship so the fleet cargo's 'Move all fleet cargo to the flagship' button leaves them aboard; everything else still moves in one click. Hover over a stack in a fleet ship's cargo and press the pin key, or use the ship's settings popup, which also has a switch to keep the ammo the ship fires.";
     public override Type[] PatchClasses => new[] { typeof(CargoPinsPatches) };
 
     public ConfigEntry<Key> PinKey;
@@ -51,7 +51,7 @@ public sealed class CargoPins : Feature
     public static bool Pinned(SpaceShipData ship, InventoryItemType item)
     {
         var s = ShipSettings.Get(ship.guid);
-        return s.pins.Contains(item.identifier) || s.keepAmmo && Items.FiredBy(ship, item);
+        return !string.IsNullOrEmpty(item.identifier) && s.pins.Contains(item.identifier) || s.keepAmmo && Items.FiredBy(ship, item);
     }
 
     // The ship whose cargo this is, without PlayerCargo.OwnerOf's closures: it runs on every cargo slot refresh.
@@ -122,13 +122,18 @@ public sealed class CargoPins : Feature
     public static string Hint(InventoryItemSlot slot)
     {
         var stack = slot.contained;
-        var ship = stack != null ? PinnableOwner(slot.inventory) : null;
+        var ship = stack != null && CanPin(stack.item) ? PinnableOwner(slot.inventory) : null;
         if (ship == null) return null;
         string key = Instance.PinKey.Value.ToString();
-        if (ShipSettings.Get(ship.guid).pins.Contains(stack.item.identifier)) return "Pinned: the crown button leaves it aboard. " + key + " to unpin";
-        if (Pinned(ship, stack.item)) return "The crown button leaves it aboard: ammo this ship fires";
-        return key + ": pin to this ship, so the crown button leaves it aboard";
+        string button = "'" + MoveAllButton() + "'";
+        if (ShipSettings.Get(ship.guid).pins.Contains(stack.item.identifier)) return "Pinned: " + button + " leaves it aboard. Press " + key + " to unpin it";
+        if (Pinned(ship, stack.item)) return button + " leaves it aboard because this ship fires this ammo";
+        return key + ": pin it to this ship, so " + button + " leaves it aboard";
     }
+
+    // What the game's tooltip calls the fleet cargo's move-all button, without its highlight marks. Translate turns the
+    // marks into a colour tag, so the text is read before that step.
+    public static string MoveAllButton() => Translation.TranslateOnly("@FleetCargoMoveAllTip").Replace("#", "");
 
     // Item types for the popup's pin list: what's aboard, then pins for items no longer aboard. Sorted by name.
     public static List<InventoryItemType> PinChoices(SpaceShipData ship, out List<string> orphanPins)
@@ -136,7 +141,7 @@ public sealed class CargoPins : Feature
         var list = new List<InventoryItemType>();
         var seen = new HashSet<string>();
         foreach (var stack in ship.cargo.items)
-            if (stack?.item != null && seen.Add(stack.item.identifier)) list.Add(stack.item);
+            if (CanPin(stack?.item) && seen.Add(stack.item.identifier)) list.Add(stack.item);
         list.Sort((a, b) => string.Compare(Translation.Translate(a.displayName), Translation.Translate(b.displayName), StringComparison.CurrentCulture));
         orphanPins = new List<string>();
         foreach (var id in ShipSettings.Get(ship.guid).pins)
@@ -145,8 +150,11 @@ public sealed class CargoPins : Feature
         return list;
     }
 
+    // Built items (crafted or looted gear) carry no identifier, so there is nothing to pin them by.
+    public static bool CanPin(InventoryItemType item) => item != null && !string.IsNullOrEmpty(item.identifier);
+
     public static string PinName(string identifier) =>
-        InventoryItemType.TryGet(identifier, out var item) && item != null ? Translation.Translate(item.displayName) : identifier;
+        string.IsNullOrEmpty(identifier) ? "" : InventoryItemType.TryGet(identifier, out var item) && item != null ? Translation.Translate(item.displayName) : identifier;
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx) => CargoPinsCheck.Run(ctx);
 }
@@ -195,7 +203,7 @@ internal static class CargoPinsPatches
         if (kb == null || key <= Key.None || (int)key > Keyboard.KeyCount) return;
         try
         {
-            if (!kb[key].wasPressedThisFrame || __instance.contained == null || UIHelper.IsTypingInInputField()) return;
+            if (!kb[key].wasPressedThisFrame || __instance.contained == null || !CargoPins.CanPin(__instance.contained.item) || UIHelper.IsTypingInInputField()) return;
             var ship = CargoPins.PinnableOwner(__instance.inventory);
             if (ship == null) return;
             CargoPins.Toggle(ship, __instance.contained.item.identifier);

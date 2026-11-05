@@ -65,7 +65,7 @@ public static class LoadoutsTab
         var status = Kit.Muted(content, reason ?? "Docked with a hangar: you can apply loadouts here.");
         if (reason != null) status.color = ColorHelper.orange75;
 
-        Kit.Heading(content, "Save the current fit");
+        Kit.Heading(content, "Save the Current Fit");
         row = Kit.Row(content);
         var nameField = Kit.Input(row, pendingName.Length > 0 ? pendingName : DefaultName(ship), TMP_InputField.ContentType.Standard, v => pendingName = v, 220f);
         Kit.Toggle(row, "Include ECHO settings", includeEcho, v => includeEcho = v);
@@ -80,14 +80,14 @@ public static class LoadoutsTab
         var shared = LoadoutStore.SameHull(ship);
         if (shared.Count > 0)
         {
-            Kit.Heading(content, "Saved on your other " + ship.shipClass.identifier + " hulls");
+            Kit.Heading(content, "Saved on Your Other " + ship.shipClass.identifier + " Hulls");
             foreach (var (owner, l) in shared) LoadoutRow(content, ship, l, false, reason == null, owner);
         }
 
         if (lastReport != null && lastReportFor == ship.guid)
         {
-            Kit.Heading(content, "Last apply");
-            foreach (var d in lastReport.done) Kit.Label(content, "Done: " + d);
+            Kit.Heading(content, "Last Apply");
+            foreach (var d in lastReport.done) Kit.Label(content, char.ToUpper(d[0]) + d.Substring(1) + ".");
             foreach (var p in lastReport.problems) Kit.Label(content, p).color = ColorHelper.orange75;
             if (lastReport.done.Count == 0 && lastReport.problems.Count == 0) Kit.Label(content, "Already matched: nothing to change.");
         }

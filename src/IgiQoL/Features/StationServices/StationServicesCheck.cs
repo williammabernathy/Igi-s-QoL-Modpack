@@ -830,31 +830,33 @@ internal static class StationServicesCheck
         a.Refresh();
         yield return new WaitForSeconds(1.5f);
         string Label(GameObject go) => go.activeSelf ? "'" + go.GetComponentInChildren<TMPro.TMP_Text>().text + "'" : "hidden";
-        var rt = (RectTransform)a.repair.transform;
-        string detail = $"repair={Label(a.repair)} restock={Label(a.restock)} sell={Label(a.sell)} crew={Label(a.crew)} brig={Label(a.brig)} repairPos={rt.anchoredPosition} size={rt.sizeDelta}";
-        bool ok = a.repair.activeSelf && Label(a.repair).Contains("cr") && (ore == null || a.sell.activeSelf) && (lost == null || a.crew.activeSelf);
+        // Short labels (a crowded row) leave the amount to the tooltip.
+        var repairSource = a.repair.GetComponentInChildren<Behaviour.UI.Tooltip.TooltipSource>(true);
+        string repairTip = repairSource != null ? repairSource.BodyText ?? "" : "";
+        bool repairCost = a.Compact ? repairTip.Contains(" cr") : Label(a.repair).Contains("cr");
+        string detail = $"repair={Label(a.repair)}{(a.Compact ? " (short labels, cost in tooltip " + repairCost + ")" : "")} restock={Label(a.restock)} sell={Label(a.sell)} crew={Label(a.crew)} brig={Label(a.brig)} row={a.RowSnapshot()}";
+        bool ok = a.repair.activeSelf && repairCost && (ore == null || a.sell.activeSelf) && (lost == null || a.crew.activeSelf) && InOrder(a) && !a.RowOverflows();
         yield return ctx.Screenshot("airlock-services");
 
-        // Clicking Replace crew puts the crew member back and hides the button.
+        // Clicking Replace crew puts the crew member back; the button stays in its place, greyed out.
         if (lost != null && a.crew.activeSelf)
         {
             int before = lost.crewData.GetCrewCount(lostType);
             a.crew.GetComponent<UnityEngine.UI.Button>().onClick.Invoke();
             yield return new WaitForSeconds(1.5f);
-            detail += $" afterCrewClick {lostType} {before}->{lost.crewData.GetCrewCount(lostType)} crew={Label(a.crew)}";
-            ok &= lost.crewData.GetCrewCount(lostType) == before + 1 && !a.crew.activeSelf;
+            detail += $" afterCrewClick {lostType} {before}->{lost.crewData.GetCrewCount(lostType)} crew={Label(a.crew)} interactable={a.crew.GetComponent<UnityEngine.UI.Button>().interactable}";
+            ok &= lost.crewData.GetCrewCount(lostType) == before + 1 && a.crew.activeSelf && !a.crew.GetComponent<UnityEngine.UI.Button>().interactable && a.crew.GetComponent<Behaviour.UI.Shared.UiButtonFx>().Dimmed;
         }
 
-        // Clicking Sell sells the stack and hides the button.
+        // Clicking Sell sells the stack; the button stays in its place, greyed out.
         if (ore != null && a.sell.activeSelf)
         {
             a.sell.GetComponent<UnityEngine.UI.Button>().onClick.Invoke();
             yield return new WaitForSeconds(1.5f);
-            detail += $" afterSellClick cargo={ship.cargo.GetCount(ore)} sell={Label(a.sell)}";
-            ok &= ship.cargo.GetCount(ore) == 0 && !a.sell.activeSelf;
+            detail += $" afterSellClick cargo={ship.cargo.GetCount(ore)} sell={Label(a.sell)} interactable={a.sell.GetComponent<UnityEngine.UI.Button>().interactable}";
+            ok &= ship.cargo.GetCount(ore) == 0 && a.sell.activeSelf && !a.sell.GetComponent<UnityEngine.UI.Button>().interactable && a.sell.GetComponent<Behaviour.UI.Shared.UiButtonFx>().Dimmed;
         }
         if (ore != null) ship.cargo.Remove(ore, ship.cargo.GetCount(ore));
-        ItemRules.Load();
         if (ok) ctx.Pass("airlock", detail);
         else ctx.Fail("airlock", detail);
 
@@ -883,8 +885,18 @@ internal static class StationServicesCheck
         a.Refresh();
         yield return new WaitForSeconds(2.5f);
         bool overflow = a.RowOverflows();
-        string full = $"compact={a.Compact} overflow={overflow} repair={Label(a.repair)} restock={Label(a.restock)} sell={Label(a.sell)} crew={Label(a.crew)} brig={Label(a.brig)}";
+        string full = $"compact={a.Compact} icons={a.IconsOnly} overflow={overflow} repair={Label(a.repair)} restock={Label(a.restock)} sell={Label(a.sell)} crew={Label(a.crew)} brig={Label(a.brig)}";
         yield return ctx.Screenshot("airlock-services-all");
+        // Other amounts on the buttons (a different repair bill, another stack to sell) must not move or resize anything in the row.
+        string rowBefore = a.RowSnapshot();
+        ship.currentHullHP = ship.maxHullHP * 0.2f;
+        if (ore != null) ship.cargo.Add(ore, 7);
+        a.Refresh();
+        yield return null;
+        a.Refresh();
+        string rowAfter = a.RowSnapshot();
+        if (rowBefore == rowAfter) ctx.Pass("airlock-stable", "row unchanged after the amounts changed: " + rowAfter);
+        else ctx.Fail("airlock-stable", $"before: {rowBefore} after: {rowAfter}");
         if (ammoShip != null)
         {
             ammoShip.cargo.Remove(ammo, ammoShip.cargo.GetCount(ammo));
@@ -892,9 +904,22 @@ internal static class StationServicesCheck
         }
         if (ore != null) ship.cargo.Remove(ore, ship.cargo.GetCount(ore));
         ItemRules.Load();
-        if (!overflow && a.repair.activeSelf && a.crew.activeSelf && a.brig.activeSelf && (ammoShip == null || a.restock.activeSelf) && (ore == null || a.sell.activeSelf))
-            ctx.Pass("airlock-full", full);
-        else ctx.Fail("airlock-full", full);
+        bool ordered = InOrder(a);
+        if (!overflow && ordered && a.repair.activeSelf && a.crew.activeSelf && a.brig.activeSelf && (ammoShip == null || a.restock.activeSelf) && (ore == null || a.sell.activeSelf))
+            ctx.Pass("airlock-full", full + " ordered=" + ordered);
+        else ctx.Fail("airlock-full", full + " ordered=" + ordered);
+    }
+
+    // In the airlock's text buttons our five sit at the end in their own order, after the game's buttons, and the Favourite button (when it is there) comes first.
+    private static bool InOrder(AirlockServices a)
+    {
+        var row = a.repair.transform.parent;
+        var ours = new[] { a.repair, a.restock, a.sell, a.crew, a.brig };
+        int n = row.childCount;
+        for (int i = 0; i < ours.Length; i++)
+            if (ours[i].transform.parent != row || row.GetChild(n - ours.Length + i) != ours[i].transform) return false;
+        var fav = row.Find(FavouriteStations.AirlockFavourite.Name);
+        return fav == null || fav.GetSiblingIndex() == 0;
     }
 
     // One crew member of the check's crew ship counted as killed, with one of that type in the reserve to replace it.

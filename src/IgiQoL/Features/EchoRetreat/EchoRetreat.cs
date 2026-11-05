@@ -25,7 +25,7 @@ public sealed class EchoRetreat : Feature
     public EchoRetreat() { Instance = this; }
 
     public override string Id => "EchoRetreat";
-    public override string Title => "ECHO retreat";
+    public override string Title => "ECHO Retreat";
     public override string Description => "Lets ECHO break off and fly to the nearest friendly station for repairs when a ship's hull gets low, instead of fighting on until the emergency jump. Every heavy hit to the hull can kill a crew member, so leaving earlier also saves crew. Starting values (0) keep the game's behaviour.";
     public override string SettingsTab => "ECHO";
     public override Type[] PatchClasses => new[] { typeof(EchoRetreatPatches) };
@@ -37,10 +37,10 @@ public sealed class EchoRetreat : Feature
     {
         base.BindConfig(cfg);
         FlagshipHullPercent = cfg.Bind(Id, "FlagshipHullPercent", 0, SettingInfo.Describe("Retreat when the flagship's hull is below (%)",
-            "While ECHO is on and your flagship's hull drops below this share, ECHO stops fighting and flies the fleet to the nearest friendly station, where the hangar repairs it before ECHO carries on. 0 = never (the game fights on until the emergency jump at 0 hull). It doesn't leave while an operation or boarding it runs is still going.",
+            "While ECHO is on and your flagship's hull drops below this percentage, ECHO stops fighting and flies the fleet to the nearest friendly station, where the hangar repairs it before ECHO carries on. 0 means never (the game fights on until the emergency jump at 0 hull). It doesn't leave while an operation or boarding it runs is still going.",
             new AcceptableValueRange<int>(0, 90)));
         FleetHullPercent = cfg.Bind(Id, "FleetHullPercent", 0, SettingInfo.Describe("Retreat when a fleet ship's hull is below (%)",
-            "The same for the other ships of your fleet at this location. The game sends a fleet ship away for two minutes of repairs at 10% hull, so only values above 10 change anything. 0 = never.",
+            "Works like the flagship setting above, but for the other ships of your fleet at this location. The game sends a fleet ship away for two minutes of repairs at 10% hull, so only values above 10 change anything. 0 means never.",
             new AcceptableValueRange<int>(0, 90)));
     }
 

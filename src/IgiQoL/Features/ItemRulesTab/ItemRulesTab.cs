@@ -21,8 +21,8 @@ public sealed class ItemRulesTab : Feature
     public ItemRulesTab() { Instance = this; }
 
     public override string Id => "ItemRules";
-    public override string Title => "Item rules tab";
-    public override string Description => "The Item rules tab: per-item, per-category and default rules for loot pickup limits and for what ECHO does with cargo at a station.";
+    public override string Title => "Item Rules";
+    public override string Description => "The Item Rules tab: per-item, per-category and default rules for how many of an item your ships pick up and for what ECHO does with cargo at a station.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 
     public static readonly ItemCategory[] Categories = BuildCategories();
@@ -33,7 +33,10 @@ public sealed class ItemRulesTab : Feature
     private static Dictionary<string, InventoryItemType> byKey;
     private static Dictionary<string, InventoryItemType> byId;
 
-    public override void OnActivated() => ModWindow.AddTab(this, "itemrules", "Item rules", 15, Build);
+    public override void OnActivated() => ModWindow.AddTab(this, "itemrules", "Item Rules", 15, Build);
+
+    // Column widths shared by the header and every rule row, so the header cells sit over their fields.
+    private const float DockWidth = 140f, KeepWidth = 80f;
 
     private static ItemCategory[] BuildCategories()
     {
@@ -91,16 +94,16 @@ public sealed class ItemRulesTab : Feature
     private static void Build(RectTransform content)
     {
         var muted = ColorHelper.poiTooltipMuted;
-        Kit.Heading(content, "Item rules");
-        Kit.Muted(content, "The most specific rule wins: a specific item, then category + rarity, then category + rarity and below, then category, then any category + rarity and below, then the default. Pickup limit: your ships stop auto-tractoring the item once they carry this many (0 = no limit, -1 = never). At dock: what ECHO does with the item when it unloads at a station. Rules are saved with this game.");
+        Kit.Heading(content, "Item Rules");
+        Kit.Muted(content, "The most specific rule wins: a specific item, then category + rarity, then category + rarity and below, then category, then any category + rarity and below, then the default. Pickup Limit: your ships stop picking the item up with their tractor beam once they carry this many (0 = no limit, -1 = never). At Dock: what ECHO does with the item when it unloads at a station. Rules are saved with this game.");
 
         var header = Kit.Row(content, 6f, 22f);
         Kit.Label(header, "Rule");
-        Kit.Tooltip(Kit.Fixed(header, "Pickup limit", 96f, TextAlignmentOptions.Center, muted), "Pickup limit",
-            "Stop auto-tractoring once a ship carries this many. 0 = no limit. -1 = never auto-tractor it (items your missions need and ammo the ship fires are still picked up; clicking an item yourself always works). Needs 'Loot pickup limits' on.");
-        Kit.Tooltip(Kit.Fixed(header, "At dock", 130f, TextAlignmentOptions.Center, muted), "At dock",
-            "Game default: deposited in the station's storage as usual. Keep aboard: never unloaded. Sell: sold at the station shop when ECHO unloads. Sell above N: deposited until the storage holds N, the rest is sold. Data items sit in your data inventory, not cargo: Sell and Sell above N sell them from there when the rule names the item or its category ('Sell from the data inventory'). With 'Sell from station storage' or 'Sell from the armory' on, the same rules also sell what is already stored at the station or in the armory. Favourite stacks, ammo a ship fires and the usable items the game keeps aboard are never touched. Needs 'ECHO cargo rules' on.");
-        Kit.Tooltip(Kit.Fixed(header, "N", 60f, TextAlignmentOptions.Center, muted), "N", "For Sell above N: the amount to keep in storage.");
+        Kit.Tooltip(Kit.Fixed(header, "Pickup Limit", 96f, TextAlignmentOptions.Center, muted), "Pickup Limit",
+            "Your ships stop picking the item up with their tractor beam once a ship carries this many. 0 means no limit, and -1 means never pick it up. Items your missions need and ammo the ship fires are still picked up, and clicking an item yourself always works. Needs 'Loot Pickup Limits' on.");
+        Kit.Tooltip(Kit.Fixed(header, "At Dock", DockWidth, TextAlignmentOptions.Center, muted), "At Dock",
+            "Game default: deposited in the station's storage as usual. Keep aboard: never unloaded. Sell: sold at the station shop when ECHO unloads. Sell, keep up to: deposited until the storage holds the Keep Up to amount, and the rest is sold. Data items sit in your data inventory, not cargo: Sell and Sell, keep up to sell them from there when the rule names the item or its category ('Sell from the data inventory'). With 'Sell from station storage' or 'Sell from the armory' on, the same rules also sell what is already stored at the station or in the armory. Favourite stacks, ammo a ship fires and the usable items the game keeps aboard are never touched. Needs 'ECHO Cargo Rules' on.");
+        Kit.Tooltip(Kit.Fixed(header, "Keep Up to", KeepWidth, TextAlignmentOptions.Center, muted), "Keep Up to", "For Sell, keep up to: how many of the item stay in storage. The rest is sold.");
         Kit.Fixed(header, "", 22f, TextAlignmentOptions.Center, muted);
 
         Kit.Heading(content, "Default");
@@ -138,7 +141,7 @@ public sealed class ItemRulesTab : Feature
             }, 60f);
         }
 
-        Kit.Heading(content, "Category and rarity");
+        Kit.Heading(content, "Category and Rarity");
         var pairs = new List<(ItemCategory, Rarity)>(ItemRules.ByCategoryRarity.Keys);
         pairs.Sort((a, b) =>
         {
@@ -170,7 +173,7 @@ public sealed class ItemRulesTab : Feature
             }, 60f);
         }
 
-        Kit.Heading(content, "Rarity and below");
+        Kit.Heading(content, "Rarity and Below");
         var rarityUps = new List<Rarity>(ItemRules.ByRarityUpTo.Keys);
         rarityUps.Sort();
         foreach (var rarity in rarityUps)
@@ -241,12 +244,12 @@ public sealed class ItemRulesTab : Feature
         var caps = TractorCaps.TractorCaps.Instance;
         SettingRows.AddSection(content, caps);
         if (caps.Active) SettingRows.AddEntries(content, caps.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Pickup limits do nothing while 'Loot pickup limits' is off (Settings tab).");
+        else Kit.Muted(content, "Pickup limits do nothing while 'Loot Pickup Limits' is off on the Settings tab.");
 
         var cargo = EchoCargo.EchoCargo.Instance;
         SettingRows.AddSection(content, cargo);
         if (cargo.Active) SettingRows.AddEntries(content, cargo.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
+        else Kit.Muted(content, "'" + cargo.Title + "' is turned off on the Settings tab.");
     }
 
     private static void RunSearch(string text)
@@ -308,20 +311,20 @@ public sealed class ItemRulesTab : Feature
             rule.dockAction = (DockAction)i;
             SyncKeep(keep, rule);
             ItemRules.Write();
-        }, 130f);
+        }, DockWidth);
         keep = Kit.Input(row, "", TMP_InputField.ContentType.IntegerNumber, v =>
         {
             if (int.TryParse(v, out var n)) rule.keepAmount = Math.Max(0, n);
             SyncKeep(keep, rule);
             ItemRules.Write();
-        }, 60f);
+        }, KeepWidth);
         SyncKeep(keep, rule);
 
         if (remove != null) Kit.Tooltip(Kit.TextTile(row, "x", 22f, () => remove()).targetGraphic, null, "Remove this rule");
         else Kit.Fixed(row, "", 22f, TextAlignmentOptions.Center, ColorHelper.offWhite);
     }
 
-    // The N field stays in every row so the columns line up; it only takes input for Sell above N.
+    // The Keep up to field stays in every row so the columns line up; it only takes input for Sell, keep up to.
     private static void SyncKeep(TMP_InputField keep, ItemRule rule)
     {
         bool on = rule.dockAction == DockAction.SellAbove;

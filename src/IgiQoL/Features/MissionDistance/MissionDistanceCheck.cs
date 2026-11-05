@@ -186,9 +186,10 @@ internal static class MissionDistanceCheck
                 else plainBar = Mathf.Min(plainBar, bar);
                 if (sample.Length < 300) sample += $" '{row.mission.name}'={got ?? "-"};";
             }
-            // The 190 px list leaves a progress bar of about 100 px; a tag must not squeeze it below 40.
+            // The 190 px list, less the game's 16 px scrollbar (4 px before 0.8.3.5), leaves a progress bar of about
+            // 58 px beside the category chip; a tag must not squeeze it below 30.
             string detail = $"{rows.Length} rows, {tagged} tagged, {good} right, {bad} wrong, narrowest bar {taggedBar:0} px tagged / {plainBar:0} px untagged:{sample}";
-            if (rows.Length > 0 && bad == 0 && (tagged == 0 || taggedBar >= 40f)) ctx.Pass("window-rows", detail);
+            if (rows.Length > 0 && bad == 0 && (tagged == 0 || taggedBar >= 30f)) ctx.Pass("window-rows", detail);
             else if (rows.Length == 0) ctx.Skip("window-rows", "no accepted missions");
             else ctx.Fail("window-rows", detail);
             yield return ctx.Screenshot("missions-window-distance");

@@ -57,7 +57,7 @@ internal static class DpsMeterCheck
 
         string titleA = TitleText(a), titleB = TitleText(b);
         string detail = $"'{titleA}' and '{titleB}'";
-        if (titleA == "DPS: Dealt by ship" && titleB == "DPS: Taken by ship") ctx.Pass("meters-title", detail);
+        if (titleA == "DPS: Dealt by Ship" && titleB == "DPS: Taken by Ship") ctx.Pass("meters-title", detail);
         else ctx.Fail("meters-title", detail);
 
         // Settings are saved with each window and the list names both.
@@ -100,6 +100,23 @@ internal static class DpsMeterCheck
         }
         yield return ctx.Screenshot("dps-meters");
 
+        // Figures that change every second keep one width: with the fixed-advance tag, "1111" and "8888" measure the
+        // same in the meter's own number label, while plain text does not (proportional digits). The table's cells are
+        // also fixed-width slots, so if the font ignored the tag the layout would still hold; this check says which it is.
+        var numberLabel = listA != null ? listA.TopNumberLabel : null;
+        if (numberLabel == null) ctx.Skip("meters-mono", "no meter row to measure with");
+        else
+        {
+            // A string's width is its advances plus the last glyph's own width, so the pairs end in the same glyph:
+            // with mspace every other character advances the same, and the widths match.
+            float monoLow = numberLabel.GetPreferredValues(DpsMeter.Mono("1110")).x, monoHigh = numberLabel.GetPreferredValues(DpsMeter.Mono("8880")).x;
+            float monoSep = numberLabel.GetPreferredValues(DpsMeter.Mono("1.1K")).x, monoWide = numberLabel.GetPreferredValues(DpsMeter.Mono("8.8K")).x;
+            float plainLow = numberLabel.GetPreferredValues("1110").x, plainHigh = numberLabel.GetPreferredValues("8880").x;
+            string monoDetail = $"mspace 1110={monoLow:0.0} 8880={monoHigh:0.0} 1.1K={monoSep:0.0} 8.8K={monoWide:0.0}; plain 1110={plainLow:0.0} 8880={plainHigh:0.0}";
+            if (Mathf.Abs(monoLow - monoHigh) < 0.5f && Mathf.Abs(monoSep - monoWide) < 0.5f) ctx.Pass("meters-mono", monoDetail);
+            else ctx.Fail("meters-mono", monoDetail + " (digits don't advance evenly; the fixed-width cells still keep the layout)");
+        }
+
         // A number change redraws the bars without rebuilding; a view change rebuilds, and the title follows.
         if (listA != null && listA.RowCount > 0)
         {
@@ -118,7 +135,7 @@ internal static class DpsMeterCheck
         yield return null;
         var rebuilt = Popouts.Get(second);
         string rebuiltTitle = rebuilt != null ? TitleText(rebuilt) : "";
-        if (rebuilt != null && rebuilt != b && rebuiltTitle == "DPS: Dealt by weapon") ctx.Pass("meters-rebuild", rebuiltTitle);
+        if (rebuilt != null && rebuilt != b && rebuiltTitle == "DPS: Dealt by Weapon") ctx.Pass("meters-rebuild", rebuiltTitle);
         else ctx.Fail("meters-rebuild", "title '" + rebuiltTitle + "'");
 
         Popouts.Remove(second);

@@ -25,7 +25,7 @@ namespace IgiQoL.Features.CombatOverview;
 
 public enum ShipsShown { All, Enemies, EnemiesAndFleet }
 
-// A pop-out window listing every ship around you with its shields, armour and hull, buffs and debuffs and target;
+// A pop-out window listing every ship around you with its shields, armor and hull, buffs and debuffs and target;
 // click a ship for its resistances, effects, weapons, threat list and attackers. The game shows this only for the
 // ship you hover (and its buff bar only for your flagship).
 public sealed class CombatOverview : Feature
@@ -39,8 +39,8 @@ public sealed class CombatOverview : Feature
     internal const float DefaultWidth = 760f, DefaultHeight = 400f;
 
     public override string Id => "CombatOverview";
-    public override string Title => "Combat overview";
-    public override string Description => "A window of its own that lists every ship around you: shields, armour and hull, its buffs and debuffs and what it's targeting. Click a ship for its resistances after debuffs, every effect on it, its weapons, its threat list and who is attacking it. Open it with the hotkey below or the button on the DPS parser tab. By default it shows only while you're in combat; its Options button changes that, its opacity and whether clicks pass through it.";
+    public override string Title => "Combat Overview";
+    public override string Description => "A window of its own that lists every ship around you: shields, armor and hull, its buffs and debuffs and what it's targeting. Click a ship for its resistances after debuffs, every effect on it, its weapons, its threat list and who is attacking it. Open it with the hotkey below or the button on the DPS Parser tab. By default it shows only while you're in combat; its Options button changes that, its opacity and whether clicks pass through it.";
     public override Type[] PatchClasses => Type.EmptyTypes;
 
     public ConfigEntry<Key> Hotkey;
@@ -50,7 +50,7 @@ public sealed class CombatOverview : Feature
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
-        Hotkey = cfg.Bind(Id, "Hotkey", Key.F7, SettingInfo.Describe("Hotkey",
+        Hotkey = cfg.Bind(Id, "Hotkey", Key.F7, SettingInfo.Describe("Combat overview hotkey",
             "Key that opens and closes the combat overview. Type a key name such as F7 or F8; None turns it off. Ignored while you type in a text field."));
     }
 
@@ -167,8 +167,8 @@ internal sealed class OverviewList : MonoBehaviour
 
     internal int RowCount => rows.Count;
 
-    // Level, shield, armour, hull, buffs, debuffs, target: fixed columns after the ship's name.
-    private static readonly string[] Columns = { "Lv", "Shield", "Armour", "Hull", "Buffs", "Debuffs", "Targeting" };
+    // Level, shield, armor, hull, buffs, debuffs, target: fixed columns after the ship's name.
+    private static readonly string[] Columns = { "Lv", "Shield", "Armor", "Hull", "Buffs", "Debuffs", "Targeting" };
     private static readonly float[] Widths = { 30f, 56f, 62f, 50f, 50f, 64f, 150f };
     private const float TargetGap = 8f;
 
@@ -181,7 +181,7 @@ internal sealed class OverviewList : MonoBehaviour
         self.grow = Mathf.Max(1f, TextScale.TextScale.Factor);
         self.summary = Kit.Muted(body, "");
         // One short line fits the narrowest window; the longer explanation is on hover.
-        Kit.Tooltip(self.summary, "Resistances", "A ship's resistances are the share of a hit it resists now. After the | comes the total on armour.");
+        Kit.Tooltip(self.summary, "Resistances", "A ship's resistances are the share of a hit it resists now. After the | comes the total on its armor.");
         Instance = self;
     }
 
@@ -378,7 +378,7 @@ internal sealed class OverviewList : MonoBehaviour
             return;
         }
 
-        Set(r.resists, "<color=#8FA3B8>Resists</color>  " + Join(Stats.Section(s), true));
+        Set(r.resists, "<color=#8FA3B8>Resistances</color>  " + Join(Stats.Section(s), true));
         int hidden = debuffs - shownDebuffs;
         var effects = Stats.EffectsSection(effectList, abilityList);
         effectList.Clear();

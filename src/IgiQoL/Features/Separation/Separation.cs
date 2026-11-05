@@ -22,8 +22,8 @@ public sealed class Separation : Feature
     public Separation() { Instance = this; }
 
     public override string Id => "Separation";
-    public override string Title => "Keep distance in combat";
-    public override string Description => "In a fight the game flies every ship straight at its target and turns its collision avoidance off, so ships pile on top of each other. With this on, your ships keep a gap from any ship near them while they fight, and with \"Other ships keep distance too\" enemy and allied ships do the same. Set it per ship of yours with the last button on its row in the fleet panel.";
+    public override string Title => "Keep Distance in Combat";
+    public override string Description => "In a fight the game flies every ship straight at its target and turns its collision avoidance off, so ships pile on top of each other. With this on, your ships keep a gap from any ship near them while they fight, and with \"Other ships keep distance too\" enemy and allied ships do the same. A ship never keeps distance from the ship it is attacking. It only works while a ship is chasing its target, not for ships the game flies in formation (Escort, Hold Fire, a Hold or Move order, Defensive until hit). Set it per ship of yours with the last button on its row in the fleet panel.";
     public override Type[] PatchClasses => new[] { typeof(SeparationPatches) };
 
     public override void OnActivated()
@@ -39,7 +39,7 @@ public sealed class Separation : Feature
     {
         base.BindConfig(cfg);
         Default = cfg.Bind(Id, "Default", false, SettingInfo.Describe("Keep distance from other ships",
-            "When on, every ship of yours keeps a gap from other ships (yours and enemies) while it fights, instead of parking on top of them. Each ship can override this in its own settings (the last button on its row in the fleet panel)."));
+            "When on, every ship of yours keeps a gap from other ships (yours and enemies) while it fights, instead of parking on top of them. A ship never keeps distance from the ship it is attacking. Each ship can override this in its own settings (the last button on its row in the fleet panel)."));
         Gap = cfg.Bind(Id, "Gap", 2f, SettingInfo.Describe("Gap between hulls (units)",
             "How much empty space a ship that keeps distance tries to leave between its hull and another ship's hull in combat.",
             new AcceptableValueRange<float>(0.5f, 10f)));
@@ -135,6 +135,25 @@ public sealed class Separation : Feature
             if (!hullGap.isValid || hullGap.distance < Gap.Value || side >= circles) ctx.Skip("apart", "couldn't line the hulls up: " + apartDetail);
             else if (apart == Vector2.zero) ctx.Pass("apart", apartDetail);
             else ctx.Fail("apart", apartDetail);
+
+            // Settle: a hull 0.1 inside the gap is the end of a push, not a collision. The game counts a ship as arrived
+            // only at the pushed point, so following it would keep a ship on its ring turning forever.
+            if (hullGap.isValid && hullGap.distance >= Gap.Value && apart == Vector2.zero)
+            {
+                Vector2 inward = (home - beside).normalized;
+                Vector2 near = beside + inward * (hullGap.distance - (Gap.Value - 0.1f));
+                wing.transform.position = near;
+                wing.rigidbody.position = near;
+                Physics2D.SyncTransforms();
+                var close = flagship.surfaceCollider.Distance(wing.surfaceCollider);
+                var raw = SeparationPatches.ComputePush(wing, Gap.Value);
+                var settled = SeparationPatches.Settle(raw);
+                string settleDetail = $"hull gap {close.distance:0.00} of {Gap.Value:0.0}, raw push {raw.magnitude:0.00}, applied {settled.magnitude:0.00} (ignored below {SeparationPatches.MinPush:0.0}), other ships near: {SeparationPatches.NearbyText(wing, flagship, near, Gap.Value)}";
+                if (!close.isValid || close.distance >= Gap.Value || close.distance < Gap.Value - 0.25f) ctx.Skip("settle", "couldn't put the hulls 0.1 inside the gap: " + settleDetail);
+                else if (raw.sqrMagnitude > 0f && settled == Vector2.zero) ctx.Pass("settle", settleDetail);
+                else ctx.Fail("settle", settleDetail);
+            }
+            else ctx.Skip("settle", "no clean side-by-side placement: " + apartDetail);
         }
 
         // Live: in the game's own physics step, the fleet ship's destination is its normal one plus the push.
@@ -183,6 +202,47 @@ public sealed class Separation : Feature
         }
         if (applied) ctx.Pass("live", liveDetail);
         else ctx.Fail("live", liveDetail);
+
+        // Own target: the game parks the ship on a ring around its target, so that target must not push it off the ring.
+        // Wing placed half a unit from the enemy it is fighting, on a side where nothing else crowds it: the old
+        // code pushed it straight away from the enemy, the new code leaves it alone.
+        if (enemy == null) ctx.Skip("own-target", "the enemy died before the check");
+        else
+        {
+            Vector2 enemyAt = enemy.transform.position;
+            Vector2 spot = Vector2.zero;
+            string ownCrowd = "";
+            foreach (var dir in new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down })
+            {
+                ownCrowd = SeparationPatches.Nearby(wing, enemy, enemyAt + dir * 0.5f, Gap.Value);
+                if (ownCrowd.Length == 0) { spot = enemyAt + dir * 0.5f; break; }
+            }
+            if (spot == Vector2.zero) ctx.Skip("own-target", "other ships crowd the enemy: " + ownCrowd);
+            else
+            {
+                var routeBefore = new List<Source.Galaxy.MapPointOfInterest>(GamePlayer.current.waypoints);
+                GamePlayer.current.waypoints.Clear();
+                try
+                {
+                    targetModule.SetManualTarget(enemy);
+                    wing.transform.position = spot;
+                    wing.rigidbody.position = spot;
+                    Physics2D.SyncTransforms();
+                    bool isTarget = wing.targetProvider != null && wing.targetProvider.priorityTarget == enemy;
+                    var skipped = SeparationPatches.ComputePush(wing, Gap.Value);
+                    var unskipped = SeparationPatches.ComputePush(wing, Gap.Value, false);
+                    string ownDetail = $"{wing.spaceShipData.GetShipName()} 0.5 u from its target {enemy.name}: push with the target left out {skipped.magnitude:0.00}, counting it {unskipped.magnitude:0.00}, target is its priority target {isTarget}";
+                    if (!isTarget) ctx.Skip("own-target", "the ship's target provider doesn't hold the enemy: " + ownDetail);
+                    else if (skipped == Vector2.zero && unskipped.magnitude > 0.5f) ctx.Pass("own-target", ownDetail);
+                    else ctx.Fail("own-target", ownDetail);
+                }
+                finally
+                {
+                    targetModule.ResetCurrentTargets();
+                    GamePlayer.current.waypoints.AddRange(routeBefore);
+                }
+            }
+        }
 
         // Other ships: an enemy dropped onto the flagship gets a push of its own only with OtherShips on.
         var other = enemy as SpaceShip;
@@ -252,16 +312,20 @@ internal static class SeparationPatches
     // Sum of "move away" vectors (centre to centre) from every ship whose hull outline is closer than the gap, each as
     // long as the gap still missing, capped at one hull diameter plus the gap. The bounding circles only pre-filter:
     // they are the hull's half-length, so long hulls side by side would count as overlapping when they aren't. A first
-    // version pushed on circle overlap and kept nudging ships that weren't touching anyone.
-    internal static Vector2 ComputePush(AbstractUnit unit, float gap)
+    // version pushed on circle overlap and kept nudging ships that weren't touching anyone. The ship's own target is
+    // left out: the game parks the ship on a ring around it, and pushing off it too would make the two fight over the
+    // ring (a close Fixed distance puts the ring inside a big hull). skipTarget is false only in the self-check.
+    internal static Vector2 ComputePush(AbstractUnit unit, float gap, bool skipTarget = true)
     {
         Vector2 p = unit.rigidbody.position;
         float r = Mathf.Max(unit.radius, unit.height, 0.5f);
         var own = unit.surfaceCollider;
+        var target = skipTarget && unit.targetProvider != null ? unit.targetProvider.priorityTarget : null;
         Vector2 push = Vector2.zero;
         foreach (var nav in ShipNavigator.navigators)
         {
             if (nav == null || nav.unit == null || nav.unit == unit || nav.rb == null || !nav.isActiveAndEnabled) continue;
+            if (target != null && nav.unit == target) continue;
             if (nav.unit.travelling || nav.unit.isCarrierFighter) continue;
             float reach = r + nav.ownRadius + gap;
             Vector2 away = p - nav.rb.position;
@@ -289,6 +353,13 @@ internal static class SeparationPatches
         float cap = 2f * r + gap;
         return push.sqrMagnitude > cap * cap ? push.normalized * cap : push;
     }
+
+    // A push this short is the last bit of a gap that is almost met. Following it keeps a ship that has reached its
+    // ring turning and thrusting sideways (the game only counts it as arrived once it is at the pushed point), so the
+    // ships of a clump never settle. Ignoring it leaves them a few tenths of a unit inside the gap, which nobody sees.
+    internal const float MinPush = 0.3f;
+
+    internal static Vector2 Settle(Vector2 push) => push.sqrMagnitude < MinPush * MinPush ? Vector2.zero : push;
 
     // Self-check only: the ships other than the unit and its partner whose circles reach this spot, "" when none.
     // They push as well, so a check that expects only the partner's push can't run there.
@@ -342,7 +413,7 @@ internal static class SeparationPatches
             float now = Time.time;
             if (now >= s.next)
             {
-                s.push = ComputePush(ship, feature.Gap.Value);
+                s.push = Settle(ComputePush(ship, feature.Gap.Value));
                 s.next = now + Refresh;
             }
             if (s.push == Vector2.zero) return;

@@ -27,6 +27,7 @@ public sealed class ContactsBadge : MonoBehaviour
     private Button button;
     private float nextRefresh;
     private bool hudShown;
+    private float lastHadContacts = float.NegativeInfinity;
     private readonly StringBuilder sb = new();
 
     public string Text => text != null ? text.text : "";
@@ -35,7 +36,9 @@ public sealed class ContactsBadge : MonoBehaviour
     internal static void Create()
     {
         if (Instance != null) return;
-        var dock = (RectTransform)HudManager.Instance.dockButton.transform;
+        // The Dock button's holder: the button itself fills it since 0.8.3.5.
+        var dock = HudButton.DockRect();
+        if (dock == null) return;
         var rt = UiCards.NewChild("IgiQoL_Contacts", dock.parent);
         rt.anchorMin = dock.anchorMin;
         rt.anchorMax = dock.anchorMax;
@@ -74,22 +77,28 @@ public sealed class ContactsBadge : MonoBehaviour
         catch (Exception e) { Contacts.Instance.Fail(e, nameof(ContactsBadge)); }
     }
 
-    // The check's way to read what the counter shows now, not up to a second ago.
+    // The check's way to read what the counter shows now, not up to a second ago, and without the hold-off.
     internal void RefreshNow()
     {
         hudShown = HudManager.Instance != null && HudManager.Instance.showHud;
-        Refresh();
+        Refresh(true);
     }
 
-    private void Refresh()
+    // Once the count drops to zero the badge stays up this long, so it doesn't flicker at the edge of a wreck's range.
+    private const float HoldSeconds = 2f;
+
+    private void Refresh(bool immediate = false)
     {
         int total = Contacts.CountHere(out int b, out int w, out int l);
-        bool show = Contacts.Instance.HudCounter.Value && hudShown && Fleet.Flagship != null && total > 0;
+        bool allowed = Contacts.Instance.HudCounter.Value && hudShown && Fleet.Flagship != null;
+        if (total > 0) lastHadContacts = Time.unscaledTime;
+        bool holding = !immediate && total == 0 && bg.enabled && Time.unscaledTime < lastHadContacts + HoldSeconds;
+        bool show = allowed && (total > 0 || holding);
         bg.enabled = text.enabled = button.interactable = show;
-        if (!show) return;
+        if (!show || holding) return;
         Follow();
         sb.Clear();
-        if (b > 0) sb.Append(b).Append(" boardable");
+        if (b > 0) sb.Append(b).Append(b == 1 ? " boardable ship" : " boardable ships");
         if (w > 0) { if (sb.Length > 0) sb.Append(" | "); sb.Append(w).Append(w == 1 ? " wreck" : " wrecks"); }
         if (l > 0) { if (sb.Length > 0) sb.Append(" | "); sb.Append(l).Append(" loot"); }
         string s = sb.ToString();
@@ -99,7 +108,8 @@ public sealed class ContactsBadge : MonoBehaviour
     // Above the QoL button while it shares the Dock button's parent (its "Above the Dock button" place), else above Dock.
     private void Follow()
     {
-        var dock = (RectTransform)HudManager.Instance.dockButton.transform;
+        var dock = HudButton.DockRect();
+        if (dock == null) return;
         var qol = HudButton.Instance != null ? (RectTransform)HudButton.Instance.transform : null;
         var below = qol != null && qol.parent == rt.parent ? qol : dock;
         rt.anchoredPosition = below.anchoredPosition + new Vector2(0f, below.rect.height + 4f);

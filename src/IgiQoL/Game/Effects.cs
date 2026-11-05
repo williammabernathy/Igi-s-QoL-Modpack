@@ -38,7 +38,7 @@ public static class Effects
     }
 
     // DebuffCount plus the debuffs that have no buff-bar effect: stat boosts from outside the unit that lower a stat
-    // (the painter drone's damage-reduction strip) and an armour paint strip. Boosts a buff-bar effect or one of
+    // (the painter drone's damage-reduction strip) and an armor paint strip. Boosts a buff-bar effect or one of
     // the unit's own abilities applied are left out, so an effect counts once and a self-buff's drawback not at all.
     public static int AllDebuffs(AbstractUnit unit)
     {

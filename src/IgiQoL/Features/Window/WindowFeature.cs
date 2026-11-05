@@ -21,25 +21,28 @@ public sealed class WindowFeature : Feature
     public WindowFeature() { Instance = this; }
 
     public override string Id => "Window";
-    public override string Title => "Mod window";
-    public override string Description => "This window. Open and close it with the hotkey below, the QoL button in space (on top of the side menu or above the Dock button, see below), or the QoL tab above the station tabs while docked.";
-    public override Type[] PatchClasses => new[] { typeof(HudButtonPatches) };
+    public override string Title => "Mod Window";
+    public override string Description => "This window. Open and close it with the hotkey below, the QoL button in space (on top of the side menu or above the Dock button, see below), or the QoL tab above the station tabs while docked. It also keeps the game's hover cards on the screen when they are too tall to fit beside the mouse.";
+    public override Type[] PatchClasses => new[] { typeof(HudButtonPatches), typeof(TooltipClampPatches) };
 
     public ConfigEntry<Key> Hotkey;
     public ConfigEntry<ButtonPlace> Place;
     public ConfigEntry<Key> PopoutInteractKey;
+    public ConfigEntry<bool> KeepCardsOnScreen;
 
     public override void BindConfig(ConfigFile cfg)
     {
         base.BindConfig(cfg);
-        Hotkey = cfg.Bind(Id, "Hotkey", Key.F6, SettingInfo.Describe("Hotkey",
+        Hotkey = cfg.Bind(Id, "Hotkey", Key.F6, SettingInfo.Describe("Mod window hotkey",
             "Key that opens and closes this window. Type a key name such as F6, F7 or Backquote. Ignored while you type in a text field."));
         Place = cfg.Bind(Id, "ButtonPlace", ButtonPlace.SideMenu, SettingInfo.Describe("QoL button in space",
             "Where the QoL button sits while you fly. On top of the side menu: above the column of side menu buttons at the right, moving with them when the side panel opens and closes. Above the Dock button: the bottom middle of the HUD, where it stays put. " +
             "You can also drag the button; it keeps that distance from its place until you press Reset below.",
             "On top of the side menu", "Above the Dock button"));
-        PopoutInteractKey = cfg.Bind(Id, "PopoutInteractKey", Key.LeftCtrl, SettingInfo.Describe("Pop-out windows: key to use a click-through window",
+        PopoutInteractKey = cfg.Bind(Id, "PopoutInteractKey", Key.LeftCtrl, SettingInfo.Describe("Key to use a click-through pop-out",
             "A pop-out window with click-through on lets your clicks on its body reach the game. Hold this key to use the window itself instead; its header always works. Type a key name such as LeftCtrl, LeftShift or LeftAlt; either Ctrl, Shift or Alt key counts. Ignored while you type in a text field."));
+        KeepCardsOnScreen = cfg.Bind(Id, "KeepCardsOnScreen", true, SettingInfo.Describe("Keep hover cards on the screen",
+            "The game puts a hover card beside the mouse and lets a tall one run off the top or bottom of the screen. On: the card slides up or down just far enough to stay on screen, still beside the mouse. Off: the game's own placement. Applies to every hover card."));
     }
 
     public override void OnActivated()
@@ -69,7 +72,7 @@ public sealed class WindowFeature : Feature
 
     private static void BuildSettings(RectTransform content)
     {
-        Kit.Muted(content, "Every change is saved at once (to BepInEx/config/igi.qol.cfg). Hover over a setting's name for details. Features with their own tab (ECHO, Operations, Item rules) keep their settings there; this tab only has their on/off switch.");
+        Kit.Muted(content, "Every change is saved at once (to BepInEx/config/igi.qol.cfg). Hover over a setting's name for details. Features with their own tab (ECHO, Operations, Item Rules) keep their settings there; this tab only has their on/off switch.");
         foreach (var feature in FeatureRegistry.All)
         {
             if (!feature.HasEnabledEntry || feature.Id == "Dev") continue;
@@ -82,7 +85,7 @@ public sealed class WindowFeature : Feature
                 continue;
             }
             SettingRows.AddEntries(content, feature.Id, SettingRows.Rows.EnabledOnly);
-            Kit.Muted(content, "Its settings are on the " + feature.SettingsTab + " tab.");
+            Kit.Muted(content, "The settings for this feature are on the " + feature.SettingsTab + " tab.");
         }
     }
 
@@ -244,10 +247,10 @@ public sealed class WindowFeature : Feature
         if (back) ctx.Pass("button-reset", reset);
         else ctx.Fail("button-reset", reset);
 
-        // The other place: above the Dock button, in the dock button's parent.
+        // The other place: above the Dock button's holder, in its parent.
         Place.Value = ButtonPlace.DockButton;
         yield return null;
-        var dock = (RectTransform)HudManager.Instance.dockButton.transform;
+        var dock = HudButton.DockRect();
         var expected = dock.anchoredPosition + new Vector2(0f, dock.rect.height + 4f) + HudButton.Offset;
         string dockDetail = $"parent={rt.parent.name} pos={rt.anchoredPosition} expected={expected}";
         if (rt.parent == dock.parent && Vector2.Distance(rt.anchoredPosition, expected) < 0.5f) ctx.Pass("button-dock", dockDetail);

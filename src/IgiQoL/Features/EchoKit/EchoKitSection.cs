@@ -15,7 +15,7 @@ namespace IgiQoL.Features.EchoKit;
 // Rule rows on the ECHO tab: one per ability on the flagship and per deployable type in its cargo or your armory.
 public static class EchoKitSection
 {
-    private static readonly string[] WhenNames = { "Off", "In combat, when ready", "Shields below %", "Armour below %", "Hull below %", "Targeted by at least", "Whenever ready" };
+    private static readonly string[] WhenNames = { "Off", "In combat, when ready", "Shields below %", "Armor below %", "Hull below %", "Targeted by at least", "Whenever ready" };
 
     public static void Build(RectTransform content)
     {
@@ -87,6 +87,6 @@ public static class EchoKitSection
             field.SetTextWithoutNotify(v.ToString());
             if (current != null) EchoKit.SetRule(rules, id, current.when, v);
         }, 50f);
-        Kit.Tooltip(field.textComponent, "Threshold", "Percent for the shield, armour and hull rules; number of enemies for 'Targeted by at least'.");
+        Kit.Tooltip(field.textComponent, "Threshold", "A percent for the shields, armor and hull rules; a number of enemies for 'Targeted by at least'.");
     }
 }

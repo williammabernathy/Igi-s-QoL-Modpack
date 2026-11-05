@@ -285,7 +285,7 @@ public sealed class NotesTab : MonoBehaviour
 
     private void BuildEditor(RectTransform content)
     {
-        var field = UiSearchField.Build(content, Placeholder, ColorHelper.panelHeaderBlue, 13f);
+        var field = UiSearchField.Build(content, Placeholder, 13f);
         field.lineType = TMP_InputField.LineType.MultiLineNewline;
         field.characterLimit = 0;
         field.textComponent.alignment = TextAlignmentOptions.TopLeft;

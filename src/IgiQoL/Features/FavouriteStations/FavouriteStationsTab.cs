@@ -60,8 +60,8 @@ internal static class FavouriteStationsTab
         favourites = FavouriteStations.Stations();
         FavouriteStations.SortByJumps(favourites, jumps);
 
-        Kit.Heading(content, "Favourite stations");
-        Kit.Muted(content, "Shift-click a station on the galaxy map, press Favourite in a station's airlock, or find it under \"Add a station\" below. Nearest first. Storage is your material storage at that station; the armory and the data inventory are the same at every station.");
+        Kit.Heading(content, "Favourite Stations");
+        Kit.Muted(content, "Shift-click a station on the galaxy map, press Favourite in a station's airlock, or find it under \"Add a Station\" below. Nearest first. Storage is your material storage at that station; the armory and the data inventory are the same at every station.");
 
         if (favourites.Count > 0)
         {
@@ -79,7 +79,7 @@ internal static class FavouriteStationsTab
         }
 
         Kit.Gap(content, 6f);
-        Kit.Heading(content, "Add a station");
+        Kit.Heading(content, "Add a Station");
         var addRow = Kit.Row(content);
         Kit.Search(addRow, "Type part of a station or system name", RunStations, 300f).SetTextWithoutNotify(stationSearch);
         stationResults = Kit.Column(content, 2f);

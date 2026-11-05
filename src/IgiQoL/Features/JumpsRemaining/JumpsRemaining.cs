@@ -20,7 +20,7 @@ public sealed class JumpsRemaining : Feature
     public JumpsRemaining() { Instance = this; }
 
     public override string Id => "JumpsRemaining";
-    public override string Title => "Jumps remaining";
+    public override string Title => "Jumps Remaining";
     public override string Description => "Shows how many jumps are left to your destination on the travel panel.";
     public override Type[] PatchClasses => new[] { typeof(TravelInfoPatch) };
 

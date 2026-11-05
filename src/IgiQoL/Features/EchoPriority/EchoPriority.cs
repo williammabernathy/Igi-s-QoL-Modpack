@@ -6,6 +6,7 @@ using Behaviour.UI.Side_Menu.SideTabs;
 using Behaviour.Unit;
 using Behaviour.Util;
 using Behaviour.Weapons;
+using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
 using IgiQoL.UI;
@@ -55,9 +56,19 @@ public sealed class EchoPriority : Feature
     public EchoPriority() { Instance = this; }
 
     public override string Id => "EchoPriority";
-    public override string Title => "ECHO activity priority";
+    public override string Title => "ECHO Activity Priority";
     public override string Description => "Gives ECHO an ordered list of activities to try, set on the ECHO tab, instead of the game's single preferred activity.";
-    public override Type[] PatchClasses => new[] { typeof(EchoPriorityPatches) };
+    public override Type[] PatchClasses => new[] { typeof(EchoPriorityPatches), typeof(EchoTracePatches) };
+
+    public ConfigEntry<int> EmptyMinutes;
+
+    public override void BindConfig(ConfigFile cfg)
+    {
+        base.BindConfig(cfg);
+        EmptyMinutes = cfg.Bind(Id, "EmptyMinutes", 5, SettingInfo.Describe("Skip empty locations for (minutes)",
+            "When ECHO reaches a mining, salvage or combat location and finds nothing it can work on there (the game logs \"No valid targets for modules\" and sends it to a station), it won't pick that location again for this many minutes. Its search for something to do skips the location, and with Missions ECHO takes at once above 1 so does the flight to the next open mission. This ends the loop where ECHO flies between a station and a location that looks workable from the station but isn't. The memory is cleared when you load a save or switch ECHO on. 0 turns this off, as in the unmodded game. Starts at 5 because the unmodded behaviour is a loop.",
+            new AcceptableValueRange<int>(0, 60)));
+    }
 
     public static List<EchoActivity> List = new List<EchoActivity>();
 
@@ -79,8 +90,9 @@ public sealed class EchoPriority : Feature
         EnsureTab();
     }
 
-    private void OnSaveLoaded()
+    internal void OnSaveLoaded()
     {
+        EchoTrace.Clear();
         if (!Active) return;
         try
         {
@@ -178,25 +190,25 @@ public sealed class EchoPriority : Feature
         if (Instance.Active) BuildPriority(content);
         else
         {
-            Kit.Heading(content, "Activity priority");
-            Kit.Muted(content, "Turned off on the Settings tab.");
+            Kit.Heading(content, "Activity Priority");
+            Kit.Muted(content, Instance.Title + " is turned off on the Settings tab.");
         }
 
         var gates = EchoGates.EchoGates.Instance;
         SettingRows.AddSection(content, gates);
         if (gates.Active) SettingRows.AddEntries(content, gates.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
-        Kit.Muted(content, "Stealth, ammo and buyouts for operations ECHO starts are on the Operations tab.");
+        else Kit.Muted(content, gates.Title + " is turned off on the Settings tab.");
+        Kit.Muted(content, "The Stealth, Ammo and Auto Accept Buyouts choices for operations ECHO starts are on the Operations tab.");
 
         var missions = EchoMissions.EchoMissions.Instance;
         SettingRows.AddSection(content, missions);
         if (missions.Active) SettingRows.AddEntries(content, missions.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
+        else Kit.Muted(content, missions.Title + " is turned off on the Settings tab.");
 
         var retreat = EchoRetreat.EchoRetreat.Instance;
         SettingRows.AddSection(content, retreat);
         if (retreat.Active) SettingRows.AddEntries(content, retreat.Id, SettingRows.Rows.Options);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
+        else Kit.Muted(content, retreat.Title + " is turned off on the Settings tab.");
 
         var kit = EchoKit.EchoKit.Instance;
         SettingRows.AddSection(content, kit);
@@ -205,17 +217,17 @@ public sealed class EchoPriority : Feature
             SettingRows.AddEntries(content, kit.Id, SettingRows.Rows.Options);
             EchoKit.EchoKitSection.Build(content);
         }
-        else Kit.Muted(content, "Turned off on the Settings tab.");
+        else Kit.Muted(content, kit.Title + " is turned off on the Settings tab.");
 
         var ores = OrePreference.OrePreference.Instance;
         SettingRows.AddSection(content, ores);
         if (ores.Active) OrePreference.OrePreferenceSection.Build(content);
-        else Kit.Muted(content, "Turned off on the Settings tab.");
+        else Kit.Muted(content, ores.Title + " is turned off on the Settings tab.");
     }
 
     private static void BuildPriority(RectTransform content)
     {
-        Kit.Heading(content, "Activity priority");
+        Kit.Heading(content, "Activity Priority");
         Kit.Muted(content, "When ECHO is looking for something to do (docked, or in empty space), it tries these activities from the top down and takes the first one your ship is equipped for and can find work for. The top entry is also the preferred activity on the game's Autopilot tab: picking an activity in that dropdown moves it to the top here, and picking Autodetect empties this list.");
 
         for (int i = 0; i < List.Count; i++)
@@ -254,6 +266,8 @@ public sealed class EchoPriority : Feature
             }, 60f);
         }
         Kit.Muted(content, "Leave the list empty to use the game's normal behaviour: the single preferred activity from the Autopilot tab.");
+        Kit.Muted(content, "Missions follow the top activity only: ECHO only works on a mission whose kind matches the top entry, and the mission boards only offer it missions for that activity. With \"Prefer missions\" off on the Autopilot tab, ECHO tries the activities in this list before the missions you accepted, so a listed activity that always finds something to do keeps ECHO away from them.");
+        SettingRows.AddEntries(content, Instance.Id, SettingRows.Rows.Options);
     }
 
     private static void Edit(Action<List<EchoActivity>> change)
@@ -266,6 +280,7 @@ public sealed class EchoPriority : Feature
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
+        EchoTraceCheck.Run(ctx);
         var player = GamePlayer.current;
         if (player == null)
         {
@@ -352,7 +367,14 @@ internal static class EchoPriorityPatches
                 bool found = type == GameplayType.Mining ? __instance.FindMiningActivity(layer)
                     : type == GameplayType.Salvage ? __instance.FindSalvageActivity(layer)
                     : __instance.FindCombatActivity();
-                if (found) { __result = true; return false; }
+                if (found)
+                {
+                    // The mining layer ECHO remembers belongs to the last mining search; another activity winning makes it stale.
+                    if (type != GameplayType.Mining) OrePreference.OrePreferencePatches.ResetLayer();
+                    EchoTrace.Step = $"activity list, entry {i + 1} ({EchoActivityInfo.Name(list[i])})";
+                    __result = true;
+                    return false;
+                }
             }
             if (anyCandidate && !anyLoadout)
             {

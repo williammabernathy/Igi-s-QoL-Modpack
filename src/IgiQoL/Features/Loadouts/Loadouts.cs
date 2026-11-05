@@ -27,7 +27,7 @@ public sealed class Loadouts : Feature
     public Loadouts() { Instance = this; }
 
     public override string Id => "Loadouts";
-    public override string Title => "Ship loadouts";
+    public override string Title => "Ship Loadouts";
     public override string Description => "Saves whole fits per ship (weapons, modules, boosters, drones, officers, crew, skill preset, the ship's QoL settings and optionally ECHO's settings) and applies them in the hangar in one click. Open it from the Loadouts tab or the L button next to the hangar's skill preset button.";
     public override Type[] PatchClasses => new[] { typeof(LoadoutPatches) };
 

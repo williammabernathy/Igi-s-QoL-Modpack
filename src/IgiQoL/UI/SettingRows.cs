@@ -13,7 +13,7 @@ public static class SettingRows
 {
     public enum Rows { All, EnabledOnly, Options }
 
-    public const string EnabledLabel = "Feature on (applies after a game restart)";
+    public const string EnabledLabel = "Feature on";
 
     public static void AddSection(RectTransform column, Feature feature) => AddSection(column, feature.Title, feature.Description);
 
@@ -44,7 +44,7 @@ public static class SettingRows
     {
         var info = SettingInfo.Of(entry);
         string label = enabled ? EnabledLabel : info?.Label ?? Pretty(entry.Definition.Key);
-        string help = enabled ? "Turns this whole feature on or off. The game only checks this when it starts." : entry.Description?.Description ?? "";
+        string help = enabled ? "Turns this whole feature on or off. Changes apply after you restart the game." : entry.Description?.Description ?? "";
         AddEntry(column, entry, label, help, info);
     }
 
@@ -90,7 +90,7 @@ public static class SettingRows
         return result;
     }
 
-    // "ArmourPiercing" -> "Armour piercing", for names that have no display text of their own.
+    // "ArmorPiercing" -> "Armor piercing", for names that have no display text of their own.
     public static string Pretty(string name)
     {
         var sb = new StringBuilder(name.Length + 4);
