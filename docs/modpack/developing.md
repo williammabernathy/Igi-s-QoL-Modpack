@@ -139,4 +139,4 @@ private static void SomeMethodPostfix(SomeGameType __instance)
 5. Build, run the harness with `OnlyChecks = <Id>`, then the full harness (`tools/Harness` does the run on a save copy; see [dev-harness.md](dev-harness.md)).
 6. Document it in the matching page under `docs/modpack/features/`, add its settings to [settings.md](settings.md), and bump the feature and startup counts in [README.md](README.md).
 
-Task tracking lives in one local file at the repo root, `FEATURELIST.md`. It holds open features, bugs found in play, standing decisions, harness notes and game-code findings. It is gitignored and stays on the machine where it was written.
+`LESSONS_LEARNED.md`, local and gitignored at the repo root, collects the findings and traps from earlier sessions: where the game keeps the logic a change needs, harness gotchas, standing decisions, and dead ends already explored. Read it before starting on an area, and add to it when a session finds something the next one would otherwise rediscover. Task status and per-run results go in commit messages, not in a tracking file.

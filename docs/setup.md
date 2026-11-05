@@ -8,7 +8,7 @@ Vanguard Galaxy (Steam app 3471800) is played here on Linux through Proton. Thes
 | Build | Windows x64, runs under Proton 11.0 |
 | Engine | Unity 6000.4.7f1 (Unity 6.4) |
 | Scripting backend | Mono (`VanguardGalaxy_Data/Managed/Assembly-CSharp.dll` exists), so BepInEx 5 works. IL2CPP games need BepInEx 6, but this one doesn't. |
-| Game version | 0.8.3.5, open-beta branch (the Steam app manifest's beta key is `open-beta`, and a save written by the 0.8.3.5 build has `{"Version":"0.8.3.5"}` in its `.meta` file). `decompiled/` matches it. `decompiled-0.8.3.4/` keeps the previous build for diffs, and `decompiled-0.8.3.2/` an older one. |
+| Game version | 0.8.3.5, open-beta branch (the Steam app manifest's beta key is `open-beta`, and a save written by the 0.8.3.5 build has `{"Version":"0.8.3.5"}` in its `.meta` file). `decompiled/` matches it, and `decompiled-0.8.3.4/` keeps the previous build for diffs. |
 | Mod loader installed | BepInEx 5.4.23.6, `win_x64` build |
 
 There is no official modding API. Every mod is a BepInEx plugin that uses Harmony to patch the game's C# code at runtime. The documentation is the game's own code, decompiled into `decompiled/` (gitignored, reference only).

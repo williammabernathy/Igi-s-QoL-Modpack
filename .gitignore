@@ -7,8 +7,8 @@ decompiled/
 decompiled-*/
 # Copies of the game's assemblies per version (Directory.Build.props, SnapshotGameAssemblies): copyrighted, never commit.
 game-versions/
-# Local task tracking: open features and bugs.
-FEATURELIST.md
+# Local notes for future sessions: game findings, harness traps, standing decisions.
+LESSONS_LEARNED.md
 # Local planning doc for the sandbox test harness; not ready to publish.
 docs/modpack/sandbox-harness.md
 # Documentation site build output (zensical.toml).
