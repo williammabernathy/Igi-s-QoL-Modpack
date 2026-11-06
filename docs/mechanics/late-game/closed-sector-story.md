@@ -1,6 +1,6 @@
 # The Closed Sector Story Line
 
-This page covers the Meridia sector and the quadrant around it, Malcyte as a dormant raider with no yards, its fleet cap, how boarding it differs, and its alliance with Meridia's Chosen. It is a spoiler for the Malcyte story. In versions 0.8.3.4 and 0.8.3.5 only the debug console wakes Malcyte or opens Meridia (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed. Anything not confirmed in code is marked "(not verified)".
+This page covers the Meridia sector and the quadrant around it, Malcyte as a dormant raider with no yards, its fleet cap, how boarding it differs, and its alliance with Meridia's Chosen. It is a spoiler for the Malcyte story. In versions 0.8.3.4 and 0.8.3.5 only the debug console wakes Malcyte or opens Meridia, so in a normal game Malcyte stays dormant and Meridia stays closed (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed.
 
 Terms are in the [late-game glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -18,7 +18,7 @@ In the code: [The Closed Sector in the Kinds of System](#code-the-closed-sector-
 
 While Meridia is closed, the quadrant is open only to Malcyte, their war ally Meridia's Chosen and, outside the Meridia sector itself, the Darkspace Compact. You are not on that list. Claiming a system there, or ordering an Empire Fleet or raid there, is refused with "This system is closed to you for now."
 
-The game also treats jump gates into the quadrant, and into the Meridia sector from outside it, as closed, and it sells no Jump Gate Pass for them. Whether those gates physically stop your travel is "(not verified)", because the gate's open state is saved data that the code does not set. Nothing outside the debug console opens the quadrant, so how it opens in a normal game is also "(not verified)".
+The game also treats jump gates into the quadrant, and into the Meridia sector from outside it, as closed, and it sells no Jump Gate Pass for them. Those gates also physically stop your travel: they are locked from the start, and a locked gate cannot be used. Only a Jump Gate Pass unlocks one, and none is sold while the gate counts as closed. Nothing outside the debug console opens the quadrant, so in a normal game it stays closed.
 
 In the code: [The Closed Quadrant](#code-the-closed-quadrant).
 
@@ -64,7 +64,7 @@ config:
     wrappingWidth: 260
 ---
 flowchart TD
-    A["Malcyte dormant<br/>(earns nothing, fleet cap 0)"] -->|"Awake: debug console only,<br/>normal game not verified"| B["Hourly economy tick"]
+    A["Malcyte dormant<br/>(earns nothing, fleet cap 0)"] -->|"Awake: debug console only,<br/>never in a normal game"| B["Hourly economy tick"]
     B --> C["Idle or retreating fleet at<br/>one of its own systems"]
     C --> D["Topped up at full price<br/>from wealth"]
     B --> E["Fleet slots under the cap?"]
@@ -80,7 +80,7 @@ In the code: [Yardless Fleets](#code-yardless-fleets).
 
 ### No Economic Outposts in the Closed Sector
 
-A Meridia system is not a valid site for an economic outpost, so no faction builds one there (see [Where economic outposts go](../conquest/faction-economy.md#where-economic-outposts-go)). A Meridia system cannot hold an economic outpost, so Meridia's Chosen and Malcyte yards cannot be in Meridia.
+A Meridia system is not a valid site for an economic outpost, so no faction builds one there (see [Where economic outposts go](../conquest/faction-economy.md#where-economic-outposts-go)). A Meridia system cannot hold an economic outpost, so Malcyte, which owns only Meridia systems, has no yard. Meridia's Chosen also owns systems outside Meridia, such as the Lucifer sector in the Darkspace region. Those systems allow stations and are outside the war zone, so its yard can stand there.
 
 In the code: [No Economic Outposts in the Closed Sector](#code-no-economic-outposts-in-the-closed-sector).
 
@@ -114,10 +114,6 @@ The ship scuttle rule ([What defenders do on ships](../basics/boarding.md#what-d
 
 In the code: [Scuttle Rate](#code-scuttle-rate).
 
-## Not Verified
-
-- Whether Meridia's Chosen owns a non-Meridia system that can host its yard. The yard rules imply a faction with none builds no yards.
-
 ## In the Game Code
 
 This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, search the decompiled source for the method or field named here.
@@ -128,9 +124,9 @@ The Meridia sector allows no stations (`AllowsStations` false).
 
 #### Code: The Closed Quadrant
 
-`ConquestScope.IsOpenTo` is `false` for the player in the closed quadrant (`IsMalcyteSide` or, outside the Meridia sector, `darkspacers`, are the only admitted factions), and `SystemClaim` and `EmpireFleets` answer `@SystemClaimRefusalClosed` when it is false. `EmpireFleets.RefuseAttack` checks it before the hubless rule, so the "nothing to besiege" text (`@EmpireFleetAttackHubless`) only shows once the quadrant is open. `ConquestScope.IsClosedMeridiaGate` marks the gates; its only caller in 0.8.3.4 and 0.8.3.5 is the Jump Gate Pass shop in `SpaceStation`, which skips closed gates. Whether the gates stop travel is `(not verified)`. Nothing in the decompiled code outside the debug console calls `Conquest.OpenMeridia`, so how it opens in a normal game is `(not verified)`. `Conquest.WakeMalcyte` and `Conquest.OpenMeridia` are only called from the debug console in 0.8.3.4 (see the [late-game gates](README.md#code-gates)).
+`ConquestScope.IsOpenTo` is `false` for the player in the closed quadrant (`IsMalcyteSide` or, outside the Meridia sector, `darkspacers`, are the only admitted factions), and `SystemClaim` and `EmpireFleets` answer `@SystemClaimRefusalClosed` when it is false. `EmpireFleets.RefuseAttack` checks it before the hubless rule, so the "nothing to besiege" text (`@EmpireFleetAttackHubless`) only shows once the quadrant is open. `ConquestScope.IsClosedMeridiaGate` marks the gates; its only caller in 0.8.3.4 and 0.8.3.5 is the Jump Gate Pass shop in `SpaceStation`, which skips closed gates. It does not decide whether a gate can be used. That is `JumpGate.canUseJumpGate` (`jumpgateOpen` and not `hidden`). `ConquestWorld.LinkExpansionSectors` creates the quadrant entrances (`LinkMeridiaQuadrantEntrances`) with `isUnlocked: false` and then `ConquestLinkClassifier.LockCrossSectorLinks` calls `JumpGate.LockGate` on every gate that joins two sectors, on both ends. `TheGate.Update` lets the player jump only while `canUseJumpGate` is true, and `GamePlayer.DoFastLaneTravel` also requires it. `JumpGate.UnlockJumpgate` is the only way back to open. It is called when a Jump Gate Pass is consumed (`JumpGateManager.TryAutoUnlockWithStoredPass`, `JumpgateTractor`) and by the debug console. `Conquest.OpenMeridia` only sets `meridiaOpen`: it does not unlock any gate, it makes the shop sell passes for these gates. Nothing in the decompiled code outside the debug console calls `Conquest.OpenMeridia`, so in a normal game the quadrant stays closed. `Conquest.WakeMalcyte` and `Conquest.OpenMeridia` are only called from the debug console in 0.8.3.4 (see the [late-game gates](README.md#code-gates)).
 
-Source: `ConquestScope.IsClosedMeridiaGate`, `ConquestScope.IsOpenTo`, `SystemClaim`, `EmpireFleets`, `SpaceStation`
+Source: `ConquestScope.IsClosedMeridiaGate`, `ConquestScope.IsOpenTo`, `SystemClaim`, `EmpireFleets`, `SpaceStation`, `JumpGate.canUseJumpGate`, `JumpGate.LockGate`, `JumpGate.UnlockJumpgate`, `ConquestWorld.LinkExpansionSectors`, `ConquestLinkClassifier.LockCrossSectorLinks`, `TheGate.Update`, `JumpGateManager.TryAutoUnlockWithStoredPass`
 
 ### Code: The Dormant Raider Faction
 
@@ -163,9 +159,9 @@ Source: `CorsairRaids.Tick`, `CorsairRaids.TryRaiseFleet`, `YardlessFleetSupply.
 
 #### Code: No Economic Outposts in the Closed Sector
 
-A Meridia system is not a valid site for an economic outpost (`ConquestScope.AllowsStations`).
+A Meridia system is not a valid site for an economic outpost (`ConquestScope.AllowsStations`). `ExpansionOwnership.PlanOwners` gives `amalgam` only the Meridia sector, so Malcyte holds no system outside it and has no yard site; its fleets are supplied by `YardlessFleetSupply`. `Faction.fanatics` owns the `Lucifer` sector (`ConquestWorld.FillDarkspaceRemainingSystemSlots`) in the Conquest quadrant, outside the war zone. `ConquestWarSeeder.EnsureYardOutsideWarZone` (through `IsYardSite`) builds a Construction Yard for a war faction in such a system, and `FactionEconomicPlanner.IsValidSite` accepts it.
 
-Source: `FactionEconomicPlanner.IsValidSite`, `ConquestScope.AllowsStations`
+Source: `FactionEconomicPlanner.IsValidSite`, `ConquestScope.AllowsStations`, `ExpansionOwnership.PlanOwners`, `ConquestWorld.FillDarkspaceRemainingSystemSlots`, `ConquestWarSeeder.EnsureYardOutsideWarZone`
 
 ### Code: The Dormant Faction's War Ally
 

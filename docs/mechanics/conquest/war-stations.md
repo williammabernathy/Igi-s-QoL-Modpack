@@ -49,7 +49,7 @@ At Escalation tier 0, the combined multiplier is the "Combined" column of the ta
 | 80 | 3.20 | 64.0 | 96.0 |
 | 100 | 5.73 | 114.7 | 172.0 |
 
-Worked example: a level 60 Station Core in a hub has a base hull of 900, so it has about 900 x 36.2 = 32,600 hull before the Hull module's own HP is added (and before any Escalation multiplier). The part's tooltip "Hull" row shows the real current and maximum.
+Worked example: a level 60 Station Core in a hub has a base hull of 900. Its Small Hull module multiplies that by 1 + u * 1920 (u is rolled between 0.010 and 0.014, and 1920 is the level 60 power level of 1600 times the High Grade factor 1.2), so by x20.2 to x27.9, about x24.0 for a mid-range roll. With the hub multiplier that is about 900 x 24.0 x 36.2 = 783,000 hull, before any Escalation multiplier. The roll and the module's aspect change it, so the part's tooltip "Hull" row shows the real current and maximum. The module formula is on [basics/stations.md](../basics/stations.md#how-tough-a-part-is). Each stat has one module (Hull, Shield Generator or Armor), so the only way two multipliers meet on the same stat is an aspect on any equipped module, such as a x1.05 hull aspect. They multiply: `AbstractUnitData.AggregateStatLines` runs `ApplyStatSourceLines` for every source, which multiplies `statMultipliers[stat]` by each line's multiplier and adds each line's flat amount to `calcedStats[stat]`.
 
 Station parts use the same hit pipeline as ships ([Combat Damage](../basics/combat-damage.md#npc-and-station-modifiers)). Only the stat set differs: it includes the HP multiplier above and the war effort multiplier below.
 
@@ -200,6 +200,8 @@ Each garrison ship is a warship chosen to fit its per-ship budget at the NPC fle
 - On paper, each conquest update adds one ship per 10 combat strength, on a 900 second timer. This never happens, because nothing in the game raises a system's combat strength above 0 (see [war.md](war.md)).
 - Newly created Defense stations start with their full wanted number of ships.
 
+A station's tier rises in two ways. New Defense stations start at tier 1, and the Darkspace Compact's gate fortresses, which the game places when the expansion opens, start at tier 5. After that, the faction economy can raise the tier of any station it owns that is below tier 5. It does so once all of the faction's station slots are used, at most twice per hourly planner run, and each step costs wealth (see [faction-economy.md](faction-economy.md#upgrades-and-the-starting-layout)). Defense stations are not excluded. The planner prefers the station with the fullest storage, and a Defense station stores nothing, so one is raised only when no other eligible station holds any goods and it comes first in the list, or when no other station is below its maximum tier.
+
 Refit works as follows. When the garrison's average level (weighted by ship points) is 3 or more levels below the current NPC fleet level and the system is not besieged, a 300 second refit starts. It raises every ship below that level to it. A refit does not add ships. Refits stop while the station is in raid recovery, and a wrecked station runs no jobs at all.
 
 When a Defense station siege is running and you are at that station, the garrison ships are spawned into the live fight as real ships at their stored level, hull rating and seed, along with the defending fleets in the system. When the siege targets the hub instead, the garrisons of every Defense station in the system spawn at the hub. Ships killed in the live fight are removed from the garrison.
@@ -215,10 +217,6 @@ In the code: [Defense Stations and Garrisons](#code-defense-stations-and-garriso
 - Each Connector you kill removes only 5 hull from a station's off-screen score.
 - A station you destroy in a war-zone system is rebuilt within about an hour of game time after you leave, unless the hub itself is lost.
 - A faction Construction Yard or Refinery (an economic outpost) in a war-zone system does not get the x20 HP multiplier that the Defense station beside it has.
-
-## Not Verified
-
-- It is not verified how a faction station's tier rises. The tier sets the garrison size above. New Defense stations start at tier 1 (3 ships, 270 points). The faction economy can pay wealth to raise the tier of an owned station that is below its maximum, but it is not verified whether it ever picks a Defense station.
 
 ## In the Game Code
 
@@ -241,9 +239,9 @@ Everything above was read from the decompiled game code of version 0.8.3.4, not 
 | A hub in any other war-zone system | x20 |
 | A faction Defense station (`FactionStation` of type Defense) in a war-zone system, including a headquarters system | x20 |
 
-Combined multiplier at escalation tier 0 is `rankHP * HpBalance * NpcBase`, the "Combined" column of the table in [basics/stations.md](../basics/stations.md#the-stat-formula). The part's tooltip shows it in the `Hull` row.
+Combined multiplier at escalation tier 0 is `rankHP * HpBalance * NpcBase`, the "Combined" column of the table in [basics/stations.md](../basics/stations.md#the-stat-formula). The part's tooltip shows it in the `Hull` row. It multiplies the part's base HP times its module multiplier: `AbstractUnit.GetStatRaw` is `(base + calcedStats[stat]) * statMultipliers[stat]`, the Hull, Shield Generator and Armor main stats are multiplier lines (`1 + u * s * powerLevel * 1.2`, see [basics/stations.md](../basics/stations.md#code-module-gear-and-weapons)), and station gear never rolls flat HP, so `calcedStats` stays 0 for the HP stats. Several multiplier lines on one stat multiply (`AbstractUnitData.AggregateStatLines`, `ApplyStatSourceLines`).
 
-Source: `CombatStationPart.GetStationHpMultiplier`, `CombatStationPart.GetConquestDefenseSystem`, `CombatStationPart.AddStatModifiers`, `AbstractUnit.ApplyNpcRankModifiers`, `BasePoiManager.AddToWorld`.
+Source: `CombatStationPart.GetStationHpMultiplier`, `CombatStationPart.GetConquestDefenseSystem`, `CombatStationPart.AddStatModifiers`, `AbstractUnit.ApplyNpcRankModifiers`, `AbstractUnit.GetStatRaw`, `AbstractUnitData.AggregateStatLines`, `AbstractUnitData.ApplyStatSourceLines`, `EquipmentBuilder.BuildInitialStats`, `BasePoiManager.AddToWorld`.
 
 ### Code: War Effort on Station Weapons
 
@@ -325,8 +323,10 @@ Garrison refill paths:
 - `Conquest.DrainCombatStrengthIntoGarrisons` runs each conquest update and would add one ship per 10 combat strength through `FactionGarrison.Repair` (900 s timer). It never fires, because nothing in the code raises a system's `combatStrength` above 0 (see [war.md](war.md)).
 - Newly seeded Defense stations are provisioned to their wanted count.
 
-`FactionGarrison.GetWantedCount` gives the wanted ship count and `FactionGarrison.PickShip` the ship (budget per ship is `tierGarrisonBudget / tierGarrisonCount`, integer division). Refit (`FactionGarrison.ProgressRefit`, `FactionGarrison.CompleteRefit`) takes 300 seconds and starts when `FleetLevels.IsDueRefit` is true: the points-weighted average garrison level (`FleetLevels.GetGarrisonLevel`) is at most the NPC fleet level minus 3. A new `FactionStation` has `tier` 1; `FactionEconomicPlanner.TryUpgrade` raises tiers for wealth.
+`FactionGarrison.GetWantedCount` gives the wanted ship count and `FactionGarrison.PickShip` the ship (budget per ship is `tierGarrisonBudget / tierGarrisonCount`, integer division). Refit (`FactionGarrison.ProgressRefit`, `FactionGarrison.CompleteRefit`) takes 300 seconds and starts when `FleetLevels.IsDueRefit` is true: the points-weighted average garrison level (`FleetLevels.GetGarrisonLevel`) is at most the NPC fleet level minus 3. A new `FactionStation` has `tier` 1. Tiers are set in three places: `FactionEconomicPlanner.TryUpgrade` adds one tier for wealth, `ExpansionEconomySeeder.SeedGateFortresses` sets the Darkspace gate fortress Defense stations to tier 5 and provisions them, and a loaded save restores the saved value.
+
+`FactionEconomicPlanner.TryTakeAction` calls `TryUpgrade` when `FactionStation.GetAllOwnedBy(faction).Count + economy.constructions.Count >= economy.outpostSlots`, up to twice per `FactionEconomicPlanner.Tick`. `ChooseUpgradeTarget` looks at every owned `FactionStation` with `tier < maxTier` (`PlayerStation.GetMaxTier`: 5 for every type except Production, which has 4) and keeps the one with the highest `GetStorageFullness()`, the first in the list on a tie. Nothing in it excludes `PlayerStationType.Defense`. A Defense station's `factionStorage` stays empty, because `StationProduction.Roll` returns null for it, so its fullness is 0. `FactionEconomicPlanner` never builds a Defense station; `ConquestFleetPlanner.TryBuildDefenseStation` does.
 
 In a live siege, `FactionGarrison.SpawnInto` and `BattleManager.SpawnSiegeDefenders` spawn the garrison ships (`BattleManager.EnsureVenueUnits` for the venue). When the station is taken (live, early after 600 s of siege in `TryEndDefenseStationStageEarly`, or when the stage's timer runs out in `ResolveDefenseStationSiegeAtCap`) `BattleManager.TakeDefenseStation` sends it through `FactionStationDestruction.Destroy`. The cap of 2 is `FactionStation.MaxPerSystem`.
 
-Source: `FactionGarrison.GetWantedCount`, `FactionGarrison.PickShip`, `FactionGarrison.Repair`, `FactionGarrison.ProgressRefit`, `FactionGarrison.CompleteRefit`, `FactionGarrison.SpawnInto`, `Conquest.DrainCombatStrengthIntoGarrisons`, `ConquestFleetPlanner.ChooseGarrisonToSupply`, `WarshipDeliveries`, `BattleManager.SpawnSiegeDefenders`, `BattleManager.EnsureVenueUnits`, `BattleManager.TakeDefenseStation`, `FactionStation.MaxPerSystem`.
+Source: `FactionGarrison.GetWantedCount`, `FactionGarrison.PickShip`, `FactionGarrison.Repair`, `FactionGarrison.ProgressRefit`, `FactionGarrison.CompleteRefit`, `FactionGarrison.SpawnInto`, `Conquest.DrainCombatStrengthIntoGarrisons`, `ConquestFleetPlanner.ChooseGarrisonToSupply`, `FactionEconomicPlanner.TryTakeAction`, `FactionEconomicPlanner.TryUpgrade`, `FactionEconomicPlanner.ChooseUpgradeTarget`, `PlayerStation.GetMaxTier`, `ExpansionEconomySeeder.SeedGateFortresses`, `StationProduction.Roll`, `WarshipDeliveries`, `BattleManager.SpawnSiegeDefenders`, `BattleManager.EnsureVenueUnits`, `BattleManager.TakeDefenseStation`, `FactionStation.MaxPerSystem`.

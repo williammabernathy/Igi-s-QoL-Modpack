@@ -300,6 +300,8 @@ Below 0.2 morale, an Active attacker has a 3% chance each update to become Panic
 
 Defender morale works the same way with the faction's morale threshold (default 0.25). Below it, each defender in a contested room has a surrender chance each second (the faction's surrender rate times the elapsed seconds). Every update, each living defender anywhere whose morale is below the threshold also has a chance to surrender. That chance is the surrender rate * 0.1 * min(1, your total power / their total power). If the defender does not surrender, an Active defender has a 2% chance to panic.
 
+An update is one rendered frame. The panic and recovery chances above, the surrender check on defenders anywhere in the ship and the mass surrender check fire once per frame, so they happen more often at a higher frame rate. The in-room surrender chance and defection are multiplied by the frame time and do not depend on frame rate.
+
 Panicked defenders in a room you hold or contest retreat to an adjacent defender-held room with spare capacity, once their morale is 0.35 or lower and after a 2-5 second delay. If no such room exists, they may surrender (the surrender rate * 3 per second). Defenders of factions with a kamikaze chance may instead blow themselves up while one of your units is in the room (the kamikaze chance * 2 per second), for 1 damage to one of your units there.
 
 If the average morale of your living units falls under 0.15 on a ship boarding, the crew breaks off and retreats (reason "Morale Collapse"). In facilities, a morale collapse only triggers a retreat through the autopilot director (see [Autopilot](#autopilot)). During a manual facility run, there is no automatic morale retreat.
@@ -703,12 +705,12 @@ When a ship boarding begins, each of these is rolled independently:
 | Comms Down | 15% | Alert noise is multiplied by 0.5 for the whole fight |
 | Reactor Down | 8% | Removes the faction's ability to scuttle the reactor (see below) |
 | Enemy Dazed | 12% | Shows the message "Enemy crew are dazed - limited initial resistance" and sets every room to Dazed. Every room already starts Dazed, so the event changes no value in the simulation. Its only effect is that Enemy Alerted cannot roll in the same fight |
-| Enemy Alerted | 12% (only if Dazed did not roll) | Every room is set to a random alert state of Concerned, Worried or Alert. There is a 20% chance that this adds an Enemy Reinforcements entry to the event list |
+| Enemy Alerted | 12% (only if Dazed did not roll) | Every room is set to a random alert state of Concerned, Worried or Alert. There is a 20% chance that this adds an Enemy Reinforcements entry to the event list, which has no effect (see below) |
 | Enemy Reinforcements | 10% | Schedules a defender reinforcement at 40% of the estimated duration |
 | Armory Damaged | 15% | Sets the armory efficiency to a random value of 70-90%, which multiplies every defender's power for the whole fight |
 | Volatile Cargo | 12% | A hazard in the Cargo Hold fires once your units are in it and no defenders are left there. It hurts your crew but does no damage to the hull |
 
-The Enemy Alerted roll that adds Enemy Reinforcements may have a quirk. As far as I can read the code, the added entry shows up in the event list but does not actually schedule reinforcements, so only the straight 10% roll does (not verified in play).
+The Enemy Alerted roll that adds Enemy Reinforcements has no effect. The game applies the start events by walking a copy of the list made before any event runs, so an entry added by Enemy Alerted is never applied. It schedules no reinforcements and logs no reinforcement message. Only the straight 10% roll schedules them.
 
 The Volatile Cargo hazard is a normal hazard (see above), so a specialist can prevent or soften it. On a ship, the only specialist is the crew type named in the ship's own investigation crew type field, which also makes that crew type the one that collects hidden caches. In 0.8.3.5 (and in 0.8.3.4) only the developer console sets that field, so ships generated in normal play have no specialist and the hazard hurts a standard crew in full. Ships flagged as never scuttling behave as if Reactor Down was rolled.
 
@@ -820,7 +822,7 @@ Consequences by outcome:
 | Victory | You capture the ship, and it becomes yours. Its crew and commander are removed. The ammo in its cargo is cut down for each turret and torpedo bay to the amount that weapon fires in 60 seconds, and anything above that is removed. If it has more than two equipped modules, a random selection of them is destroyed. At least two are always lost, and the more hull the ship has left when you win, the more survive. The number of nodes on every hull upgrade path is halved (rounded down). All loot goes to your cargo, with a 2% chance of a booster. You gain Leadership mastery XP | All loot goes to your cargo, with a 2% chance of a booster, as on ships. The clear-the-base mission trigger fires (the game's "Base cleared"), and one already completed clear-the-base mission with no turn-in step is claimed automatically |
 | Extracted | The ship recovers (at least 15% hull), becomes unboardable and flees. Each loot item that is not data has a 50% chance to reach your cargo. Boarding missions fail | The same partial loot rule applies, but data items are always kept. Integrity stays reduced |
 | Hostile victory | Your crew is lost. The ship recovers and flees, boarding missions fail, and you get a quarter of the usual XP | Your crew is lost |
-| Ship exploded | Loot is lost. Surviving attackers drop out as crew pods (see below), and the ship is gone | Not applicable |
+| Ship exploded | Loot is lost. Surviving attackers drop out as crew pods (see [Escape pods when a ship explodes](#escape-pods-when-a-ship-explodes)), and the ship is gone | Not applicable |
 
 In the code: [How a Run Ends](#code-how-a-run-ends).
 
@@ -850,6 +852,12 @@ Survivors of the pods are returned to your ship's crew quarters, but only up to 
 Prisoners are added to your brig up to the ship's brig capacity. Brig capacity is the ship's base crew capacity, multiplied by 0.65 for combat-role ships (0.5 for others), multiplied by 1 plus the Extended Brig skill bonus, and rounded. The Extended Brig skill gives +10% per point, 3 points, so up to +30%, and only for your own ships.
 
 In the code: [Returning Crew and Overflow](#code-returning-crew-and-overflow).
+
+### Escape Pods When a Ship Explodes
+
+When a ship boarding ends in Ship exploded, two separate steps turn your living units into crew pods. The first gives each living unit of yours that stands in a ship room (not the Airlock and not staging) a 40% chance of a pod. The second gives every living unit of yours a pod, wherever it stands. Nothing removes units between the two steps, so a unit in a room always gets a pod from the second step and has a 40% chance of a second pod from the first. The same unit can be counted twice. The first step's pods roll on pickup whether their crew is hostile, using the crew type's hostile chance. The second step's pods are always friendly.
+
+In the code: [Escape Pods When a Ship Explodes](#code-escape-pods-when-a-ship-explodes).
 
 ### Walking Into Facilities
 
@@ -896,7 +904,9 @@ In the code: [Reinforcements](#code-reinforcements).
 | Equipment stat Boarding Suppression | Defender power is multiplied by (1 - value) in every contested room. The officer-only skill "Shock Assault" (a top-tier Combat officer skill) gives 0.05 (5%) |
 | Body Armor | One item in cargo, or found anywhere during the run, reduces your casualty hit rate by 10% |
 
-I found no item in the asset files that carries Boarding Power. The only thing that carries Boarding Suppression is the officer skill Shock Assault, whose description reads "While boarding, enemy defenders have their Boarding Power reduced by 5%." The game reads Boarding Suppression from your current flagship, not from the operation's ship.
+Nothing in the 0.8.3.5 game data provides Boarding Power. No item, equipment builder, aspect, booster, module or skill carries that stat, so the equipment part of the multiplier is 0 in an unmodified game. Boarding Suppression comes only from the officer skill Shock Assault, whose description reads "While boarding, enemy defenders have their Boarding Power reduced by 5%." A Combat officer can roll it as the sixth skill, which only Exotic and Legendary officers have, and that skill unlocks at officer level 60. While such an officer is aboard your flagship, the flagship gains 5% Boarding Suppression, and each further officer with Shock Assault adds another 5%. The game reads Boarding Suppression from your current flagship, not from the operation's ship.
+
+Skill names and descriptions come from the game's English text table, and the numbers come from each skill's prefab. Your own skill points come from your captain level (one for every level above 1) and from bonus points: missions that reward a skill point, a bonus skill point item (found in rare facility caches and loot boxes and sold in the Conquest and Darkspace shops), and one bonus point if you skip the prologue when starting a new game. Bonus points stop at a cap that rises with the story: 11 in the prologue, 31 after you leave it, 61 once the level 28 story mission "Continue your galactic journey" has added the Conquest story, and 101 once you accept "Beyond the Front". The bonus skill point item found in caches and loot boxes has its own cap on how many you can find: 5 in the prologue and after it, 10 from the level 28 mission, and 30 after "Beyond the Front". Officers have no skill points. Each officer's skills are fixed when the officer is created and unlock as the officer levels up.
 
 The Crew screen and the ship's General tab show crew boarding power * (1 + Assault Doctrine). They do not include the equipment stat.
 
@@ -976,16 +986,6 @@ In the code: [Autopilot](#code-autopilot).
 - Cancelling an approach does not refund the reputation penalty.
 
 In the code: [What Looks Useful but Is Not](#code-what-looks-useful-but-is-not).
-
-## Not Verified
-
-- It is not verified whether the two escape-pod steps on a ship explosion double up. Both run, one after the other. One gives every living unit of yours a crew pod. The other gives each living unit standing in a ship room (not the Airlock, not staging) a further 40% chance of a pod. Nothing removes units between the two, so the second group can come out twice. This is an inference from the code, not observed in game.
-- It is not verified whether any generated equipment carries the Boarding Power stat. None of the prefab data does, and the 0.8.3.5 item, equipment builder, aspect and module dumps do not mention it.
-- The per-update chances in the morale code (panic 2-3%, mass surrender, the surrender rate * 0.1 roll) are not scaled by elapsed time. The simulation is ticked once per rendered frame with the frame time as dt, so these chances fire once per frame and happen more often at a higher frame rate.
-- It is not verified how an officer's Shock Assault skill reaches the flagship's Boarding Suppression stat. That step was not traced.
-- Skill names and values come from the localization strings and prefab data. How skill points are earned was not checked.
-
-In the code: [Not Verified](#code-not-verified).
 
 ## In the Game Code
 
@@ -1197,11 +1197,13 @@ Several effects only run when `tracksAttackerMorale` is set, which is the case o
 
 Defender morale works the same way with the faction `moraleThreshold` (default 0.25). Below the threshold, each defender in a contested room has a `surrenderChance * dt` per second chance to surrender. Every update, each living defender anywhere with morale under the threshold also has a `surrenderChance * 0.1 * min(1, totalAttackerPower/max(1, totalDefenderPower))` chance to surrender. Otherwise an Active one has a 2% chance to panic.
 
+The per-update chances are not scaled by time. `DungeonManager.Update` calls `DungeonOperation.Tick(Time.deltaTime)` once per rendered frame, which reaches `DungeonSimulation.TickSimulationBody` with that frame time as `delta`. These rolls do not use `delta`, so they fire once per frame: the attacker panic roll (0.03) and recovery roll (0.02) in `UpdateAttackerState`, the defender panic roll (0.02) and the global surrender roll (`surrenderChance * 0.1 * ratio`) in `TickGlobalDefenderMorale`, and the `surrenderChance * 5` roll in `CheckMassSurrender` (called from `CheckHostilesWinConditions`). `TrySurrenderInCombat` (`surrenderChance * delta`) and `TryDefectInCombat` (`0.02 * delta`) do use `delta`. The first group therefore happens more often at a higher frame rate.
+
 Panicked defenders in a room you hold or contest retreat to an adjacent defender-held room with spare capacity. The retreat needs morale <= 0.35 and a 2-5 s `fleeDelayTimer`. If no such room exists, they may surrender (`surrenderChance * 3 * dt` per second). For factions with `kamikazeChance`, while one of your units is in the room, they may instead die for 1 damage to one of your units in the room (`kamikazeChance * 2 * dt` per second).
 
 If the average morale of your living units falls under 0.15 on a ship boarding, the crew breaks off and retreats (`DungeonOutcomeReason.MoraleCollapse`). The autopilot director does the same for facilities (see [Autopilot](#autopilot)).
 
-Source: `DungeonSimulation.ApplyCombatDamage`, `DungeonSimulation.TickCompartmentCombatMorale`, `DungeonSimulation.TickHostileMoraleInCompartment`, `DungeonSimulation.TickAttackerMorale`, `DungeonSimulation.ComputeWoundedMoralePenalty`, `DungeonSimulation.TickLossTraumaDrain`, `DungeonSimulation.TickIdleMoraleRecovery`, `DungeonSimulation.UpdateAttackerState`, `DungeonSimulation.TickGlobalDefenderMorale`, `DungeonSimulation.CheckAttackerMoraleCollapse`, `DungeonSimulation.TickPanickedUnit`.
+Source: `DungeonSimulation.ApplyCombatDamage`, `DungeonSimulation.TickCompartmentCombatMorale`, `DungeonSimulation.TickHostileMoraleInCompartment`, `DungeonSimulation.TrySurrenderInCombat`, `DungeonSimulation.TryDefectInCombat`, `DungeonSimulation.TickAttackerMorale`, `DungeonSimulation.ComputeWoundedMoralePenalty`, `DungeonSimulation.TickLossTraumaDrain`, `DungeonSimulation.TickIdleMoraleRecovery`, `DungeonSimulation.UpdateAttackerState`, `DungeonSimulation.TickGlobalDefenderMorale`, `DungeonSimulation.CheckMassSurrender`, `DungeonSimulation.CheckAttackerMoraleCollapse`, `DungeonSimulation.TickPanickedUnit`, `DungeonSimulation.TickSimulationBody`, `DungeonOperation.Tick`, `DungeonManager.Update`.
 
 #### Code: Surrender, Capture, Defection, Heroics
 
@@ -1377,7 +1379,7 @@ Source: `DungeonSimulation.PlaceDefendersForDungeon`, `DungeonSimulation.Compute
 
 The Enemy Alerted start event sets each room to a random alert state of Concerned, Worried or Alert (2-4). Armory Damaged sets `armoryDamageEfficiency` to 70-90% (random).
 
-The Enemy Alerted roll that adds Enemy Reinforcements happens inside the loop that applies start events over a copy of the list. As far as the code reads, the added entry shows up in the event list but does not set `_reinforcementsScheduled`, so only the straight 10% roll schedules reinforcements (not verified in play).
+The Enemy Alerted roll that adds Enemy Reinforcements has no effect. `ApplyStartEvents` loops over `new List<StartEventType>(activeStartEvents)`, a copy taken before the loop, so the `StartEventType.EnemyReinforcements` that `ApplyEnemyAlerted` adds to `activeStartEvents` is never visited. `_reinforcementsScheduled` is set only by the `EnemyReinforcements` case of that loop, and `ApplyStartEvents` is called only from `RollAndApplyStartEvents`. Nothing else reads the entry: `CompartmentView` reads only ReactorDown, ArmoryDamaged and VolatileCargo, and `ReapplyFactionProfile` reads only ReactorDown. Only the straight 10% roll in `RollStartEvents` schedules reinforcements.
 
 Ships with `ship.shipNoScuttle` behave as if Reactor Down was rolled.
 
@@ -1446,6 +1448,12 @@ Prisoners are added to your brig up to the ship's `brigCapacity`. `SpaceShip.Get
 
 Source: `DungeonOperation.SelectReturningUnits`, `DungeonOperation.JettisonOverflowCrew`, `SpaceShipData.AddCrew`, `SpaceShipData.AddPrisoners`.
 
+#### Code: Escape Pods When a Ship Explodes
+
+`DungeonOperation.HandlePodSimulationComplete` handles `MissionOutcome.ShipExploded` by calling `SpawnEscapeeCrewPods(sim)`, then `DestroyAllPods()`, then `boardableTarget.OnExploded(sim, ship)`. `SpawnEscapeeCrewPods` counts, per crew type, each `SimCrewUnit` in `sim.friendlyUnits` that `IsAlive()`, has a `compartmentIndex` other than the Airlock index and -1, and passes `SeededRandom.Global.RandomBool(0.4f)`. It then calls `LootManager.CreateCrewPodsBatched` with default flags, so `ConfigurePodHostility` sets `rollOnPickup` on each pod, and `CrewPodState.RollHostilityIfPending` rolls `isHostile` against the crew type's `hostileChance` when the pod is picked up. `OnExploded` calls `BoardableUnit.SpawnExplosionEscapePods`, which counts every living unit in `sim.attackerUnits` (the same list as `friendlyUnits`) with no room test, and creates its pods with `forceFriendly: true`. `DestroyAllPods` only handles pods already in `_activePods`, and nothing in `OnExploded` removes units before `ClearSimulation` runs, which is after `SpawnExplosionEscapePods`. The two counts therefore overlap: a living unit in a room is in the second count for certain and in the first with probability 0.4. Each pod holds up to the `CrewPod` item builder's `maxCrewPerPod` units of one crew type.
+
+Source: `DungeonOperation.HandlePodSimulationComplete`, `DungeonOperation.SpawnEscapeeCrewPods`, `DungeonOperation.DestroyAllPods`, `BoardableUnit.OnExploded`, `BoardableUnit.SpawnExplosionEscapePods`, `LootManager.CreateCrewPodsBatched`, `CrewPodState.RollHostilityIfPending`, `DungeonSimulation.attackerUnits`.
+
 #### Code: Walking Into Facilities
 
 If the ship docked at a pad, the logistics walkers carry the crew to the pad.
@@ -1462,11 +1470,15 @@ Source: `DungeonSimulation.TickReinforcementSchedule`, `DungeonOperation.CheckRe
 
 The power multiplier on your units is `1 + AssaultDoctrine + BoardingPower`. Boarding Suppression multiplies defender power by `(1 - value)` in every contested room. "Shock Assault" (0.05) is the `UniqueCombatBoardingSuppression` prefab: a `SkilltreeNode` (tier 6, `availableForCrew` = Combat, `skillNodeLevel` MajorOfficer, max 1 point) carrying a `BoostStat` with stat 78 (BoardingSuppression), `statBoost` 0.05. `CrewResistanceIncrease2` (Combat Hardening) is tier 4 with `requiredPointsInTree` 11, and `SkilltreeNode.CanInvestSkillPoints` also rejects tier > 3 until `skilltreeTier2Unlocked`.
 
-I found no item in the asset files that carries Boarding Power (no `BoostStat` with stat 79 anywhere). Suppression reads from your current flagship, not the operation's ship.
+No equipment carries Boarding Power. No `BoostStat`, `EquipmentBuilderStat`, `ResonantUnlockStat` or other serialized `stat` field with value 79 exists in `resources.assets`, any `sharedassets*.assets` file or any `level*` scene. The same search finds stat 78 once, on `UniqueCombatBoardingSuppression`, and finds stats 80 and 81 where expected. The 0.8.3.5 dumps for `EquipmentBuilder`, `ItemBuilder`, `EquipAspect`, `AbstractModule` and `InventoryItemType` contain no Boarding Power stat. In code, `EquipStat.BoardingPower` appears only in the enum and in `EquipStatExtensions.IsPercentageStat`, and `AbstractUnit.RecalculateStats` copies `calcedStats[79]` into `SkilltreeNode.BoardingEquipmentBonus` for the player's ship. The officer passive bonus pools (`OfficerData.GetBonusPool`) and `ShipUpgradeCalculator` do not produce it. The value is 0 unless a mod or save edit adds a stat line.
+
+Shock Assault reaches the stat like this. `OfficerData.SetSkillNodes` fills each slot with `PickNodeForSlot`. Slot 5 (the sixth) calls `PickUniqueNode(profession, random, 4, 6)`, which picks a `MajorOfficer` node of tier 4 to 6 from `SkilltreeNode.GetAllMajorNodes`. These nodes load from `Resources/Crew/CrewSkills` and have no `parent` skill tree. `SlotCountForRarity` gives 2, 3, 5, 6 and 8 slots for Standard to Legendary, so slot 5 exists only for Exotic and Legendary officers. `SlotUnlockLevels[5]` is 60, and `OfficerData.IsUnlockedAt` compares it with the officer's level. `SpaceShipData.AddSubclassDerivedStatBoosts` calls `AddOfficerUniqueStatBoosts`. For each unlocked node with a null `parent`, that calls `AddSkillNodeStatBoosts`, which stores a derived `StatBoostEntry` with source id `crew-skill:<officer guid>:<node identifier>:<index>`. `RebuildDerivedStatBoosts` runs when an officer is added to or removed from a ship and when a ship loads. `AbstractUnitData.AggregateStatLines` adds each entry into `calcedStats[78]`, so every officer with the skill adds 0.05. `DungeonOperation.TickActive` copies `GameplayManager.Instance.spaceShip.GetStat(EquipStat.BoardingSuppression)` into `DungeonSimulation.boardingSuppressionStat` every tick, and `ComputeHostilePowerIn` multiplies a room's defender power by `1 - boardingSuppressionStat`. `TotalDefenderPower`, which feeds the morale and mass surrender checks, does not include it.
+
+Skill names come from `SkilltreeNode.displayName`, which is `"@" + identifier + "Name"`. The English text table holds `<identifier>Name` and `<identifier>Description` (for example `UniqueCombatBoardingSuppressionName` is "Shock Assault"). The values (`statBoost`, `customIncrease`, `maxSkillPoints`) are prefab fields. The `availableForCrew` flag lists the officer professions that can roll a skill (`Profession`: Mining 1, Engineering 4, Salvaging 16, Combat 32, Industrial 64). It is not a requirement for your own skill tree. `CaptainData.GetSkillPoints` is `bonusSkillPoints + (level - 1)`, and `GetRemainingSkillPoints` subtracts the points invested in all trees. `bonusSkillPoints` rises through `CaptainData.TryGiveBonusSkillPoints`, which refuses to pass `GameMath.MaxBonusSkillPoints` unless forced. Its callers are the `Skillpoint` mission reward (a refused amount becomes a `BonusSkillPointTemplate` cargo item), using a `BonusSkillPoint` item, and the debug console. `NewGame` adds 1 only on the path that skips the prologue (the `else` branch that adds `Sandbox`). The item drops from a 0.5% discovery roll in `DungeonCompartmentLoot` and a 1% roll in `LootManager.OpenLootBox`, both only while the `LootboxSkillPointsGained` counter is below `GameMath.MaxLootBoxSkillPoints`. The Conquest and Umbral shops in `SpaceStation` sell it while `bonusSkillPoints` is below the cap. Both caps come from the storytellers, and `GameMath` takes the largest value among the storytellers in `GamePlayer.storytellers`. The `Storyteller` defaults are `maxBonusSkillpoints` 0 and `maxLootBoxSkillPoints` 5. Only `Tutorial` (11), `Sandbox` (31) and `Conquest` override the bonus cap, and only `Conquest` overrides the loot cap. `Conquest` returns `maxPlayerLevel + 1` and 10 while `expansionUnlocked` is false, and 101 and 30 once it is true (`maxPlayerLevel` is 60, then 100). The stages follow the storyteller switches. `NewGame` adds `Tutorial` for a prologue start, or `Sandbox` (with `Puppeteers` and `Economy`) when the prologue is skipped. `GamePlayer.LeavePrologueForFrontier` calls `RemoveStoryteller<Tutorial>()` and then `AddSandboxStorytellers()`. The story mission `StoryMissionSkipToConquest` ("Continue your galactic journey", available at player level 28) adds `new Conquest(ply)` if none exists. `ExpansionMissions.CreateGoToExpansionMission` calls `Conquest.UnlockExpansion()` when "Beyond the Front" is accepted. Nothing removes `Sandbox` afterwards, so the largest value always applies. The only other `new Conquest` call is the debug console. Officers have no points: `OfficerData.IsUnlockedAt` unlocks slot `i` once the officer's level reaches `skillUnlockLevels[i]`.
 
 The Crew screen (`CrewView`) and the ship's General tab show `crew boarding power * (1 + Assault Doctrine)`. They do not include the equipment stat.
 
-Source: `SkilltreeNode.BoardingPowerBonus`, `SkilltreeNode.CrewResistanceBonus`, `SkilltreeNode.BoardingEquipmentBonus`, `AbstractUnit.RecalculateStats`, `DungeonOperation.TickActive`, `DungeonSimulation.GetArmorDamageMultiplier`, `UniqueCombatBoardingSuppression` prefab, `CrewView`.
+Source: `SkilltreeNode.BoardingPowerBonus`, `SkilltreeNode.CrewResistanceBonus`, `SkilltreeNode.BoardingEquipmentBonus`, `AbstractUnit.RecalculateStats`, `DungeonOperation.TickActive`, `DungeonSimulation.ComputeHostilePowerIn`, `DungeonSimulation.GetArmorDamageMultiplier`, `UniqueCombatBoardingSuppression` prefab, `OfficerData.SetSkillNodes`, `OfficerData.IsUnlockedAt`, `SpaceShipData.AddOfficerUniqueStatBoosts`, `AbstractUnitData.AggregateStatLines`, `CaptainData.GetSkillPoints`, `CaptainData.TryGiveBonusSkillPoints`, `Skillpoint.OnComplete`, `CrewView`.
 
 ### Code: Autopilot
 
@@ -1496,11 +1508,3 @@ Source: `IdleManager.FindDungeonActivity`, `IdleManager.FindEligibleDungeonIn`, 
 - The profession discovery bonus is unused data. Only `professionSpeedBonus` is read.
 - The room `efficiencyModifier` (reduced for rooms cut off from the Airlock) is computed, but nothing reads it.
 - Investigation speed per room is `1 + 0.15 * (n - 1)`.
-
-### Code: Not Verified
-
-- It is not verified whether `DungeonOperation.SpawnEscapeeCrewPods` (each living unit with `compartmentIndex` not the Airlock and not -1 gets `RandomBool(0.4)`) and `BoardableUnit.SpawnExplosionEscapePods` (every living attacker unit, via `OnExploded`) both turn the same units into pods. Both run on ShipExploded, and neither removes units from `friendlyUnits`, so units in rooms can be turned into pods twice (inference).
-- It is not verified whether any generated equipment carries the Boarding Power stat. None of the prefab data does.
-- The per-update chances in the morale code (panic 2-3%, mass surrender, `surrenderChance * 0.1`) are not scaled by elapsed time. The simulation is ticked once per rendered frame (`DungeonManager.Update`), so these chances fire once per frame.
-- It is not verified how the officer skill `UniqueCombatBoardingSuppression` reaches the flagship's Boarding Suppression stat. That step was not traced.
-- Skill names and values come from the localization strings and prefab data. The `availableForCrew` flag lists the officer professions that can roll a skill (Mining 1, Engineering 4, Salvaging 16, Combat 32, Industrial 64). It is not a requirement for your own skill tree. How skill points are earned was not checked.

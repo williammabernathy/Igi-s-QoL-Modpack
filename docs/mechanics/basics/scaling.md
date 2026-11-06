@@ -290,7 +290,7 @@ module   = 1 + 0.012 * 2.25 * 1600 = 44.2
 HP mult  = 44.2 * 1.3 * 1.36 * 1.81 * 1.43 = about 202 times the base HP
 ```
 
-Damage per weapon at the same level is 3.0 to 3.15 times 1600. That is about 4900 combat power for a Large weapon at Standard rarity, and the base ramp of 1.81 multiplies it. How combat power turns into damage per shot is explained on the [combat damage page](combat-damage.md). The damage ratios in the tables below assume that damage is linear in combat power, which was not verified here.
+Damage per weapon at the same level is 3.0 to 3.15 times 1600. That is about 4900 combat power for a Large weapon at Standard rarity, and the base ramp of 1.81 multiplies it. How combat power turns into damage per shot is explained on the [combat damage page](combat-damage.md). The damage ratios in the tables below rely on damage being proportional to combat power, and it is. A shot is the turret's power divided by 5, times a random roll, and the later steps only multiply that by other factors, none of which read combat power. A turret's power is its own power plus its share of the ship's pool, so doubling an enemy's combat power doubles every shot it fires.
 
 In the code: [Putting the Multipliers Together](#code-putting-the-multipliers-together).
 
@@ -380,7 +380,7 @@ Every ship can use Combat and Defense.
 | Defense | +1% shield HP, armor HP and hull HP each |
 | Mining and Salvage | +2% mining power or +2% salvage power, respectively |
 
-The node bonuses add up with the node count. A ship with 30 combat nodes has 1 + 0.02 * 30 = x1.6. Milestone bonuses at 10, 20 and 30 nodes in a path also exist, but they need accumulated activity (kills or yield) on the ship. A freshly generated NPC has none, so they are not counted here. Whether long-lived conquest ships accrue that progress was not verified.
+The node bonuses add up with the node count. A ship with 30 combat nodes has 1 + 0.02 * 30 = x1.6. Milestone bonuses at 10, 20 and 30 nodes in a path also exist, but they need accumulated activity on the ship, such as kills, mined ore or damage absorbed. An enemy ship has none, so they are not counted here. That includes long-lived conquest ships. They gain hull nodes by winning battles, but the game rebuilds each one for every battle from its saved type, level, seed and node count, and keeps no activity record for it. So they gain nodes and never milestones.
 
 For a plain combat ship (only the Combat and Defense paths), about 71% of nodes go to Combat and 29% to Defense. That is 5 of 7 slots against 2 of 7, because the pick range stops one short of the total weight, so the last path in the list loses one slot. With a drone or torpedo bay, these shares drop.
 
@@ -603,7 +603,7 @@ Each of these is rolled independently:
 | One cargo item (not ammo) | 30% | Worth up to a whole number from 3 to 9, times 100 * the credit multiplier for its level, in credits of value. |
 | Ammo | 10% | Worth up to 1 or 2 times 100 * the credit multiplier for its level. |
 | Credits | 30% | random(2.5, 3.25) * 100 * the credit multiplier for its level. |
-| Blueprint | 4% | A ship of rank Elite or above requests at least High Grade. Lower ship ranks use the default roll (not verified). |
+| Blueprint | 4% | A ship of rank Elite or above drops only High Grade blueprints. Lower ship ranks roll any Standard, Enhanced or High Grade blueprint you do not know yet, with Standard about 2.6 times as likely as Enhanced and about 4.8 times as likely as High Grade. Exotic and Legendary blueprints never drop this way, and blueprints with a minimum level above the ship's level are left out. If none qualifies, nothing drops. |
 | Ship blueprint piece | 5% | Only for ship classes you have not unlocked, at or above the class unlock level. |
 | Officer upgrade (High Grade) | 1% | Level 30 and above. |
 | Commendation tag (officers only) | In quadrant 2: a 20% roll, then, if it fails, a 10% roll at system level 10 or higher. Elsewhere: 10% at system level 10 or higher. | In quadrant 2, the first roll gives tag 3 at Champion or above (25%), tag 2 at Veteran or above (33%), and tag 1 otherwise. The second roll, and every other quadrant, gives tag 1. |
@@ -730,7 +730,7 @@ Tiers 6 to 8 also lower your resists by 60, 75 and 85 points, so the real gap is
 - Rarity is free power. It adds +10% to +50% on main stats at no extra energy draw, plus extra stat lines and aspect slots. A Legendary item is worth about 6 levels of item level, and it also costs no extra energy for that.
 - Item level raises power and energy cost together. A level 60 Standard weapon has a power level of 1,600. A level 54 Legendary weapon has about the same power with lower energy draw.
 - At level 60, an NPC rolls Legendary on a given slot 5% of the time. That rises to 20.8% at level 80 and 32.1% at level 100. Late-game enemies therefore carry much better gear than Locked Containers, which stay below 2% Legendary at level 100.
-- To find better rarity, fight enemies above level 60 (see the NPC gear table) and open boxes at level 25 or higher for Exotic. Aim for ship rank Elite or above so the blueprint drop is at least High Grade. Ships drop their worst fitted item 95% of the time, so a ship with one Legendary and one Standard module almost always drops the Standard one.
+- To find better rarity, fight enemies above level 60 (see the NPC gear table) and open boxes at level 25 or higher for Exotic. Aim for ship rank Elite or above so the blueprint drop is always High Grade. Ships drop their worst fitted item 95% of the time, so a ship with one Legendary and one Standard module almost always drops the Standard one.
 
 These tables are worked out from the formulas on this page, not measured in play.
 
@@ -884,6 +884,10 @@ NPC modules do not roll HP bonus stats (`NpcShipGearRollRules` excludes them), s
 
 In the worked example, `mainStat` is 0.012. Damage per weapon at the same level is `3.0-3.15 * 1600 = ~4900` "combat power" for a Large weapon at Standard rarity, before the base ramp.
 
+Damage per shot is proportional to turret power. `DamageData.CalculateDamage` computes `power / 5 x random(0.8, 1.25) / defaultAttacksPerSecond`, then multiplies by the critical multiplier and by `1 + type damage + Damage`. None of these read `CombatPower`: the critical chance comes from `Precision` and the unit level (`AbstractUnit.GetPrecisionCrit`). `AbstractTurret.CalculatePooledPower` returns `(displayedPower x M + max(0, shipStat - mains x M) / N x rating) x powerMultiplier`, where `M` is the `CombatPower` stat multiplier. `AbstractUnit.ApplyEscalationNpcModifiers` multiplies stat 21 (`CombatPower`) by the base ramp and the tier damage multiplier, and the hull-node bonus is another `CombatPower` multiplier. A change in `M` therefore scales the turret power, and the shot, by the same factor.
+
+Source: `DamageData.CalculateDamage`, `AbstractTurret.CalculatePooledPower`, `AbstractUnit.GetPrecisionCrit`, `AbstractUnit.ApplyEscalationNpcModifiers`.
+
 #### Code: Growth With Level
 
 `powerLevel` is 25 * `2^(L/10)` and the credit multiplier is 2^(L/14). Damage doubles every 10 levels up to level 100 (`DamageMultiplier`), and every 25 levels past it. Credits double every 14 levels up to 100 and every 25 after.
@@ -923,9 +927,9 @@ The path weights are built by `ShipUpgradeCalculator.BuildWeightedNpcPaths`. Per
 | Defense | +1% `ShieldHP`, `ArmorHP`, `HullHP` each |
 | Mining, Salvage | +2% `MiningPower` / `SalvagePower` |
 
-The node bonuses are additive in the node count (a ship with 30 combat nodes has `1 + 0.02 * 30 = x1.6`). Milestone bonuses at 10, 20 and 30 nodes in a path also exist (`IsMilestoneUnlocked`), but they need accumulated activity (kills or yield) on the ship, and a freshly generated NPC has none, so I did not count them. Whether long-lived conquest ships accrue progress was not verified. `PickWeightedPath` calls `RandomRange(0, totalWeight - 1)` and `SeededRandom.RandomRange(int, int)` excludes the upper bound, so the last path in the list (`GetNpcApplicablePaths` order: Combat, Defense, Mining or Salvage, Drones, Torpedo) is one slot short.
+The node bonuses are additive in the node count (a ship with 30 combat nodes has `1 + 0.02 * 30 = x1.6`). Milestone bonuses at 10, 20 and 30 nodes in a path also exist (`IsMilestoneUnlocked`). Each needs the node count and `activityRecord` progress at or above `GetMilestoneThreshold`, and enemy ships have an empty record, so I did not count them. Kills (`LootManager.CreditKillToShip`) and damage absorbed (`SpaceShip.TakeDamage`) are credited only when the killer or the damaged unit is a player unit (`IsPlayer()`), and `GamePlayer.TrackMissionActivity` credits only your own ships. Conquest fleet entries (`FleetShipEntry`) and garrison ships (`FactionGarrisonShip`) store only the ship type, level, seed, `hullPoints` and `hullXp`. `HullXp.Award` grows `hullPoints`, and `BattleUnitDescriptor.Build` rebuilds the ship through `ConquestCombat.BuildShip` and `ShipUpgradeCalculator.SetNpcHullNodes` with a new `SpaceShipData` and an empty record. Long-lived conquest ships therefore gain nodes but never milestones. `PickWeightedPath` calls `RandomRange(0, totalWeight - 1)` and `SeededRandom.RandomRange(int, int)` excludes the upper bound, so the last path in the list (`GetNpcApplicablePaths` order: Combat, Defense, Mining or Salvage, Drones, Torpedo) is one slot short.
 
-Source: `ShipUpgradeCalculator.BuildWeightedNpcPaths`, `ShipUpgradeCalculator.GetPathAmountPerNode`, `ShipUpgradeCalculator.GetDefenseStatLines`, `ShipUpgradeCalculator.PointBudget`, `ShipUpgradeCalculator.IsMilestoneUnlocked`, `HullRating.ToRating`, `HullRating.FormatRating`
+Source: `ShipUpgradeCalculator.BuildWeightedNpcPaths`, `ShipUpgradeCalculator.GetPathAmountPerNode`, `ShipUpgradeCalculator.GetDefenseStatLines`, `ShipUpgradeCalculator.PointBudget`, `ShipUpgradeCalculator.IsMilestoneUnlocked`, `ShipUpgradeCalculator.GetMilestoneThreshold`, `ShipUpgradeCalculator.SetNpcHullNodes`, `LootManager.CreditKillToShip`, `SpaceShip.TakeDamage`, `SpaceShipData.CreditShipActivity`, `GamePlayer.TrackMissionActivity`, `FleetShipEntry`, `FactionGarrisonShip`, `HullXp.Award`, `BattleUnitDescriptor.Build`, `ConquestCombat.BuildShip`, `HullRating.ToRating`, `HullRating.FormatRating`
 
 #### Code: How Many Nodes an NPC Gets
 
@@ -1060,6 +1064,8 @@ Source: `LootRarity.GetRarityChances`, `LootRarity.RollRarity`, `LootRarity.GetB
 
 `SpaceShipData.CreateLootTable` rolls each of the drops independently. The cargo item is worth up to `RandomRange(3, 10) * 100 * costMultiplier(level)` (integer range, so 3 to 9), ammo up to `RandomRange(1, 3) * 100 * costMultiplier(level)` (1 or 2), and the credit drop is `random(2.5, 3.25) * 100 * costMultiplier(level)`. The commendation tag block is an `if / else if`: in quadrant 2 a failed 20% roll falls through to the 10% system-level-10 roll. Station defense platforms use `CombatStationPartData.CreateLootTable` (40% weapon drop, `RandomBool(0.55f)` for the lowest-rarity filter).
 
+The 4% blueprint drop calls `ItemBuilder.CreateRandomBlueprint(level, rarity)` with `Rarity.HighGrade` when `unitRank >= UnitRank.Elite` and with no rarity otherwise. `GatherAvailableBlueprints` takes the recipes from `CraftingRecipe.GetBlueprintableRecipes` (not unlocked from the start, `blueprintAvailable`) that are not already known (`IsAlreadyKnownAtLevel`) and have `minLevel` at or below the ship's level. With a rarity it keeps only recipes whose `craftingRarity` equals it. With none, `excludeExoticOrHigher` is true by default, so Exotic and Legendary recipes are dropped and the rest are weighted `1 / GetCostMultiplier(craftingRarity)^2`: Standard 1, Enhanced 0.39 (cost multiplier 1.6), High Grade 0.21 (2.2). `CreateRandomBlueprint` returns null when no recipe qualifies, and then nothing drops.
+
 Credit drops, using `GetCreditsValue`:
 
 ```
@@ -1068,7 +1074,7 @@ GetCreditsValue(base, L) = round(base * 100 * CostMultiplier(L))
 
 The bounty credit reward is `GetCreditsValue(25, L)`, before the Escalation bonus.
 
-Source: `SpaceShipData.CreateLootTable`, `SpaceShipData.GetEquipedModulesForLootTable`, `LootRarity.SelectDroppableEquipment`, `SpaceShipData.RollShipBlueprintPieceLoot`, `GameMath.GetCreditsValue`, `GameMath.CostMultiplier`, `BountyBoard.AddBountyRewards`
+Source: `SpaceShipData.CreateLootTable`, `SpaceShipData.GetEquipedModulesForLootTable`, `LootRarity.SelectDroppableEquipment`, `SpaceShipData.RollShipBlueprintPieceLoot`, `ItemBuilder.CreateRandomBlueprint`, `ItemBuilder.GatherAvailableBlueprints`, `CraftingRecipe.GetBlueprintableRecipes`, `RarityExtensions.GetCostMultiplier`, `GameMath.GetCreditsValue`, `GameMath.CostMultiplier`, `BountyBoard.AddBountyRewards`
 
 ### Code: XP Rewards
 

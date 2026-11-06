@@ -14,6 +14,7 @@ exclude_docs = """
 /modpack/developing.md
 /modpack/dev-harness.md
 /modpack/sandbox-harness.md
+/modpack/ui-rework-research.md
 """
 nav = [
   { "Home" = "index.md" },
@@ -25,6 +26,7 @@ nav = [
     "mechanics/basics/scaling.md",
     "mechanics/basics/stations.md",
     "mechanics/basics/boarding.md",
+    "mechanics/basics/credits.md",
   ] },
   { "Conquest (Level 28+ Spoilers)" = [
     "mechanics/conquest/README.md",

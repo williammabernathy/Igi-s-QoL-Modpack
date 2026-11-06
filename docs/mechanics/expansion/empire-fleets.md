@@ -1,6 +1,6 @@
 # Empire Fleets
 
-This page covers your own Empire Fleets and patrol fleets: slots and size, service levels, orders, stances, the outmatched warning, how your fleets show on the map and in the Defense number, and what the war looks like above level 60. Fleets need captain level 10 and a held system. The war options on this page open with "Beyond the Front", which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Anything the code does not confirm is marked `(not verified)`.
+This page covers your own Empire Fleets and patrol fleets: slots and size, service levels, orders, stances, the outmatched warning, how your fleets show on the map and in the Defense number, and what the war looks like above level 60. Fleets need captain level 10 and a held system. The war options on this page open with "Beyond the Front", which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten.
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md). Buying and claiming systems, upkeep and your stations are covered in [Your Empire](your-empire.md).
 
@@ -268,7 +268,7 @@ In the code: [Taking a System With Empire Fleets](#code-taking-a-system-with-emp
 
 - Keep a fleet in the system with a defense stance. It counts in full for Defense, plus the mix bonus (2 or more ship sizes, up to 3% per size at Empire Level 10).
 - Build Defense stations and assign patrol fleets. They count in full for Defense, and a hub siege goes straight to the hub instead of through station stages. Patrol ships lost in a siege are lost for good.
-- Run war effort missions for the faction that owns the system, near that system. A +1.0 bonus doubles the station term, which adds 250 to 700 of Defense (the term goes from 250 to 700 up to 500 to 1400). Whether this applies to systems you hold is `(not verified)` (see [War Effort on Your Own Systems](your-empire.md#war-effort-on-your-own-systems)).
+- War effort does not apply to systems you hold. Missions that raise it never reach a system you own (see [War Effort on Your Own Systems](your-empire.md#war-effort-on-your-own-systems)), so it adds nothing to your Defense number. Against NPC-held systems, a +1.0 bonus doubles the station term, which adds 250 to 700 of Defense (the term goes from 250 to 700 up to 500 to 1400).
 - Stay out of reach of the 1.15 threshold that NPC fleet planning uses. NPC fleets attack when their points are at least 1.15 times the weakest-station strength plus any fleets already traveling to relieve it. A lone NPC fleet is 2000 points, so a Defense number above about 1740 stops single-fleet attacks. Assaults combine 2 or more fleets and can exceed that.
 - If a flagship or fleet of yours is in the system, the battle turns live and the simulation freezes. The fight then depends on the ships alone. The real station HP is multiplied by 20 (30 at a headquarters), and war effort scales the station weapons.
 - A defending fleet or patrol in the system stops a raid from running unopposed. An undefended raid finishes at its 600 s minimum once the station structure (15% of normal hull) is broken.
@@ -282,7 +282,7 @@ In the code: [Defending a System You Hold](#code-defending-a-system-you-hold).
 | What can I hold? | You cannot hold any system. | You can hold systems, with 1 fleet slot per threshold. |
 | What is the main lever on a war? | Interception, live hub kills at the right moment, and war effort bursts. | Your own fleets, attacking and defending. War effort is a small add-on. |
 | How useful is war effort? | It is most of what you can do to the war. | It is a minor boost of at most 250 to 700 Defense at the cap. |
-| What does intercepting cost? | It is cheap to start. It costs -1000 reputation per ship force-attacked and -3500 per kill with factions at Wary or better, and nothing against factions that are already your enemies. | The cost is the same, but a big fleet of yours can usually fight the real fight instead. |
+| What does intercepting cost? | It is cheap to start. It costs -1000 reputation for the ship you click and -3500 per kill with factions at Wary or better. A first hit can flag the faction's other ships in the encounter (see [faction-economy](../conquest/faction-economy.md#intercepting-deliveries-and-convoys)). It costs nothing against factions that are already your enemies. | The cost is the same, but a big fleet of yours can usually fight the real fight instead. |
 | What does a hub kill do? | It hands the system to the lead attacker of a hub siege at once. Otherwise it leaves the system unowned until a fleet lands. | It offers the claim to you first, with a reputation drop to Hostile with the old owner. A player-sector system goes back on sale instead. |
 | What happens to my reputation? | You lose it station by station. | You lose it system by system (to -5000), and the owner attacks you afterwards. |
 | What level are enemy ships? | Your level plus about 10. | At least 66, and your level plus about 10 above level 60. |
@@ -397,6 +397,6 @@ Source: `ConquestCombat.GetNextBattleStrength`, `EmpireFleets.GetOutmatchingDefe
 
 #### Code: Defending a System You Hold
 
-Whether war effort applies to systems you hold is `(not verified)`.
+War effort never reaches a system you hold. `ConquestWarEffort.Apply` is called only from `ConquestStrength.OnComplete`, and `MissionGenerator.AddRewards` adds a `ConquestStrength` reward only when the source station's faction is in `Conquest.conquestFactions`, which does not contain `Faction.player`. See [War Effort on Your Own Systems](your-empire.md#code-war-effort-on-your-own-systems).
 
-Source: `EmpireFleets.JoinsDefense`
+Source: `EmpireFleets.JoinsDefense`, `ConquestWarEffort.Apply`, `ConquestStrength.OnComplete`, `MissionGenerator.AddRewards`, `Conquest.conquestFactions`

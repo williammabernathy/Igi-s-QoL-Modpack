@@ -6,7 +6,7 @@ The page lists terms and abbreviations used across these pages, with what the ga
 
 How to read the tables: "Term used here" is the one wording the pages use for that meaning. "What the game shows" is the exact interface text and where it appears. Some words are used by the game or by these pages for more than one thing. They are gathered in "Easily Confused Terms" below.
 
-Pages: [Combat Damage](combat-damage.md), [Scaling](scaling.md), [Combat Stations](stations.md) and [Boarding and Facility Operations](boarding.md).
+Pages: [Combat Damage](combat-damage.md), [Scaling](scaling.md), [Combat Stations](stations.md), [Boarding and Facility Operations](boarding.md) and [Earning Credits](credits.md).
 
 ## Places and Stations
 
@@ -38,6 +38,8 @@ In the code: [Fleets and Battles](#code-fleets-and-battles).
 | Escalation | "Escalation" (button), "Enemy toughness / damage / forces" | A difficulty setting you choose. Higher tiers make enemies stronger and raise mission rewards. |
 | ship rank | "Rookie", "Regular", "Veteran", "Elite", "Champion", "Commander", "Legendary" (coloured badge on a ship tooltip title) | An enemy ship's strength tier. It is not the same as rarity. |
 | rarity | Standard, Enhanced, High Grade, Exotic, Legendary (item colours; High Grade is blue) | An item's quality tier. Legendary Locked Container gear appears at level 60 or higher. Enemy gear can carry it a few levels earlier. |
+| credit factor | Not shown | The number the game turns into credits with a level: credits = factor x 100 x 2^(L/14) up to level 100. A higher factor pays more. [Earning Credits](credits.md#how-credit-amounts-scale) lists the factor of each credit source. |
+| Signal Trap | "Signal Trap - {boss}" (item), "Trap Site - {boss}" (map location) | A crafted item that summons a boss to the current system. The code calls these bosses pocket bosses. See [Signal Traps and Pocket Bosses](credits.md#signal-traps-and-pocket-bosses). |
 
 In the code: [Missions and Standing](#code-missions-and-standing).
 
@@ -132,6 +134,8 @@ The wording above comes from the translation strings in `resources.assets` and t
 | Escalation | `EscalationHelper.CurrentTier` |
 | ship rank | `UnitRank`. "Regular" is `UnitRank.Standard`. The seven names are hard-coded in `UnitRankHelper.displayNames`, not in the text table. |
 | rarity | `Rarity` |
+| credit factor | the first argument of `GameMath.GetCreditsValue(f, level)` |
+| Signal Trap | `SignalTrapItem`, built by `SignalTrapBuilder` (item definition `BaitBeacon`); the boss is a `PocketBossDefinition`, the Trap Site a `LureSite` |
 
 ### Code: Reputation
 

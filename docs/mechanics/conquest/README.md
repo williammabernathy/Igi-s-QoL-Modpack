@@ -1,6 +1,6 @@
 # Conquest
 
-This stage covers the faction war in the Conquest sector (Ara Martis): the embassies, aligning with a faction, the war itself and the 30% sector-control mission. It opens at captain level 28. Values were read from the game code of version 0.8.3.4 (the decompiled source), not from testing in the game. The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Anything the code does not confirm is marked `(not verified)`. The last section, "In the Game Code", lists the mission ids and conditions behind the plain-language steps.
+This stage covers the faction war in the Conquest sector (Ara Martis): the embassies, aligning with a faction, the war itself and the 30% sector-control mission. It opens at captain level 28. Values were read from the game code of version 0.8.3.4 (the decompiled source), not from testing in the game. The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. The last section, "In the Game Code", lists the mission ids and conditions behind the plain-language steps.
 
 ## Spoiler: How You Get Here
 
@@ -9,7 +9,7 @@ The stage opens at level 28. At that level the story step "Gathering Storm", whi
 The chain that follows, in order:
 
 1. The story mission "Sector Control" asks you to find the three embassies and talk to their representatives.
-2. Talking to a representative offers to align you with that faction. You answer a yes or no prompt first. A faction that is your enemy refuses. Whether you can change the choice later is `(not verified)` on this page.
+2. Talking to a representative offers to align you with that faction. You answer a yes or no prompt first. A faction that is your enemy refuses. A yes finishes "Sector Control", so you cannot pick a second faction afterwards, and nothing in the game undoes the choice, even though the prompt says you are not permanently bound. A no starts nothing, and you can talk to a representative again.
 3. The faction's first mission ("Internship" for Stellar, "For the Collective!" for Kolyatov, "Alignment" for Luminate) takes you to its headquarters and has you run missions for it.
 4. Its second mission ("Hostile Takeover", "The People's Sector" or "Harmony") asks you to push that faction to 30% of the systems in the Conquest sector.
 
@@ -47,7 +47,7 @@ This part is the decompiled code behind the sections above: mission ids, conditi
 The chain that follows, in order:
 
 1. `ConquestThreeFactions` ("Sector Control") asks you to find the three embassies and talk to their representatives.
-2. Talking to a representative offers to align you with that faction (`Characters.AlignWithMajorFaction`, then `FactionAlignmentChoice`), after a yes/no prompt. A faction that is your enemy refuses. The code in this chain only starts the faction's first mission; whether the choice can be undone is not verified.
+2. Talking to a representative offers to align you with that faction (`Characters.AlignWithMajorFaction` shows the prompt, and its Yes calls `FactionAlignmentChoice`). A faction that is your enemy refuses. `FactionAlignmentChoice` fires the embassy trigger, which completes `ConquestThreeFactions` (its single step needs any one of the three triggers, `requireAllObjectives = false`), and adds the faction's first mission. A representative's dialogue is offered only while that trigger objective is open (`GamePlayer.GetCurrentDialogueTrigger`), so after the first yes the representatives give only their default dialogue. Nothing else adds the first missions, which cannot be abandoned (`canAbandon = false`), and no code removes or swaps them. The choice cannot be changed.
 3. The faction's first mission (`ConquestStellar1`, `ConquestKolyatov1` or `ConquestLuminate1`) takes you to its headquarters and has you run missions for it.
 4. Its second mission (`ConquestStellar2`, `ConquestKolyatov2` or `ConquestLuminate2`) asks you to push that faction to 30% of the systems in the Conquest sector.
 

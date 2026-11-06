@@ -26,9 +26,9 @@ In the code: [Which Station Is Which](#code-which-station-is-which).
 
 ## Every Station Part
 
-A station is a set of parts joined by physics joints. The tooltip title is the part type name, followed by the level ("Lv. N"), the owner, and a single "Hull" row. Each part also has a more specific name in the game's name list, such as "Small Turret Mk II (3-Way)", "Small Landing Pad" or "Energy Field Generator". A part without an entry in that list is named "{type} ({N}-Way)", where N is the number of connectors the part has. Where that longer name is shown is not verified.
+A station is a set of parts joined by physics joints. The tooltip title is the part type name, followed by the level ("Lv. N"), the owner, and a single "Hull" row. Each part also has a more specific name in the game's name list, such as "Small Turret Mk II (3-Way)", "Small Landing Pad" or "Energy Field Generator". A part without an entry in that list is named "{type} ({N}-Way)", where N is the number of connectors the part has. The longer name is not shown in a station's tooltip or anywhere else in normal play. It appears only on the part buttons of the Station Builder, a developer tool that opens from the debug console.
 
-"Base HP" (hit points; the game shows "Hull HP", "Armor HP" and "Shield HP") below is the unscaled starting value for each part. Shield and armor base HP only count when the part has a Shield Generator or Armor module equipped (every module slot is filled when the part spawns). A part's stored shield and armor values therefore do not always apply (see the notes under the table). Modules add their own HP on top before the multipliers in the next section.
+"Base HP" (hit points; the game shows "Hull HP", "Armor HP" and "Shield HP") below is the unscaled starting value for each part. Shield and armor base HP only count when the part has a Shield Generator or Armor module equipped (every module slot is filled when the part spawns). A part's stored shield and armor values therefore do not always apply (see the notes under the table). Equipped modules then multiply these values (see the formula in the next section).
 
 | In-game name | Variant | Base HP | Module slots | Weapon slots |
 |---|---|---|---|---|
@@ -59,24 +59,24 @@ In the code: [Every Station Part](#code-every-station-part).
 
 ### What Each Part Does in a Live Fight
 
-Only Defense Platforms shoot. A part gets turret behaviour only when its prefab lists weapon slots. The Core, Energy Field, Refinery, Cargo Dock, Docking Pads, Docking Tunnels and Connectors are targets and nothing else. Every other part is only hull for you to destroy.
+Only Defense Platforms attack. A part gets turret behaviour (choosing targets and firing) only when its prefab lists weapon slots, and only the platforms with turrets have them. The drone bay platform has no weapon slots and fights through its drones (see the table). The Core, Energy Field, Refinery, Cargo Dock, Docking Pads, Docking Tunnels and Connectors are targets and nothing else. Every other part is only hull for you to destroy.
 
 | Part | In a fight |
 |---|---|
 | Station Core | Always drops credits. Counts as a required part for station destruction, like any part that is not a Connector. In Station Defense missions it is the part the mission asks you to protect. |
 | Energy Field | Has hull and drops loot only (see [The Energy Field](#the-energy-field)). |
-| Refinery | Has hull and drops loot (ore, canisters, blueprints). |
+| Refinery | Has hull and drops loot (ore and blueprints). |
 | Cargo Dock | Has hull and drops loot (credits and refined parts). |
 | Docking Pad, Docking Tunnel | Have hull and drop loot. They hold the docking points ships use, which matters only for boardable facilities. |
 | Connector | Has hull and drops a little loot. It is never required for station destruction. |
 | Defense Platform (turret) | Shoots, has the only shields on any part, and can drop one of its turrets. |
-| Defense Platform (drone bay) | Carries a Drone Bay module and has no turret slots. It drops nothing from the platform loot table. This page does not cover how it launches or targets drones. |
+| Defense Platform (drone bay) | Carries a Drone Bay module and has no turret slots. It drops nothing from the platform loot table. It does launch drones: the bay holds 3 (4 if its module rolled the extra-drone aspect, about a 7.5% chance), and they leave it when the part's scanner finds an enemy in range. Each drone is a Combat Laser Drone or a Combat Missile Drone, and with a 15% chance one of the drones is a Painter drone instead. A drone's gun has about half the Combat Power of a Small turret (see [Module Gear and Weapons](#module-gear-and-weapons)). |
 
 In the code: [What Each Part Does in a Live Fight](#code-what-each-part-does-in-a-live-fight).
 
 ### The Energy Field
 
-The Energy Field does nothing special. It is a 1350 base hull part with no weapons, no aura and no effect on the other parts. It drops warp fuel and, rarely, Energy Crystals. The part's stored data lists a hidden object that gives +0.75 weapon range (not verified, prefab data). The code never switches that object on for a station part: a part's stats come only from equipped modules and turrets (and saved stat boosts), and the range bonus the game does add is for ships only. The Energy Field does not extend turret range for any part.
+The Energy Field does nothing special. It is a 1350 base hull part with no weapons, no aura and no effect on the other parts. It drops warp fuel and, rarely, Energy Crystals. Its prefab carries a leftover child object called RangeBonus that is set to a +0.75 weapon range bonus, but nothing in the game reads it for a station part, so it has no effect. The Energy Field is not special in this: 19 of the 23 part prefabs in the generic art style carry the same object (all except the Cargo Dock, the two Conquest docking pads and the Docking Tunnel). The Energy Field does not extend turret range for any part.
 
 In the code: [The Energy Field](#code-the-energy-field).
 
@@ -87,11 +87,13 @@ In the code: [The Energy Field](#code-the-energy-field).
 Each of hull, armor and shield HP is built the same way:
 
 ```
-HP = (base HP + HP of equipped modules) * M
+HP = base HP * module multiplier * M
+module multiplier = (1 + main stat of the matching module) * aspect multipliers
 M  = rank * HP balance curve * NPC base curve * Escalation * context
 ```
 
 - Base HP: the numbers in the table above.
+- Module multiplier: the equipped Hull, Shield Generator or Armor module multiplies the matching HP. Its main stat is a multiplier, not an HP amount that gets added (the numbers are below the formula section). Flat HP bonus stats cannot roll on station gear, so modules never add flat HP.
 - Rank: 0.7, because station parts always count as the lowest ship rank (Rookie), whose HP multiplier is 0.7.
 - HP balance curve, for part level L: (1 + 0.28 * a) * (1 + 0.6 * b^1.5), where a = (L - 10) / 30 limited to the range 0 to 1, and b = (L - 40) / 60 limited to 0 or above. The game never shows this curve or gives it a name on screen. It is the extra HP every NPC unit gets as its level rises.
 - NPC base curve: 4 raised to c, where c = (L - 30) / 70 limited to the range 0 to 1 (so the result is 1 at level 30 or below and 4 at level 100 or above). The game does not show this curve on screen either. It also multiplies the part's combat power (see "War Effort on Station Weapons" on [war-stations.md](../conquest/war-stations.md)).
@@ -115,7 +117,29 @@ The combined multiplier at Escalation tier 0 (rank * HP balance curve * NPC base
 
 The x20 and x30 columns and a worked example are on [war-stations.md](../conquest/war-stations.md).
 
-The HP that equipped modules add is not listed because it comes from equipment rolls that I did not read. Treat the tooltip number as the truth and the base terms above as the minimum.
+Equipped modules multiply the base HP. The Hull, Shield Generator and Armor modules each carry one main stat, a multiplier of 1 + u * s * P * 1.2:
+
+- u is a roll between 0.010 and 0.014 for a Hull module and between 0.013 and 0.014 for a Shield Generator or Armor module.
+- s is the size factor: 1 for a Small module and 1.5 for Medium and Large (station gear caps the HP size scaling at Medium).
+- P is the power level of the module's level: 25 * 2^(L/10), rounded, up to level 100. Past level 100 it doubles every 25 levels instead.
+- 1.2 is the High Grade rarity multiplier.
+
+For a Small module:
+
+| Level | P | Hull module multiplier | Shield or Armor module multiplier |
+|---|---|---|---|
+| 10 | 50 | x1.6 to x1.8 | x1.8 |
+| 30 | 200 | x3.4 to x4.4 | x4.1 to x4.4 |
+| 45 | 566 | x7.8 to x10.5 | x9.8 to x10.5 |
+| 60 | 1600 | x20.2 to x27.9 | x26.0 to x27.9 |
+| 80 | 6400 | x77.8 to x108.5 | x100.8 to x108.5 |
+| 100 | 25600 | x308 to x431 | x400 to x431 |
+
+For a Medium or Large module, the part of the multiplier above 1 is 1.5 times larger. At level 60 that is x29.8 to x41.3 for a Hull module and x38.4 to x41.3 for a Shield Generator or Armor module.
+
+Worked example: a Defense Platform with one Small turret at level 60 has a base hull of 450 and a base shield of 150. A mid-range Hull module (u = 0.012) gives x24.0 and a mid-range Shield Generator (u = 0.0135) gives x26.9. With the combined x1.81 for level 60, the hull is about 450 * 24.0 * 1.81 = 19,600 and the shield about 150 * 26.9 * 1.81 = 7,300, before the context multiplier.
+
+Every High Grade module also carries one aspect (a random bonus): a rare one with 25% chance, otherwise a common one. One of the common aspects on the Hull, Shield Generator and Armor modules is x1.05 hull HP. No rare aspect on these modules changes HP. The tooltip number is the final value.
 
 In the code: [The Stat Formula](#code-the-stat-formula).
 
@@ -155,7 +179,9 @@ Turrets are chosen by the weapon slot size:
 | 80 | 17% | 25% | 25% | 12% | 21% |
 | 100 | 14% | 21% | 21% | 11% | 32% |
 
-A given station always rolls the same gear. Damage-dealt and fire-rate scaling for the turrets is on [combat-damage.md](combat-damage.md).
+Each turret's Combat Power is c * P * R. c is a roll inside the turret model's range: 1.00 to 1.05 for a Small turret, 2.00 to 2.10 for Medium and 3.00 to 3.15 for Large (the size is already inside c, so there is no extra size factor; the Junk Gatling is the one exception, at 0.6 to 0.8). P is the power level from [How Tough a Part Is](#how-tough-a-part-is) for the turret's level, and R is the rarity multiplier: 1.0 Standard, 1.1 Enhanced, 1.2 High Grade, 1.35 Exotic, 1.5 Legendary. At level 60 a Large Standard turret has about 3.07 * 1600 = 4,900 Combat Power, and a Legendary one about 7,400. The war-zone and Escalation multipliers come on top of that (see [war-stations.md](../conquest/war-stations.md)). A slot draws from 14 Small, 14 Medium or 11 Large combat turret models. Their damage type, fire delay, range and magazine are listed in the code section, and damage-dealt and fire-rate scaling is on [combat-damage.md](combat-damage.md).
+
+The seed fixes each part's module choices, rarities and stat rolls. It does not fix which turret model fills a slot, because that draw uses the game's global random generator. Once a part has spawned, its gear is saved with it. A station that is rebuilt from its seed (see [How Long Damage Lasts](#how-long-damage-lasts)) rolls its turret models again.
 
 In the code: [Module Gear and Weapons](#code-module-gear-and-weapons).
 
@@ -169,7 +195,7 @@ Loot is rolled when the part is destroyed and differs on every kill. Level L is 
 | Docking Pad, Docking Tunnel | The same refined-part roll as Connectors, without the halving. |
 | Cargo Dock | The refined-part roll, plus a 70% chance of credits at a credit factor of 4.5 to 5.25. |
 | Energy Field | 50% chance of High Grade warp fuel, in an amount of 1 + random(round(L/20), round(L/16)). Above level 25, a 4% chance of Energy Crystals, in an amount of 1 + random(round(L/45), round(L/20)). |
-| Refinery | 50% chance of ore of this system: a surface ore in an amount of 1 + random(round(L/6), round(L/4)) and a core ore at half that amount (minimum 1). Within that 50%, there is another 50% chance of two further entries (see the note below the table). |
+| Refinery | 50% chance of ore of this system: a surface ore in an amount of 1 + random(round(L/6), round(L/4)) and a core ore at half that amount (minimum 1). Within that 50%, there is another 50% chance of two more stacks of the same core ore, at 4 times and 2 times a fresh roll of that amount. |
 | Refinery and Core | Both also have a 30% chance of a blueprint of level L. 98.5% of the time, Exotic and higher blueprints are excluded. |
 | Station Core | Always credits at a credit factor of 13.5 to 15.25. |
 | Defense Platform with turrets | 40% chance of one of its equipped turrets (only turret types that players can use), rebuilt at its exact level and rarity. 55% of the time, the choice is limited to the lowest-rarity turrets it carries. Separately, a 20% chance of a stack of one of its ammo types worth about a credit factor of 1 or 2, capped at the amount it holds. |
@@ -178,7 +204,7 @@ Loot is rolled when the part is destroyed and differs on every kill. Level L is 
 
 Games using the sandbox storyteller add these drops to the Core: an 80% chance of 1 to 2 Locked Container Keys and, in a conquest system, also a Locked Container of the part's level.
 
-Note on Refineries: I could not tell whether the two extra entries are canisters or bulk core ore (not verified). The decompiled code gives core ore in both, which may be a decompiler artifact. Treat them as "bulk core ore, possibly canisters" until they are checked in play.
+Both extra Refinery stacks are core ore, not canisters. The game looks up the matching canister items but never drops them.
 
 Killing a part also pays kill experience: 50 * level-gap factor * 2^(effective level / 9), rounded up. The 50 is 5 x the part's reward of 10, and the level-gap factor is the usual penalty or bonus for the level gap (see [scaling.md](scaling.md)). The Rookie rank (the lowest ship rank) adds no extra multiplier. Industrial Outpost stations give no loot or experience and cause no reputation change.
 
@@ -263,7 +289,7 @@ In the code: [Killing Parts](#code-killing-parts).
 Left-clicking a hostile part sets it as your manual target. Ctrl + left-click on a part whose faction is not hostile to you (the tooltip hint "force attack") works only when all of these are true:
 
 - The part is not already hostile to you.
-- You are in a subsector of the Conquest quadrant or of a quadrant beyond it. The Frontier quadrant and the prologue never allow it. The galaxy map button names the neighbouring quadrant, for example "< Frontier" and "Conquest >".
+- You are in a subsector of the Conquest quadrant or of a quadrant beyond it. The Frontier quadrant and the prologue never allow it. The galaxy map button names the neighbouring quadrant, for example "< Frontier" and "Conquest >". The game also numbers a test arena as quadrant 3. It is a developer mode with no map button, and a normal game never contains it.
 - The location you are in is not one of the space station kinds.
 
 Faction stations (Defense stations and economic outposts), hubs, embassy stations, player stations, Industrial Outposts and every guild or neutral station are space station kinds, so you cannot force attack any of them. The rule lets you force attack non-hostile parts at combat-type locations (mission, skirmish and pirate stations, and boardable facilities). Embassy station parts are also always friendly, so normal targeting does not reach them either.
@@ -291,7 +317,7 @@ flowchart TD
     E -->|"no"| G
 ```
 
-When you do attack a non-hostile part, it becomes hostile to you. Any damage you deal to a unit whose faction is not your enemy also marks every unit of that faction at that location hostile to you. The reputation cost is the kill penalty above. A part that is already hostile to you (a faction at war with you, or a flagged unit) can be targeted with a plain click.
+When you do attack a non-hostile part, it becomes hostile to you. Any damage you deal to a unit whose faction is not your enemy also marks every ship and standalone turret of that faction at that location hostile to you. This does not reach the station's other parts. They are not in the location's list of units, so only the part you clicked is flagged hostile, and each other part stays non-hostile until you force attack it too. The reputation cost is the kill penalty above. A part that is already hostile to you (a faction at war with you, or a flagged unit) can be targeted with a plain click.
 
 Since 0.8.3.5 a plain left-click on a part docks you at the station hub when the part's faction owns the station you are at, docking is possible right now and the station has a hub to dock at (the tooltip then shows a "dock" hint). Boardable facility parts open the facility panel instead.
 
@@ -396,7 +422,7 @@ If the goal is loot, shoot these parts:
 | Credits | The Core (always), then Cargo Docks (70% chance). |
 | Turrets | Defense Platforms (40% chance of one of their turrets). |
 | Blueprints | Cores and Refineries (30% chance each). |
-| Ore and canisters | Refineries. |
+| Ore | Refineries. |
 | Warp fuel | Energy Fields. |
 | Crafting parts (refined parts) | Connectors, Docking Pads, Docking Tunnels and Cargo Docks (70% chance each). |
 
@@ -408,18 +434,6 @@ Two things do not work the way they look:
 
 - Killing Connectors does not count toward destroying the station. It can release the parts hanging off that Connector to drift, which is a physics effect and not damage.
 - The Energy Field is not an energy source for the station's weapons or a range booster. It is only a part with 1350 base hull.
-
-## Not Verified
-
-- The HP added by equipped modules (Hull, Shield Generator, Armor) and the exact turret statistics. They come from equipment rolls that I did not read.
-- Whether the extra two Refinery drops are canisters or core ore (the decompiled output yields core ore).
-- Whether station parts are included in the list of units that get marked hostile when you attack a friendly part.
-- Whether drone-bay platforms launch drones at all. A part only gets combat behaviour if its prefab lists weapon slots or the part has set auto actions, and the drone-bay platform has neither (not verified), so its damage is unknown.
-- Which quadrant the game numbers 3 belongs to. The code names it the test arena, and no map button for it was checked.
-- The range bonus object on the Energy Field. It is stored in the prefab, and neither the C# source nor the 0.8.3.5 data dumps list it.
-- Where the longer part names (such as "Small Turret Mk II (3-Way)") are shown in the interface.
-
-In the code: [Not Verified](#code-not-verified).
 
 ## In the Game Code
 
@@ -436,7 +450,7 @@ A "location" is the code's point of interest, POI.
 
 ### Code: Every Station Part
 
-A station is a set of `CombatStationPart` objects joined by physics joints. The tooltip title is the part type name (`@StationPart<type>`), followed by the level (`Lv. N`), the owner, and a single `Hull` row. `CombatStationPart.GetDisplayName` looks up `@StationPartName_<prefab key>` and falls back to `{type} ({N}-Way)`, where N is the number of connectors the part has; every prefab on this page has an entry in the translation table.
+A station is a set of `CombatStationPart` objects joined by physics joints. The tooltip title is the part type name (`@StationPart<type>`), followed by the level (`Lv. N`), the owner, and a single `Hull` row. `CombatStationPart.GetDisplayName` looks up `@StationPartName_<prefab key>` and falls back to `{type} ({N}-Way)` (`@StationPartNameFallback`), where N is the number of connectors the part has; every prefab on this page has an entry in the translation table. `CombatStationPart.displayName` hides the base `AbstractUnit.displayName` (`new`, not `override`), so only code that holds a `CombatStationPart` reference gets the longer name. The only call to it in the compiled assembly is `StationBuilderPopup.AddPaletteButton`, which labels the part buttons of the Station Builder. `ConsoleScreen.OpenStationBuilder` (console command `OpenStationBuilder`, short form `osb`) opens that popup, and the console is only available when a file named `console.enabled` exists (`ConsoleScreen.ConsoleAvailable`). The tooltip title comes from `CombatStationPart.BuildTooltipCard`, not from the long name.
 
 `Base HP` is the unscaled starting term: hull is `hullHPScale * 150`, shield is `shieldHPScale * 300`, armor is `armorHPScale * 300` (`AbstractUnit.baseHullHP` and the related properties). The scale values themselves are prefab data, read from the 0.8.3.5 data dump (`CombatStationPart.allParts`): hull scale 6 for the Core, Cargo Dock, Docking Pads and Docking Tunnel, 9 for the Energy Field and Refinery, 10 for the escort Refinery, 2.1 and 4.9 for the Connectors, 3 to 6 for the Defense Platforms with turrets, and 4 for the drone bay platform. Shield scale is 0.5, 1, 1.4 and 3, and the only armor scales are 3 (Core) and 2 (drone bay platform). Shield and armor base HP only count when a Shield Generator or Armor module is equipped (`AbstractUnit.GetStatRaw`), so a prefab's shield and armor scale is not always live (see the notes below). Prefab names, without the faction prefix:
 
@@ -466,30 +480,34 @@ Notes on the table:
 - The number before the `C` in a prefab name is not reliable as a connector count. The serialized connector list is rebuilt from the child objects at load, and for example `Energy1_4C` has four.
 - In 0.8.3.5 the dedicated prefixes are `Generic_` (Kolyatov Collective and every faction without its own prefix), `Stellar_` (Stellar Industries), `Luminate_` (Luminate Combine) and `Corsair_` (Corsair Syndicate). Each has the same 23 prefabs in the `CombatStationPart.allParts` dump. The part type, hull, shield and armor scale, module slots, weapon slot sizes, tonnage, experience reward and display name are identical across all four prefixes. The sprites and connector references were found to differ when the prefabs were read earlier; the dump does not list them. The prefix changes how a station looks and nothing else.
 
-Source: `CombatStationFactory.GetFactionPrefix`, `AbstractUnit.baseHullHP`, `AbstractUnit.baseShieldHP`, `AbstractUnit.baseArmorHP`, `AbstractUnit.GetStatRaw`, `CombatStationPart.BuildTooltipCard`, `CombatStationPart.GetDisplayName`, prefab data for `*_Core_4C` and the other `StationParts`.
+Source: `CombatStationFactory.GetFactionPrefix`, `AbstractUnit.baseHullHP`, `AbstractUnit.baseShieldHP`, `AbstractUnit.baseArmorHP`, `AbstractUnit.GetStatRaw`, `CombatStationPart.BuildTooltipCard`, `CombatStationPart.GetDisplayName`, `CombatStationPart.displayName`, `StationBuilderPopup.AddPaletteButton`, `StationBuilderPopup.BuildPalette`, `ConsoleScreen.OpenStationBuilder`, `ConsoleScreen.ConsoleAvailable`, prefab data for `*_Core_4C` and the other `StationParts`, and the `@StationPartName_*` text entries.
 
 #### Code: What Each Part Does in a Live Fight
 
-A part gets turret behaviour (`CombatActions`) only when its prefab lists weapon slots. In Station Defense missions the Core is set up as the "defense subject" the mission protects.
+A part gets turret behaviour (`CombatActions`) only when its prefab lists weapon slots: `CombatStationPart.CreateAutoActions` returns the part's named `autoActions` if set, `CombatActions` when `hardpointSlots` is not empty, and nothing otherwise. In Station Defense missions the Core is set up as the "defense subject" the mission protects.
 
-Source: see [the Energy Field](#code-the-energy-field).
+The drone bay platform (`DefenseDronebaySmall_2C`) has an empty `hardpointSlots` and a null `autoActions` in the 0.8.3.5 `CombatStationPart.allParts` dump, so it gets no `CombatActions`. It still launches drones. Its module slots include `DroneBay`, and the `Small DroneBay` builder sets the dynamic field `_droneAmount` to 3. `DroneBayModule.droneAmount` adds `droneBonusAmount` (1 from the `DroneAmountAspect` that is `commonAspects[0]` of that builder, so a 75% * 1/10 chance on a High Grade bay). The skill additions are skipped because `CanApplyDroneAmountSkill` is false for a non-player unit outside the shipyard, and the ship-upgrade additions need a `SpaceShipData`. `AbstractUnitData.LoadDefaultEquipment` runs `LoadDefaultDrones` for a part with a `DroneBay` module, using the part's `gameplayType` (Combat). `FillDroneSlots` fills each slot with `GetDefaultDrone`, a random entry of `Drone.GetAll()` whose default turret is a non-support combat turret (`Combat Laser Drone` or `Combat Missile Drone`). With 15% chance, when the bay holds at least 2 drones, one random slot takes `GetSupportDrone` instead (a drone with a `LaserPainterTurret`). `AbstractUnit.InitModules` creates a `CombatModule` for a unit whose drone bay has a combat loadout and links the bay to it (`SetDroneBay`). The part's Scanner module reaches that module through `ScannerModule.DispatchToModules`, and `AbstractTargetingModule.UpdateAutoTarget` calls `DroneBayModule.DeployDrones` when it finds a target. The drones copy the part's hostility flags (`DroneBayModule.CopyFactionSettings`). Each drone's gun comes from the `DroneCombatLaser` or `DroneCombatMissileLauncher` builder, whose main stat is Combat Power 0.5 to 0.6 times the power level, built at the bay item's level with the bay item's rarity (High Grade) for the hardpoint (`DroneBayModule` builds the drone with `LoadDefaultEquipment` and a rarity function).
+
+Source: `CombatStationPart.CreateAutoActions`, `AbstractUnitData.LoadDefaultDrones`, `AbstractUnitData.FillDroneSlots`, `AbstractUnitData.GetDefaultDrone`, `AbstractUnitData.GetSupportDrone`, `AbstractUnit.InitModules`, `ScannerModule.DispatchToModules`, `AbstractTargetingModule.UpdateAutoTarget`, `DroneBayModule.DeployDrones`, `DroneBayModule.droneAmount`, prefab `Generic_DefenseDronebaySmall_2C`, builders `Small DroneBay`, `DroneCombatLaser` and `DroneCombatMissileLauncher`. See also [the Energy Field](#code-the-energy-field).
 
 #### Code: The Energy Field
 
-Its code-side role is the loot table (warp fuel, rarely Energy Crystals). The prefab data lists a child object called `RangeBonus` with a `BoostStat` of +0.75 on `WeaponRange` (not verified, prefab data). Nothing registers it as a stat source for a station part: a part's stats come only from equipped modules and turrets (and saved stat boosts), because only equipment and ship upgrades register themselves as stat sources. `AbstractUnit.AddRangeBonus` only adds a range badge to `SpaceShip` units. It does not extend turret range for any part.
+Its code-side role is the loot table (warp fuel, rarely Energy Crystals). The prefab `Generic_Energy1_4C` has an active child object `RangeBonus` with a `BoostStat` component (`stat` 53 = `EquipStat.WeaponRange`, `statBoost` 0.75, `statMultiplier` 1). 19 of the 23 `Generic_` part prefabs carry an identical `RangeBonus` child; the four without it are `Conq_CargoDock_4C`, `Conq_DockingMedium_2C`, `Conq_DockingSmall_2C` and `DockingTunnel_1C`. It is the same object as the ship range badge (`Bonus/RangeBonus/RangeBonus`), not an Energy Field feature. A `BoostStat` does nothing on its own. It implements `IEquipStatSource`, but an `AbstractUnit` only sums the sources in its `statSources` list, and `AbstractUnit.RegisterStatSource` is called from `AbstractEquipment` and `ShipUpgradeStatSource` only. `BoostStat` and `StackableEffect` have no `Awake` or `OnEnable`, and `CombatStationPart.OnEnable` only clones the sprite. The other readers of `BoostStat` components are aspects (`AbstractUnitData.AddAspectStatBoosts`), skill nodes and mastery, abilities and temporary effects, the ship bonus badges (`SpaceShipData.AddRangeBonusStatBoosts`, which reads the badge instance it creates) and pocket boss buffs (`SpaceShip.ApplyBossBuffs`). None of them look at the children of a station part. `AbstractUnit.AddRangeBonus` only adds a range badge to `SpaceShip` units. So the object has no effect, and the Energy Field does not extend turret range for any part.
 
-Source: `CombatStationPart.CreateAutoActions`, `CombatStationPartData.CreateLootTable`, `AbstractUnit.RegisterStatSource`, `AbstractEquipment` (the only registrant), `BoostStat`.
+Source: `CombatStationPart.CreateAutoActions`, `CombatStationPart.OnEnable`, `CombatStationPartData.CreateLootTable`, `AbstractUnit.RegisterStatSource`, `AbstractEquipment` (a registrant), `ShipUpgradeStatSource` (the other registrant), `BoostStat`, `AbstractUnit.AddRangeBonus`, `SpaceShipData.AddRangeBonusStatBoosts`, `SpaceShip.ApplyBossBuffs`, prefab data for `*_Energy1_4C/RangeBonus`.
 
 ### Code: How Tough a Part Is
 
 #### Code: The Stat Formula
 
 ```
-HP = (base term + sum of equipped module HP) * M
+HP = base term * module multiplier * M
+module multiplier = (1 + main stat of the matching module) * aspect multipliers
 M  = rankHP * HpBalance(level) * NpcBase(level) * escalationHP * stationContext
 ```
 
 - `base term`: the numbers in the table above.
+- `module multiplier`: `AbstractUnit.GetStatRaw` computes `(base + calcedStats[stat]) * statMultipliers[stat]`. `calcedStats` is the sum of the flat `amount` of every stat line and `statMultipliers` the product of every line's `multiplier` (`AbstractUnitData.ApplyStatSourceLines`, `EquipStatLineMerging.MergeLinesFor`). The Hull, Shield Generator and Armor main stats are multiplier lines (`EquipmentBuilder.BuildInitialStats` with `isMultiplier` true adds `EquipStatLine(stat, 0, 1 + value)`), and the flat HP optional stats are in `excludedBonusStats`, so `calcedStats` for `HullHP`, `ShieldHP` and `ArmorHP` stays 0 and the modules only multiply. Every `M` term below is a further factor in `statMultipliers`, applied in `AbstractUnit.RecalculateStats`.
 - `rankHP`: 0.7. Station parts are never given a rank in code, so they keep the default rank (Rookie), whose HP multiplier is 0.7.
 - `HpBalance(level)`: `GameMath.HpBalanceMultiplier`, `(1 + 0.28 * clamp01((L-10)/30)) * (1 + 0.6 * max(0,(L-40)/60)^1.5)`. It is the "HP balance curve" of the player text. No localization key names it.
 - `NpcBase(level)`: `EscalationHelper.GetNpcBaseMultiplier`, `4 ^ clamp01((L-30)/70)`. The peak of 4 is fixed: `EscalationHelper.basePeakOverride` is never set. It also multiplies the part's combat power. It is the "NPC base curve" of the player text. No localization key names it.
@@ -520,9 +538,57 @@ For NPC parts the module is a uniform random pick among every builder of that sl
 
 Turret rarity is rolled from `u = random(0, 0.4 + level/100)`, where `level` is the location's level passed to `LoadDefaultEquipment`: below 0.2 Standard, below 0.5 Enhanced, below 0.8 HighGrade, below 0.95 Exotic, else Legendary.
 
-The equipment seed is the location id, the station seed and the part's position in the build order, so a given station always rolls the same gear.
+The equipment seed is the location id, the station seed and the part's position in the build order (`CombatStationData.GetEquipmentSeed`). It seeds the module builder pick, the rarity rolls and every stat roll. It does not seed the turret model: `AbstractUnitData.GetRegularHardpointBuilder` calls `EquipmentBuilder.GetRandom` without a generator, so the pick uses `SeededRandom.Global`. `AbstractUnitData.LoadDefaultEquipment` only fills empty slots, and `AbstractUnitData.ToJson` saves `equipment` and `hardpoints`, so a spawned part keeps its gear until the station is rebuilt from its seed. The part's `gameplayType` is Combat (`CombatStationPartData` constructor), so the turret filter is `AbstractCombatTurret` of the slot's size, not a support turret, with no level check (`EquipmentBuilder.GetRandom` only applies `AvailableForLevel` for player-owned units).
 
-Source: `CombatStationPartData.fixedModuleRarity`, `CombatStationPartData.StationGearRollRules`, `AbstractUnitData.LoadDefaultEquipment`, `AbstractUnitData.EquipDefaultModuleSlots`, `AbstractUnitData.EquipDefaultHardpoints`, `AbstractUnitData.GetSupportTurretFilter`, `AbstractUnitData.DetermineSupportSlotIndex`, `AbstractUnitData.GetDefaultEquipmentRarity`, `EquipmentBuilder.GetRandom`, `EquipmentBuilder.GetStatSize`, `CombatStationData.GetEquipmentSeed`.
+HP modules: `EquipmentBuilder.SetupItem` computes `powerLevel = round(25 * GameMath.DamageMultiplier(itemLevel))` and `BuildInitialStats` rolls each stat as `ApplyStatScaling(random.RandomRange(minValue, maxValue), ...)`, which is `value * sizeFactor * powerLevel^levelScaling * rarity.GetPowerMultiplier()^rarityScaling`. `levelScaling` and `rarityScaling` are 1 on these main stats. `GameMath.DamageMultiplier` is `2^PiecewiseDoublings(level, 100, 10, 25)`, which is 2^(L/10) up to level 100 and `2^(10 + (L-100)/25)` after. `Rarity.GetPowerMultiplier` is 1 / 1.1 / 1.2 / 1.35 / 1.5 for Standard to Legendary. `sizeFactor` comes from `GetStatSize` (`AutoScaleBySize` is true for these stats): Small 1, Medium 1.5, and Large 1.5 because the HP stats are capped at Medium by `hpStatSizeCap` (the stats in `AbstractUnit.npcHealthAffectedStats`). The main stat ranges are in the 0.8.3.5 `EquipmentBuilder.allBuilders` dump: `SmallHull`, `MediumHull` and `LargeHull` roll 0.010 to 0.014 on `HullHP`; `SmallShield`, `MediumShield` and `LargeShield` roll 0.013 to 0.014 on `ShieldHP`; `SmallArmor`, `MediumArmor` and `LargeArmor` roll 0.013 to 0.014 on `ArmorHP`. `SetupItem` inserts the main stats at the head of the stat list, so they are always rolled.
+
+Aspects: `GetHighGradeAspectSlots` gives a High Grade item one aspect slot, rare with 25% and common otherwise (`FillAspectSlots` picks uniformly from the builder's list). Aspect `BoostStat` lines reach the unit as derived stat boosts (`AbstractUnitData.RebuildDerivedStatBoosts`, `AddAspectStatBoosts`). `commonAspects[0]` of every Hull, Shield Generator and Armor builder is a `BoostStat` on `HullHP` with `statMultiplier` 1.05. The builders' rare aspects are a `TriggeredAbility` and `ArmorRegenPercentage` on the Hull module, and none change HP.
+
+Turret statistics: a combat turret's main stat is `CombatPower`, rolled between 1.00 and 1.05 (Small), 2.00 and 2.10 (Medium) or 3.00 and 3.15 (Large), with `levelScaling` and `rarityScaling` 1. `AutoScaleBySize` is false for a main `CombatPower` stat, so the size is only in the range (`JunkGattlingTurret` is 0.6 to 0.8). So `CombatPower = roll * powerLevel(itemLevel) * rarity multiplier`. The pool is every builder whose prefab is an `AbstractCombatTurret` (`AutoCannonTurret`, `CorropultTurret`, `GatlingTurret`, `LaserTurret`, `MicrocellMissileLauncherTurret`, `MissileTurret`, `RadiationCannonTurret`, `RailCannonTurret`, `CryoLanceTurret`, `PlasmaLanceTurret`) with the slot's size: 14 Small, 14 Medium and 11 Large. The damage type, fire delay and magazine are the prefab values from the dump, and the range is the builder's `range` field, rolled between the two values shown:
+
+| Size | Builder | Damage type | Fire delay (s) | Range | Magazine |
+|---|---|---|---|---|---|
+| Small | `JunkGattlingTurret` | Kinetic | 0.05 | 6-8 | 200 |
+| Small | `SmallAutocannon` | Kinetic | 0.4 | 9-11 | 22 |
+| Small | `SmallCorropult` | Corrosion | 0.5 | 9-11 | 2 |
+| Small | `SmallCryoLance` | Cold | 0.2 | 9-11 | 1 |
+| Small | `SmallGatlingTurret` | Kinetic | 0.05 | 7-9 | 250 |
+| Small | `SmallHailfireLauncher` | Explosive | 0.1 | 18-19 | 15 |
+| Small | `SmallLaser` | Energy | 1 | 7-9 | 1 |
+| Small | `SmallLaserRepeater` | Energy | 0.2 | 5-7 | 30 |
+| Small | `SmallMicrocellMissileTurretBuilder` | Energy | 2 | 9-11 | 50 |
+| Small | `SmallMissileTurret` | Explosive | 0.2 | 21-25 | 5 |
+| Small | `SmallPlasmaAutocannon` | Energy | 1.2 | 9-11 | 33 |
+| Small | `SmallPlasmaLanceBuilder` | Energy | 0.2 | 9-11 | 10 |
+| Small | `SmallRailCannon` | Kinetic | 1 | 19-21 | 1 |
+| Small | `SmallShotgun` | Energy | 1.6 | 6-7 | 24 |
+| Medium | `MediumAutocannon` | Kinetic | 0.35 | 10-12 | 38 |
+| Medium | `MediumBurstRailCannon` | Kinetic | 0.5 | 25-29 | 3 |
+| Medium | `MediumCorropult` | Corrosion | 0.5 | 9-11 | 4 |
+| Medium | `MediumCryoLance` | Cold | 0.2 | 9-11 | 1 |
+| Medium | `MediumLaser` | Energy | 1 | 9-11 | 1 |
+| Medium | `MediumLaserRepeater` | Energy | 0.17 | 10-12 | 45 |
+| Medium | `MediumMicrocellMissileTurretBuilder` | Energy | 5 | 9-11 | 100 |
+| Medium | `MediumMissileTurret` | Explosive | 0.2 | 26-30 | 5 |
+| Medium | `MediumPlasmaAutocannon` | Energy | 1.4 | 10-11 | 60 |
+| Medium | `MediumPlasmaCannon` | Energy | 1.5 | 9-11 | 8 |
+| Medium | `MediumPlasmaLanceBuilder` | Energy | 0.2 | 9-11 | 10 |
+| Medium | `MediumRadiationCannon` | Radiation | 3 | 14-16 | 1 |
+| Medium | `MediumRailCannon` | Kinetic | 1 | 25-29 | 1 |
+| Medium | `MediumTwinAutocannon` | Kinetic | 0.15 | 10-12 | 54 |
+| Large | `LargeBurstRailCannon` | Kinetic | 1 | 31-35 | 6 |
+| Large | `LargeCombatLaser` | Energy | 1 | 13-14 | 1 |
+| Large | `LargeDoubleChaingun` | Kinetic | 0.09 | 17-19 | 100 |
+| Large | `LargeLaserRepeater` | Energy | 0.14 | 14-16 | 60 |
+| Large | `LargeMissileTurret` | Explosive | 0.2 | 32-36 | 6 |
+| Large | `LargePlasmaBattery` | Energy | 1.4 | 14-15 | 80 |
+| Large | `LargePlasmaCannon` | Energy | 2 | 17-18 | 6 |
+| Large | `LargeRadiationCannon` | Radiation | 3 | 20-22 | 1 |
+| Large | `LargeRailCannon` | Kinetic | 1 | 31-33 | 2 |
+| Large | `LargeTripleAutocannon` | Kinetic | 0.1 | 13-14 | 102 |
+| Large | `LargeTripleCannon` | Explosive | 1 | 18-20 | 1 |
+
+Source: `CombatStationPartData.fixedModuleRarity`, `CombatStationPartData.StationGearRollRules`, `AbstractUnitData.LoadDefaultEquipment`, `AbstractUnitData.EquipDefaultModuleSlots`, `AbstractUnitData.EquipDefaultHardpoints`, `AbstractUnitData.GetRegularHardpointBuilder`, `AbstractUnitData.GetHardpointDefaultEquipmentFilter`, `AbstractUnitData.GetSupportTurretFilter`, `AbstractUnitData.DetermineSupportSlotIndex`, `AbstractUnitData.GetDefaultEquipmentRarity`, `AbstractUnitData.ApplyStatSourceLines`, `AbstractUnitData.RebuildDerivedStatBoosts`, `AbstractUnit.GetStatRaw`, `EquipmentBuilder.GetRandom`, `EquipmentBuilder.SetupItem`, `EquipmentBuilder.BuildInitialStats`, `EquipmentBuilder.ApplyStatScaling`, `EquipmentBuilder.GetStatSize`, `EquipmentBuilder.AutoScaleBySize`, `EquipmentBuilder.GetAspectSlotAmount`, `GameMath.DamageMultiplier`, `RarityExtensions.GetPowerMultiplier`, `CombatStationData.GetEquipmentSeed`, builders `SmallHull` to `LargeArmor`, and the turret builders in the table.
 
 ### Code: What Drops When a Part Dies
 
@@ -540,7 +606,7 @@ Loot is rolled when the part is destroyed, using the global random generator (`S
 
 Kill experience is `ceil(50 * gapFactor * 2^(effectiveLevel/9))`, where the base is 5 x the part's reward of 10 (`AbstractUnit.baseExperienceReward`, default 10), the gap factor is the usual level-gap penalty or bonus, and `UnitRankHelper.GetAdjustedPoints` is 1 for the default Rookie rank. Only turrets whose builder passes `EquipmentBuilder.AvailableForPlayer` can be picked as the dropped turret. Loot and kill rewards (experience, reputation) are skipped at an Industrial Outpost (`LootManager.DropLoot`) and the reward part only runs when `hitByPlayer` is set.
 
-Note on Refineries: the decompiled code looks up the canister item for the surface and core ore and then yields the core ore item (x4 and x2 the rolled amount) in both extra entries, not the canisters. This may be a decompiler artifact. Treat the extra two entries as "bulk core ore, possibly canisters" until checked in play.
+Both extra Refinery stacks are the system's core ore, not canisters. In the IL of `CombatStationPartData.CreateLootTable`, the `InventoryItemType.Get("Canister" + product)` result is discarded (a `pop`) in both blocks, and each `yield` returns `coreOre.item`: first with 4 times a fresh `1 + random(round(L/6), round(L/4))`, then with 2 times a fresh roll. The decompiler's output matches the IL. The `Canister<Material>` items exist in the 0.8.3.5 item dump (`CanisterTitanium` and the others), so the lookups succeed and the items are never used.
 
 Source: `CombatStationPartData.CreateLootTable`, `AbstractUnitData.CreateLootTable`, `AbstractUnitData.FilterLoot`, `LootRarity.SelectDroppableEquipment`, `LootManager.DropLoot`, `LootManager.DropRegularLoot`, `LootManager.AddKillExperience`, `GameMath.GetExperienceRewardValue`.
 
@@ -572,11 +638,13 @@ The exemption is the `noReputationLoss` flag on the part. The base penalty is `n
 
 #### Code: Ctrl-Click on a Friendly Station
 
-The third condition is that the location you are in is not a `SpaceStation`. The second condition is `SystemMapData.current.sector.quadrant > 1` in `AbstractUnit.CanBeForceFired`. The `SectorMapData` constants are `quadrantPrologue` 0, `quadrantFrontier` 1, `quadrantConquest` 2, `quadrantTestArena` 3 and `quadrantExpansion` 4 (Meridia) to 7 (north 5, south 6, middle 7). The tooltips call a `SectorMapData` a "Subsector" (`@MapStaticSector`) and the map button for a neighbouring quadrant reads "< Frontier" (`@MapFrontier`), "Conquest >" (`@MapConquest`) or the quadrant name with a ">" (`@MapQuadrantNext`, `MapWidget.GetQuadrantName`). `FactionStation` (Defense stations and economic outposts), `ConquestStation` (hubs), `EmbassyStation`, `PlayerStation`, `IndustryStation` (Industrial Outposts) and every guild or neutral station are `SpaceStation`s. When you attack a non-hostile part, the part's `playerHostile` flag is set.
+The third condition is that the location you are in is not a `SpaceStation`. The second condition is `SystemMapData.current.sector.quadrant > 1` in `AbstractUnit.CanBeForceFired`. The `SectorMapData` constants are `quadrantPrologue` 0, `quadrantFrontier` 1, `quadrantConquest` 2, `quadrantTestArena` 3 and `quadrantExpansion` 4 (Meridia) to 7 (north 5, south 6, middle 7). Quadrant 3 is the developer test arena: `TestArenaWorld.SetupWorld` creates its only sector, named `@MapPOITestArenaSector`, for the test-arena game that `MainMenuUI.StartTestArena` starts. The main-menu test arena button is only shown when `ConsoleScreen.ConsoleAvailable()` is true (a file named `console.enabled`). It has no map button: `GalaxyMapManager`, `GalaxyLayout`, `GalaxyRegionField`, `GalaxyRegionFieldBuilder` and `MapSearchContext` all filter out `quadrantTestArena`, and `GalaxyMapData` does not register a quadrant entry for it (`HasDefaultQuadrantName` has no case for it). The tooltips call a `SectorMapData` a "Subsector" (`@MapStaticSector`) and the map button for a neighbouring quadrant reads "< Frontier" (`@MapFrontier`), "Conquest >" (`@MapConquest`) or the quadrant name with a ">" (`@MapQuadrantNext`, `MapWidget.GetQuadrantName`). `FactionStation` (Defense stations and economic outposts), `ConquestStation` (hubs), `EmbassyStation`, `PlayerStation`, `IndustryStation` (Industrial Outposts) and every guild or neutral station are `SpaceStation`s. When you attack a non-hostile part, the part's `playerHostile` flag is set.
+
+Damage to a part whose faction is not your enemy calls `BasePoiManager.MarkFactionPlayerHostile` (from `AbstractUnit.TakeDamage`). It loops over `poi.GetUnits(includeInactive: true)`, which yields only `MapPointOfInterest.units` (guard ships, patrols, battle ships and standalone defensive turrets added with `AddUnit`) and the units of triggered payloads. Station parts are `CombatStationPartData` objects held in `CombatStationData.parts`, a persistable that `CombatStationData.SpawnParts` spawns through `BasePoiManager.AddToWorld(AbstractUnitData, ...)`, never through `MapPointOfInterest.AddUnit`. They are therefore not in that list. The only writers of `playerHostile` on a part are `CombatStationPart.OnMouseUpAsButton` (the clicked part) and the `CombatStationData.playerHostile` setter, which only `SalvageDeadDrop` calls.
 
 In 0.8.3.5, `CombatStationPart.OnMouseUpAsButton` gained a last branch: when the part is not a facility part, `MapPointOfInterest.current` is a `SpaceStation` with the same faction as the part, and `HudManager.CanDockAtStationHub` is true (`IsDockableHubPart`), the click calls `HudManager.DockAtStationHub`. `CombatStationPart.BuildTooltipCard` adds the `@TipHintDock` hint in the same case.
 
-Source: `LootManager.HandleKillReputation`, `LootManager.DropLoot`, `AbstractUnit.CanBeForceFired`, `AbstractUnit.TakeDamage`, `CombatStationPart.OnMouseUpAsButton`, `BasePoiManager.MarkFactionPlayerHostile`, `AbstractUnitData.IsEnemy`, `MapPointOfInterest.FinishSeedBuiltStation`.
+Source: `LootManager.HandleKillReputation`, `LootManager.DropLoot`, `AbstractUnit.CanBeForceFired`, `AbstractUnit.TakeDamage`, `CombatStationPart.OnMouseUpAsButton`, `BasePoiManager.MarkFactionPlayerHostile`, `BasePoiManager.AddToWorld`, `MapPointOfInterest.GetUnits`, `MapPointOfInterest.AddUnit`, `CombatStationData.SpawnParts`, `CombatStationData.playerHostile`, `AbstractUnitData.IsEnemy`, `MapPointOfInterest.FinishSeedBuiltStation`, `TestArenaWorld.SetupWorld`, `MainMenuUI.StartTestArena`, `GalaxyMapData.DefaultQuadrantName`, `GalaxyMapData.HasDefaultQuadrantName`, `GalaxyMapManager`, `MapSearchContext`.
 
 ### Code: Station Layouts
 
@@ -614,6 +682,8 @@ The gun platform variant is chosen at random (a roll above 0.666, between 0.333 
 - `PirateLarge` (pirate hideouts, the pirate station in the conquest world, Hard to Insane Station Offense and Defense missions): same two items plus the skill point template.
 - Station Offense and Defense missions pick the builder from the difficulty: Easy gets Easy 1 or 2, Normal the Medium station, Hard and above the Large station.
 
+`CombatStationFactory.CreateFromLayout` builds a station from a layout file (`CombatStationLayoutStorage.BuildStation`, which loads `Resources/StationLayouts/<name>`) and adds it to a location. Nothing calls it. The decompiled source of 0.8.3.4 and 0.8.3.5 has no other reference to the name. In the compiled `Assembly-CSharp.dll` it appears only as the method definition (no `call` or `callvirt` in any method, and no second occurrence of the name, which rules out reflection by string). No scene or asset file in the game's data folder contains the name, so no serialized event refers to it. The Station Builder loads layouts through `CombatStationLayoutStorage.BuildStation` directly. So none of the layouts in the table above come from a layout file.
+
 Source: `CombatStationFactory.CreateStationVariant`, `CombatStationFactory.DispatchStationVariant`, `CombatStationFactory.ResolveSizeVariant`, `CreateMediumStation`, `CreateLargeStation`, `CreateEasyStation1`, `CreateEasyStation2`, `CreateEscortLocation`, `CreateGunPlatform`, `CreateMediumSkirmishStation`, `CreatePirateHideoutStation`, `MapPointOfInterest.BuildStationFromSeed`, `StationBattle.GenerateMission`, `PoiWindowDressingHelper.AddGunPlatform`.
 
 ### Code: How Long Damage Lasts
@@ -633,8 +703,3 @@ Source: `CombatStationPart.BuildIndustrySection`, `IndustrialOutpost.UpdateActiv
 A facility (dungeon) station is built by `DungeonStationFactory`. Projectiles, rail cannons, torpedoes and manual drone targeting all ignore its parts (`IsProtectedFromWeaponFire`). Facility integrity is `live parts / total parts`. When a saved facility with integrity below 100% loads, each part other than the first is removed with probability `1 - integrity`. When the last Docking Pad or Docking Tunnel dies, the facility's `dockingDestroyed` flag is set.
 
 Source: `CombatStationPart.HandleDockingPartDestroyed`, `CombatStationPart.UpdateFacilityIntegrityFromCombat`, `CombatStationPart.CheckDungeonStationFullyDestroyed`, `DungeonData.isEnterable`, `DungeonLocationData.CollectOrDamagePart`, `DungeonStationFactory.Generate`, `TargetableUnit.IsProtectedFromWeaponFire`, `AbstractUnit.ApplyFacilityDamage`.
-
-### Code: Not Verified
-
-- Whether station parts are included in the unit list used by `MarkFactionPlayerHostile`.
-- `CombatStationFactory.CreateFromLayout` has no caller in the decompiled code.

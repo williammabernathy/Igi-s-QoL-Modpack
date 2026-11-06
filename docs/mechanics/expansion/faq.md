@@ -281,7 +281,7 @@ Details: [Your Fleets and Patrols in the Defense Number](empire-fleets.md#your-f
 - Keep the Defense number above about 1740. NPC fleets attack at 1.15 times the strength of the weakest station, and a lone NPC fleet is 2000 points. Assaults combine 2 or more fleets and can exceed that.
 - A defending fleet or patrol stops a raid from running unopposed.
 - If a flagship or fleet of yours is in the system, the battle turns live, and the fight then depends on the ships alone.
-- War effort missions for the owner's faction would add 250 to 700 Defense at most. Whether they apply to systems you hold is `(not verified)`.
+- War effort missions do not help here. They never apply to systems you hold.
 
 Details: [Defending a System You Hold](empire-fleets.md#defending-a-system-you-hold).
 
