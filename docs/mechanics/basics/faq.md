@@ -1,6 +1,6 @@
 # Common Questions
 
-Short answers to questions players ask about the systems you meet from the start of a new game: damage, ship stats, enemy strength, loot, combat stations and boarding. Each answer ends with a link to the section with the full numbers and how they were read from the code. The code was read from game version 0.8.3.4 and re-checked against 0.8.3.5, and the answers follow the 0.8.3.5 code. Values stored in the game's assets (weapons, armor, aspects, skill trees, crew, facilities and station parts) were compared with the 0.8.3.5 data dumps and match what was read from 0.8.3.4. The game's text strings were not re-read for 0.8.3.5. Terms are explained in the [glossary](glossary.md).
+Short answers to questions players ask about the systems you meet from the start of a new game: damage, ship stats, enemy strength, loot, credits, combat stations and boarding. Each answer ends with a link to the section with the full numbers and how they were read from the code. The code was read from game version 0.8.3.4 and re-checked against 0.8.3.5, and the answers follow the 0.8.3.5 code. Values stored in the game's assets (weapons, armor, aspects, skill trees, crew, facilities and station parts) were compared with the 0.8.3.5 data dumps and match what was read from 0.8.3.4. The game's text strings were not re-read for 0.8.3.5. Terms are explained in the [glossary](glossary.md).
 
 ## Damage
 
@@ -350,6 +350,46 @@ To earn XP from kills, you need enemies close to your level. A higher ship rank 
 
 Details: [XP Rewards](scaling.md#xp-rewards).
 
+## Credits
+
+### What Is the Best Way to Earn Credits at My Level?
+
+Nearly every payout is a credit factor times 100 times 2^(L/14), where L is usually the level of the place, not yours. So the ranking stays the same as you level, and a source only drops out when a better one opens:
+
+| Level | Best source |
+|---|---|
+| 5-15 | Facility runs with every locked room opened (a level-10 Derelict Colony Ship averages 58,000 credits), then Ship Capture missions from level 10 |
+| 16-37 | Dungeon Assault missions, which pay the mission and the Pirate Base's own caches |
+| 40+ | Signal Trap bosses (a credit factor of 300-499, about 1 million credits at level 60), with facility runs to collect Signal Fragments |
+
+Missions with an enemy faction also gain the Escalation bonus (up to +150%) and up to +40% from reputation. Ship kills pay little: one level-60 Bounty Hunt mission equals about 47 kills' worth of credit drops.
+
+Details: [What Pays Best at Your Level](credits.md#what-pays-best-at-your-level) and [Every Source at a Glance](credits.md#every-source-at-a-glance).
+
+### Does Escalation Raise All Credits?
+
+No. It raises mission credits only, and only on missions with an enemy faction, plus Bounty, Patrol and Industrial Ops credits. Courier, Mine Ore, Deliver Crafted Goods, Trader and Trade Materials missions never get it. Facility caches, Signal Trap bosses, kill drops and sales are not affected.
+
+Details: [Reputation and Escalation Bonuses](credits.md#reputation-and-escalation-bonuses).
+
+### Should I Refine Ore or Sell It Raw?
+
+Refine it from level 23. Ore loses 1% of its sell price per level above 10, down to 60% at level 50. Refined canisters keep their full value, so refined ore sells for 0.7 of the ore's value after the 10% refinery fee, against 0.48 raw at level 50 and above. Better still, an Ore Trader at a bar pays 3 times the ore's value.
+
+Details: [Ore and Refining](credits.md#ore-and-refining) and [Bar Patron Orders](credits.md#bar-patron-orders).
+
+### Is Opening Locked Containers Worth the Credits?
+
+Not in credits alone. Opening one with credits costs a credit factor of 50 at the box's level, and the credits inside average 81% of that. The equipment, blueprints and other contents have to make up the rest. Opening with a Key for opening Locked Containers costs nothing, so use keys first (the game does this for you).
+
+Details: [Locked Containers](credits.md#locked-containers).
+
+### Do ECHO's Missions Pay Well?
+
+No. A mission ECHO runs on Autopilot pays 0.33 of the normal credits with the Prompt Engineering skill "Automated Negotiations", and half that without it, and ECHO only takes Easy missions (Normal with "Risk & Reward"). Autopilot also skips half of the credit drops from kills.
+
+Details: [Missions ECHO Runs for You](credits.md#missions-echo-runs-for-you).
+
 ## Combat Stations
 
 ### What Do the Parts of a Combat Station Do?
@@ -360,7 +400,7 @@ Only Defense Platforms shoot. Every other part is a hull target with loot.
 |---|---|
 | Station Core | Always drops credits. It must be destroyed for the station to count as destroyed. A Station Defense mission asks you to protect it. |
 | Energy Field | A hull target that drops loot. It does nothing else. |
-| Refinery | A hull target that drops loot (ore, canisters, blueprints). |
+| Refinery | A hull target that drops loot (ore and blueprints). The ore is the system's surface ore and core ore. |
 | Cargo Dock | A hull target that drops loot (credits and refined parts). |
 | Docking Pad, Docking Tunnel | Hull targets that drop loot. They hold the docking points, which matter only for boardable facilities. |
 | Connector | A hull target that drops a little loot. It is never required for the station to count as destroyed. |
@@ -385,7 +425,7 @@ Details: [What Counts as Destroyed](stations.md#what-counts-as-destroyed) and [W
 
 ### How Much HP Does a Station Part Have?
 
-Hull, armor and shield are each built as (base HP + the HP of equipped modules) x a multiplier. The base hull values are:
+Hull, armor and shield are each built as base HP x a module multiplier x a multiplier. The Hull, Shield Generator or Armor module supplies the module multiplier (about x20 to x28 for a Small module at level 60). Modules do not add flat HP. The base hull values are:
 
 - Connector: 315 or 735.
 - Core, Cargo Dock and docking parts: 900.
@@ -399,7 +439,7 @@ The multiplier is the Rookie ship rank (0.7) x an HP balance curve x an NPC base
 |---|---|---|---|---|---|---|
 | Combined multiplier | 0.70 | 0.83 | 1.22 | 1.81 | 3.20 | 5.73 |
 
-The context multiplier is x10 for a boardable facility and x1 for every other mission, skirmish and pirate station, and faction outposts. Stations in war-zone systems are far tougher. That is covered by the [Conquest stage](../conquest/README.md), which opens at level 28. The modules add HP on top of the base values, so treat the number on the tooltip as the true value and these base values as a minimum.
+The context multiplier is x10 for a boardable facility and x1 for every other mission, skirmish and pirate station, and faction outposts. Stations in war-zone systems are far tougher. That is covered by the [Conquest stage](../conquest/README.md), which opens at level 28. The module multiplier comes on top of the base values and these multipliers, so treat the number on the tooltip as the true value.
 
 Details: [How Tough a Part Is](stations.md#how-tough-a-part-is) and [Context Multiplier](stations.md#context-multiplier).
 

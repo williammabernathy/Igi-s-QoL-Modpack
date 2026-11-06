@@ -1,6 +1,6 @@
 # The Control Story Line
 
-This page covers the Umbral Reach: its control row and how it spreads, the Umbral Hacking Tool, the puppeteers' station, and every exception the Umbral transponder makes to the early rules. It is a spoiler for the Umbral story line, which opens as part of the reward for your faction's first Conquest mission (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed. Anything not confirmed in code is marked "(not verified)".
+This page covers the Umbral Reach: its control row and how it spreads, the Umbral Hacking Tool, the puppeteers' station, and every exception the Umbral transponder makes to the early rules. It is a spoiler for the Umbral story line, which opens as part of the reward for your faction's first Conquest mission (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed.
 
 Terms are in the [late-game glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -108,7 +108,7 @@ Changes [Ways to slow a faction](../conquest/faction-economy.md#ways-to-slow-a-f
 
 ## In the Game Code
 
-This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, search the decompiled source for the method or field named here. Anything not confirmed in code is marked `(not verified)`.
+This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, search the decompiled source for the method or field named here.
 
 ### Code: The Control Row and Its Spread
 

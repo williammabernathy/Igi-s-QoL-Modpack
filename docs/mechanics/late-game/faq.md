@@ -20,7 +20,7 @@ Details: [Gates](README.md#spoiler-gates).
 
 ### Spoiler: How Do I Wake the Dormant Raider Faction or Open the Closed Sector?
 
-I don't know. In versions 0.8.3.4 and 0.8.3.5 the only thing that wakes Malcyte or opens Meridia is the debug console, and it works only once the expansion is unlocked. The code has no other caller. How either one happens in a normal game is "(not verified)".
+You can't, in a normal game. In versions 0.8.3.4 and 0.8.3.5 the only thing that wakes Malcyte or opens Meridia is the debug console, and it works only once the expansion is unlocked. No story mission, dialogue, save load or game asset does either, so Malcyte stays dormant and Meridia stays closed.
 
 Details: [Gates](README.md#spoiler-gates).
 
@@ -94,13 +94,13 @@ You can't attack it because the Meridia sector allows no stations. Malcyte hold 
 
 You also can't claim or order anything in the quadrant around it while it is closed. The game answers "This system is closed to you for now." That answer also comes before the "nothing to besiege" one. The quadrant is open only to Malcyte, their war ally Meridia's Chosen and, outside the Meridia sector itself, the Darkspace Compact.
 
-The game also treats jump gates into the quadrant, and into the Meridia sector from outside it, as closed, and it sells no Jump Gate Pass for them. Whether they physically stop your travel is "(not verified)". How the quadrant opens in a normal game is also "(not verified)".
+The game also treats jump gates into the quadrant, and into the Meridia sector from outside it, as closed, and it sells no Jump Gate Pass for them. Those gates are locked from the start and do stop your travel. In a normal game nothing opens the quadrant, so it stays closed.
 
 Details: [The closed quadrant](closed-sector-story.md#the-closed-quadrant) and [Your options in the closed sector](closed-sector-story.md#your-options-in-the-closed-sector).
 
 ### Spoiler: Can Anyone Build an Economic Outpost in the Closed Sector?
 
-No. A Meridia system is not a valid site for an economic outpost, so no faction builds one there. That means Meridia's Chosen and Malcyte yards can't be in Meridia.
+No. A Meridia system is not a valid site for an economic outpost, so no faction builds one there. That means Malcyte, which owns only Meridia systems, has no yard. Meridia's Chosen also owns systems outside Meridia, so its yard can stand there.
 
 Details: [No economic outposts in the closed sector](closed-sector-story.md#no-economic-outposts-in-the-closed-sector).
 

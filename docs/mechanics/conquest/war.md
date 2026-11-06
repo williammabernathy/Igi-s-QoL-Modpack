@@ -1,6 +1,6 @@
 # War Zone and Battles
 
-This page covers the Conquest war as the Conquest Map shows it. It describes the war zone and the kinds of system in it, what the Defense number on a system tooltip is made of, what war effort does, how battles and sieges run and end, what capture and abandonment do, how NPC (non-player character) factions pick fights and raids, and what each fleet label on the map means. The war opens with the level 28 story step described in [Conquest](README.md). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Quoted in-game wording comes from the game's English text table, which was read in 0.8.3.4 and not re-read for 0.8.3.5. Anything not confirmed in code is marked (not verified). The last section, "In the Game Code", holds the class and method names behind each claim.
+This page covers the Conquest war as the Conquest Map shows it. It describes the war zone and the kinds of system in it, what the Defense number on a system tooltip is made of, what war effort does, how battles and sieges run and end, what capture and abandonment do, how NPC (non-player character) factions pick fights and raids, and what each fleet label on the map means. The war opens with the level 28 story step described in [Conquest](README.md). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Quoted in-game wording comes from the game's English text table, which was read in 0.8.3.4 and not re-read for 0.8.3.5. The last section, "In the Game Code", holds the class and method names behind each claim.
 
 Terms and abbreviations are explained in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -45,7 +45,7 @@ Defense = station firepower term
 station firepower term = max(250 x m, min(firepower, 700 x m) x structure fraction) x war effort multiplier + sector flat bonus
 ```
 
-`m` here is the sector's station-defense multiplier and the flat bonus is a sector bonus. Nothing in versions 0.8.3.4 or 0.8.3.5 creates either one, so in a standard game m = 1 and the flat bonus is 0 (not verified for old saves).
+`m` here is the sector's station-defense multiplier and the flat bonus is a sector bonus. Nothing in versions 0.8.3.4 or 0.8.3.5 creates either one, so in a standard game m = 1 and the flat bonus is 0. Sector bonuses are part of the save file, so a save that already lists such a bonus on a sector keeps it. The game removes one only from your player sector, which it turns into a safe sector when the save loads.
 
 The station term uses the firepower of the system's hub and of every Defense station of the same owner that is not wrecked, each scaled by m. Parts score as follows. Destroyed parts (HP at 0 with damage taken) are skipped:
 
@@ -79,7 +79,7 @@ Each faction Defense station holds a garrison, a group of warships stationed in 
 | Garrison ships | 3 | 4 | 5 | 6 | 8 |
 | Garrison budget (points) | 270 | 405 | 540 | 720 | 900 |
 
-For each slot, the game picks the biggest warship that costs at most the budget divided by the number of ships (90 to 120 points). A full garrison therefore costs at most its budget. How close it gets depends on the ship catalog (not verified). The garrison counts for a system's Defense in full, summed across every Defense station in it. Ships lost from a garrison are restocked by warships built at a Construction Yard (a faction station that builds warships); see [faction-economy](faction-economy.md). An older mechanism in which combat strength drains into garrisons never fires in this version.
+For each slot, the game picks the biggest warship that costs at most the budget divided by the number of ships (90 to 120 points). A full garrison therefore costs at most its budget. How close it gets depends on the hulls the faction owns, because the pick is the largest own hull at or under the per-ship budget. Stellar and Luminate each own a 100-point hull, so their garrisons use 100-point ships from tier 2 (400 of 405 points at tier 2, 500 of 540 at tier 3, 800 of 900 at tier 5), and Luminate's 120-point Exemplar fills tier 4 (720 of 720). At tier 1 their largest hull under the 90-point budget is 40 points, so a tier-1 garrison costs 120 of 270. Kolyatov and the Darkspace Compact have no hull between 80 and 180 points, so they stop at 80 points a ship (640 of 900 at tier 5). The garrison counts for a system's Defense in full, summed across every Defense station in it. Ships lost from a garrison are restocked by warships built at a Construction Yard (a faction station that builds warships); see [faction-economy](faction-economy.md). An older mechanism in which combat strength drains into garrisons never fires in this version.
 
 A defending fleet counts if it belongs to the owner's faction, is in the system, is not traveling, and is set to join defense. NPC fleets always are. In the systems you hold, the number also gets a term for your patrol ships and a fleet mix bonus on your own fleets. Both unlock with Beyond the Front ([Your fleets and patrols in the Defense number](../expansion/empire-fleets.md#your-fleets-and-patrols-in-the-defense-number)).
 
@@ -123,7 +123,7 @@ Every owned system has a control level of 0 (unowned), 1 or 2. It rises by 1 at 
 
 Apart from the Military Outpost, the only other thing that uses the control level is the tie-break that decides which system is a faction's headquarters: garrison strength first, then resident fleet points, then control level.
 
-The game's text table calls this value only "Control", but no code shows that text. The text table also holds "Tenuous", "Contested" and "Secure" (`ConquestSystemStatus0` to `2`), which look like names for the three levels. No code shows them either, and what they were meant for is not verified. "Control level" on this page is a plain name for the stored number, not a label the game shows.
+The game's text table holds the word "Control" (`SystemCardControl`) and "Tenuous", "Contested" and "Secure" (`ConquestSystemStatus0` to `2`), which look like names for the three levels. The game's code never reads any of these text keys, and no scene or prefab refers to them, so the game shows none of them. "Control level" on this page is a plain name for the stored number, not a label the game shows.
 
 In the code: [Control Level](#code-control-level).
 
@@ -152,7 +152,7 @@ Once an hour, when the "Conquest Update" countdown on the galaxy map runs out (3
 | Level with it, or 1 to 3 levels below it | +1, with a 50% chance |
 | 4 or more levels below it | none |
 
-Levels never go down. A system settles at about 4 levels above your effective level. At 3 levels above you it still has a 50% chance to step up, and at 4 levels above you it stops. Frontier systems only rise this way after a hidden switch is flipped. The only thing I found that flips it is a debug command, and the switch is saved with the game. I did not verify whether story events also flip it.
+Levels never go down. A system settles at about 4 levels above your effective level. At 3 levels above you it still has a 50% chance to step up, and at 4 levels above you it stops. Frontier systems only rise this way after a hidden switch is flipped. Only a debug command flips it, and the switch is saved with the game. No story event, mission or scene sets it, so in a normal game Frontier systems do not rise this way.
 
 In the code: [How System Levels Rise](#code-how-system-levels-rise).
 
@@ -443,7 +443,7 @@ In the code: [Settling and Unrest](#code-settling-and-unrest).
 
 Destroying the conquest hub of an owned war-zone system abandons it. In practice this means you are flying at the station when its last part dies. The Empire Log says "Lost control of {system} - its station was destroyed." and the notice reads "{faction} lost {system} - the system is unclaimed".
 
-The system becomes unowned and remembers the faction that abandoned it. Its control level and war effort reset, and the headquarters flag drops. The code does not check whether the system is a headquarters here, so destroying a headquarters hub abandons it (not verified in play). A simulated siege that ends in Captured does not go through this path. In your player sector, the system goes back on sale instead ([Your empire](../expansion/your-empire.md)).
+The system becomes unowned and remembers the faction that abandoned it. Its control level and war effort reset, and the headquarters flag drops. The code does not check whether the system is a headquarters here, so destroying a headquarters hub abandons it. The faction then names a new headquarters at once from the systems it still owns, if it has any (see "Control Level"). A simulated siege that ends in Captured does not go through this path. In your player sector, the system goes back on sale instead ([Your empire](../expansion/your-empire.md)).
 
 Every fight at the system ends at once, and the system goes to whoever comes first:
 
@@ -614,7 +614,7 @@ In the code: [Reputation Cost of Destroying Stations](#code-reputation-cost-of-d
 
 ## In the Game Code
 
-Everything above was read from the decompiled code of version 0.8.3.4 (not from in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Names are written as `Class.Method` or `Class.field`; to check a claim, search the decompiled source for the name. Claims the code does not settle are marked `(not verified)`. The conquest update is `Conquest.DoConquestTick`; the hourly economy tick is `ConquestFleetPlanner.Tick`.
+Everything above was read from the decompiled code of version 0.8.3.4 (not from in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Names are written as `Class.Method` or `Class.field`; to check a claim, search the decompiled source for the name. The conquest update is `Conquest.DoConquestTick`; the hourly economy tick is `ConquestFleetPlanner.Tick`.
 
 ### Code: The War Zone and the Kinds of System
 
@@ -646,7 +646,7 @@ StationFirepower = bound(profile.firepower) + sectorFlatBonus
 bound(fp)        = max(250*m, min(fp, 700*m) * structureFraction) * warEffortMultiplier
 ```
 
-`m` is the sector StationDefense multiplier and `sectorFlatBonus` the sector flat bonus. No code in 0.8.3.4 or 0.8.3.5 creates a StationDefense sector bonus (only SafeSector is created, in `ConquestWorld.CreateSafeSectorBonus`), so in a standard game `m = 1` and the flat bonus is 0 `(not verified for old saves)`.
+`m` is the sector StationDefense multiplier (`StationDefense.GetSectorDefenseMultiplier`, which multiplies the matching `SectorBonus` entries through `SectorMapData.GetBonusMultiplier`) and `sectorFlatBonus` the sector flat bonus (`StationDefense.GetSectorDefenseFlat`). No code in 0.8.3.4 or 0.8.3.5 creates a StationDefense sector bonus (only SafeSector is created, in `ConquestWorld.CreateSafeSectorBonus`), so in a standard game `m = 1` and the flat bonus is 0. Sector bonuses are saved in the sector's `bonuses` array and read back by `SectorMapData.LoadBonuses`, so a save that already lists a StationDefense bonus keeps it. The only code that removes one is `GamePatch.MakePlayerSectorSafe`, which strips the StationDefense bonuses from the player sector and adds SafeSector.
 
 The station term uses a profile summed over the system's hub and every non-wrecked Defense station of the same owner, each scaled by `m`. `sizes` is the sum over the platform's turret slots of `max(1, size)` with Small = 1, Medium = 2, Large = 3. While a hub siege (the `StationSiege` stage) is running, `structureFraction` is the siege's remaining station hull fraction; outside a siege, or during a Defense station stage, it is 1.
 
@@ -698,7 +698,7 @@ gap > 3             -> +2
 gap <= -4           -> +0
 ```
 
-Frontier systems are included only after the `frontierLevelsRise` flag is set. The only caller of `StartFrontierLevelRise` I found is the debug console; the flag is saved with the game. Whether story events also set it was not verified.
+Frontier systems are included only after the `frontierLevelsRise` flag is set. The only caller of `StartFrontierLevelRise` is the debug console (`ConsoleScreen.RaiseFrontierLevels`). The method name appears once in the game assembly and in none of the asset files, so no story event, mission or scene sets the flag. It is written to the save only when set and read back on load.
 
 Source: `Conquest.UpdateSystemLevels`, `Conquest.RaiseTowardPlayer`, `Conquest.DoConquestTick`
 
@@ -865,7 +865,7 @@ Source: `ConquestSystem.StartSettling`, `ConquestSystem.isInUnrest`, `Conquest.T
 
 #### Code: Unowned and Abandoned Systems
 
-Destroying the conquest hub of an owned war-zone system calls `ConquestOwnership.OnStationDestroyed`, which calls `ConquestOwnership.Abandon` (not for a hub flagged `rebuildOnLeave`). `Abandon` stores `abandonedBy`, clears the headquarters flag, control level and war effort, posts the log line `EmpireLogSystemAbandoned` and the notice `ConquestSystemAbandoned`, then calls `ReturnToSale` for a player-sector system and `HandOverToClaimant` for any other. The code does not check whether the system is a headquarters, so destroying a headquarters hub abandons it `(not verified in play)`. A simulated siege that ends in `Captured` does not go through this path.
+Destroying the conquest hub of an owned war-zone system calls `ConquestOwnership.OnStationDestroyed`, which calls `ConquestOwnership.Abandon` (not for a hub flagged `rebuildOnLeave`). `Abandon` stores `abandonedBy`, clears the headquarters flag, control level and war effort, posts the log line `EmpireLogSystemAbandoned` and the notice `ConquestSystemAbandoned`, then calls `ReturnToSale` for a player-sector system and `HandOverToClaimant` for any other. The code does not check whether the system is a headquarters, so destroying a headquarters hub abandons it. `Abandon` ends with `Conquest.OnSystemAbandoned`, which runs `UpdateFactionStandings`, and `EnsureSingleHeadquarters` gives the faction a new headquarters from its remaining systems. A simulated siege that ends in `Captured` does not go through this path.
 
 `HandOverToClaimant` reads `SystemClaim.GetRefusal`. It is null when claiming is unlocked, the system is an open war-zone system with no owner that is not player sector or free territory, and your flagship or an idle Empire Fleet is there. `BattleManager.EndBattlesAt(systemGuid, besiegerClaims)` stops every battle at the system (outcome `Aborted`, attackers set idle) and returns the lead attacker of the first `StationSiege` (hub siege) battle whose faction `CanConquer` (is not a raider). With a refusal, `besiegerClaims` is true: that battle ends as `Captured` and `ConquestOwnership.Claim` gives that fleet's faction the system at once. With no refusal, `SystemClaim.OfferClaim` opens an offer (`IsClaimableOnArrival` is false while it is open), and `Decline` calls `Claim` for the besieger if the system is still unowned and its fleet still has ships there. Every stopped battle calls `RequestReplan`, so `LivingUniverse.RequestMilitaryPlanning` queues its attacker, defender, target owner and supporter factions for `PlanBetweenTicks` on the next update.
 

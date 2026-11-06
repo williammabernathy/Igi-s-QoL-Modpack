@@ -42,6 +42,8 @@ In the code: [What the Faction Overview Shows](#code-what-the-faction-overview-s
 
 A yard slot that frees up is therefore refilled within about ten minutes, not an hour. Economic outposts and taxes move on the hourly economy tick.
 
+Story seconds are game seconds. They stop while the game is paused, which popups, dialogues and the station builder do, and they do not pass on the main menu.
+
 In the code: [When Things Happen](#code-when-things-happen).
 
 ## Where a Faction's Wealth Comes From
@@ -150,7 +152,7 @@ In the code: [Order of Builds](#code-order-of-builds).
 
 A system is a valid site when all of these hold:
 
-- It belongs to the faction and is not a reserved slot. A reserved slot is a placeholder system left over in older saves: the game does not draw it, search it or give it stations, and the save-upgrade step that runs when an older save is loaded removes it. What the placeholders were for is not shown in the code `(not verified)`.
+- It belongs to the faction and is not a reserved slot. A reserved slot is a placeholder system that only exists in saves made before version 0.8.3: the game does not draw it, search it or give it stations, and the save-upgrade step that runs when an older save is loaded removes it. Nothing in the game creates reserved slots any more, and the code gives them no role besides being skipped or deleted.
 - It is in the Frontier or Conquest quadrant, or in an expansion quadrant ("Quadrant" is the game's name for the large map regions).
 - It holds fewer than 2 stations of any kind (Defense stations and stations of other owners count, and so do this faction's builds already under construction there).
 - Pocket systems only accept economic outposts if they are a "Motherlode" or a "Graveyard" system. A pocket system is a small side system that hangs off a host system through a locked jumpgate. The game names them "{name}, the Motherlode" (mining), "{name} Graveyard" (salvage), "Warzone {name}" and "Dread Port {name}"; the last two never take faction outposts.
@@ -219,7 +221,9 @@ A hull's price is set by its size category, not by its point value: 50 wealth pe
 
 Size 3 hulls are the cheapest per point, and size 5 and 6 hulls are the most expensive. The size 7 and 8 rows exist in the price table, but the only size-7 entries in the ship prefabs are two wrecks (point value 999,999), and there is no size-8 prefab. Build times for work-bay ships (mining and salvage ships for a station's work bay; 60 s at size 1 up to 420 s at size 8) apply to work-bay ships only, not warships.
 
-A fleet of 2000 points costs roughly 40,000 to 130,000 wealth at full price depending on its mix.
+One more size-1 combat hull, the Acolyte Voidweaver, has a point value of 2,500 and is not in the table. No faction can build it: the warship picker skips hulls that are flagged as not for random spawning, and the Voidweaver carries that flag. Only a story mission uses it, as the enemy of one Umbral mission.
+
+A fleet of 2000 points costs about 43,000 wealth at full price if every ship is a 140-point size 3 hull (3,000 each, the cheapest per point in the table) and about 130,000 if every ship is the 460-point size 6 hull (30,000 each, the dearest per point). Any real mix costs between the two. A faction picks from its own hulls first, so the figure differs by faction.
 
 In the code: [Cost](#code-cost).
 
@@ -302,7 +306,7 @@ Defense station garrison size depends on the station's tier:
 | 4 | 6 | 720 | 120 |
 | 5 | 8 | 900 | 112 |
 
-A garrisoned ship is also refitted to the current NPC fleet level, in one 300 s pass, once the garrison's point-weighted average level is 3 or more levels below the NPC fleet level. No refit runs while the system is besieged. The refit only raises ship levels. It adds no ships. A separate way of refilling garrisons without a build exists, but it only receives anything from a system's combat strength, which the game never raises above 0. In practice, garrisons are refilled only by the yard queue.
+A garrison can also be refilled without a build, but that path only receives anything from a system's combat strength. Nothing in the game raises combat strength above 0: the game only ever sets it to 0, and a save from before version 0.8.3 has it reset to 0 when it loads. In practice, garrisons are refilled only by the yard queue.
 
 In the code: [What Gets Queued, in Priority Order](#code-what-gets-queued-in-priority-order).
 
@@ -422,7 +426,9 @@ Reputation is charged per ship. Reputation levels are bands of a number: Wary is
 | Opening fire on a ship that was not hostile to you (a force-attack) | -1,000 |
 | Destroying that ship afterwards, if your standing with the faction was Wary or better (reputation above -5,000) | -3,500 more |
 
-A faction that is already your enemy, meaning at war with you or reputation below -500, cannot be force-attacked in the first place. Its ships are already hostile, so a plain click targets them. Intercepting an enemy faction therefore costs nothing in reputation. Each convoy ship is checked separately. The kill penalty applies only while your standing is Wary or better when the ship dies. Once earlier penalties push you to Hostile or worse (-5,000 or lower), a force-attacked kill no longer costs the extra -3,500. Whether shooting one ship flags its escorts is not verified.
+A faction that is already your enemy, meaning at war with you or reputation below -500, cannot be force-attacked in the first place. Its ships are already hostile, so a plain click targets them. Intercepting an enemy faction therefore costs nothing in reputation. The kill penalty is checked for each ship and applies only while your standing is Wary or better when that ship dies. Once earlier penalties push you to Hostile or worse (-5,000 or lower), a force-attacked kill no longer costs the extra -3,500.
+
+Shooting one ship of a convoy or fleet can flag the rest of its faction's ships in the encounter, depending on your standing. The -1,000 is charged when you click the ship. If you are still at -500 or better after it (you had +500 or more before), the first shot that lands marks every ship of that faction in the encounter as force-attacked. Each of those kills then costs -3,500 while you are Wary or better, and the flagged ships cost no further -1,000. If the -1,000 pushes you below -500, the faction is already your enemy when the shot lands, so only the ship you clicked counts as force-attacked. The other ships are plain enemies, and killing them costs nothing.
 
 A delivery is on the map for only 30 + 30 x jumps seconds, so catching it means being near the yard already. A cargo run lasts as long as the route's travel time.
 
@@ -511,15 +517,6 @@ In the code: [Ways to Slow a Faction](#code-ways-to-slow-a-faction).
 - Draining wealth with raids is capped at 1.5 hours of income, and only matters when wealth is the faction's limit. A faction at the cap with a full yard can be wealth-rich and yard-limited.
 - Yardless Corsairs and Canisec do not queue anything, so destroying their stations does not slow them. Their rebuilds are only limited by wealth. Taking away their raid income and taxes is the only lever.
 
-## Not Verified
-
-- Whether a system's combat strength is ever raised elsewhere (for example by a mod patch or an asset-driven path). In the decompiled code it is only reset to 0, which makes the separate garrison refill path dead.
-- One size-1 combat hull in the prefab data carries a point value of 2,500. The size table leaves it out, and the code section below names it.
-- Whether attacking one ship of an intercepted convoy flags the whole convoy as hostile, which would change the reputation cost per convoy.
-- Whether story time runs while the game is paused or on a menu. Build times are in story seconds.
-
-In the code: [Not Verified](#code-not-verified).
-
 ## In the Game Code
 
 This part holds the code detail behind the player sections above: class and method names, field names, timers as written in the code, raw formulas and the `Source:` lines. The code was read in version 0.8.3.4 and compared with the 0.8.3.5 source. To check a claim, find the named method in a decompiler (the `Source:` line of each section lists them) and read it. Ship point values come from the `SpaceShip.pointValue` field of the ship prefabs, which the runtime dumps of 0.8.3.4 and 0.8.3.5 both list with the same values.
@@ -542,11 +539,13 @@ Source: `FactionOverviewContent.BuildShipyardSection`, `FactionOverviewContent.S
 
 | Cadence | What runs |
 |---|---|
-| Every story second | `FactionEconomy.ProgressConstructions`: economic outpost builds, warship builds, warship deliveries, work-bay ship orders |
+| Every story second | `FactionEconomy.ProgressConstructions`: economic outpost builds, warship builds, warship deliveries, work-bay ship orders. The story clock is `GamePlayer.UpdateStorytellers(Time.deltaTime)`, called from `GameplayManager.Update` |
 | Every 3600 s (hourly economy tick, not shown in the game) | `GrowWealth` pays taxes, then each faction's planner runs: `FactionEconomicPlanner.Tick` (economic outposts), `ConquestFleetPlanner.Tick` (warship queue, Defense stations, fleet orders), `GreatGateReinforcement.Tick` (home subsidy and Great Gate reinforcement). Then Canisec patrols, then the ledger hour closes |
 | Every 3600 s (conquest update, a separate timer) | `Conquest.DoConquestTick`: recalculates Area Conquered, rebuilds damaged stations and counts down settling. The galaxy map shows it as the "Conquest Update" countdown card |
 | Every 600 s | `ConquestFleetPlanner.PlanBetweenTicks`: the warship queue is refilled and fleet orders reassigned |
 | After battles | `LivingUniverse.RequestMilitaryPlanning` queues the attacker, defender, target owner and supporter factions; `PlanRequestedFactions` runs `PlanBetweenTicks` for them on the next update |
+
+`Time.deltaTime` is scaled by `Time.timeScale`, which `GameTimeScale.Apply` sets to 0 while `GameTimeScale.paused` is true. `GameManager.Pause` sets it, and `AlertPopup`, `DialogueManager`, `StationBuilderPopup` and other popups call it. `GamePlayer.Update` is only called from `GameplayManager.Update`, so no story time passes outside a loaded game, including on the main menu.
 
 Source: `LivingUniverse.StoryUpdate`, `LivingUniverse.RunHourlyTick`, `LivingUniverse.TickMilitaryPlanning`, `LivingUniverse.RecordPowerSamples`, `FactionLedger.CloseHour`, `Conquest.DoConquestTick`
 
@@ -599,7 +598,7 @@ Source: `FactionEconomicPlanner.ChooseNextStationType`, `FactionEconomicPlanner.
 
 #### Code: Where Economic Outposts Go
 
-A Construction Yard is never built in a war-zone system. The one exception, `CanHostHeadquartersYard`, is never true because `ConquestWarTuning.HeadquartersYardFactions` is empty. Every yard sits in home space, meaning outside the war zone. `IsValidSite` also requires `ConquestScope.AllowsStations` (not the Meridia sector), `IsInScopeQuadrant` (Frontier, Conquest or an expansion quadrant) and `FactionStation.CountIn(system) + CountPendingIn < 2`. `CountIn` counts every `FactionStation` in the system, whatever its type or owner. Pocket systems (`SystemMapData.pocketSystem`, set by the `Motherlode`, `DerelictFleet`, `FactionSkirmish` and `PirateHideout` storytellers and by `SandboxWorld.AddSideContentSystemToSystem`, which links the pocket to its host with a locked jumpgate) pass `PocketSystemAllowsFactionStation` only for `Motherlode` and `DerelictFleet`, whose names come from `PocketSystemMotherlode` and `PocketSystemDerelictWreck` ("Graveyard"). `isReservedSlot` systems fail `IsValidSite` and are skipped by the map drawing code; the save-upgrade step `GamePatch.RemoveReservedSlots` deletes them when `GamePlayer` loads an older save.
+A Construction Yard is never built in a war-zone system. The one exception, `CanHostHeadquartersYard`, is never true because `ConquestWarTuning.HeadquartersYardFactions` is empty. Every yard sits in home space, meaning outside the war zone. `IsValidSite` also requires `ConquestScope.AllowsStations` (not the Meridia sector), `IsInScopeQuadrant` (Frontier, Conquest or an expansion quadrant) and `FactionStation.CountIn(system) + CountPendingIn < 2`. `CountIn` counts every `FactionStation` in the system, whatever its type or owner. Pocket systems (`SystemMapData.pocketSystem`, set by the `Motherlode`, `DerelictFleet`, `FactionSkirmish` and `PirateHideout` storytellers and by `SandboxWorld.AddSideContentSystemToSystem`, which links the pocket to its host with a locked jumpgate) pass `PocketSystemAllowsFactionStation` only for `Motherlode` and `DerelictFleet`, whose names come from `PocketSystemMotherlode` and `PocketSystemDerelictWreck` ("Graveyard"). `isReservedSlot` systems fail `IsValidSite` and are skipped by the map drawing code. Nothing assigns `isReservedSlot = true`: the field is only read from save data (`SectorMapData` and `SystemMapData` loading) and copied by `ConquestAreaTiling`. The save-upgrade step `GamePatch.RemoveReservedSlots` deletes them. It runs in the `GamePlayer.ApplyVersionPatches` block for saves below version 0.8.3 (through `ApplyGalaxyLayoutPatches`) and from the debug console.
 
 Source: `FactionEconomicPlanner.IsValidSite`, `FactionEconomicPlanner.CompareSites`, `FactionEconomicPlanner.IsInScopeQuadrant`, `FactionEconomicPlanner.CanHostHeadquartersYard`, `ConquestWarTuning.HeadquartersYardFactions`
 
@@ -633,7 +632,11 @@ cost = FactionShipPricePoints[size] * 50 wealth
 
 The point values in the size table are read from the `SpaceShip.pointValue` field of the ship prefabs, and the values for the combat hulls of each size match the dumps of both versions. The bay-ship build times in `FactionShipPricing` (60 s at size 1 up to 420 s at size 8) apply to work-bay ships only, not warships.
 
-Source: `FactionShipPricing.GetCost`, `GameMath.FactionShipPricePoints`, `FactionShipPricing.GetBuildSeconds`; point values read from the `SpaceShip.pointValue` field of the ship prefabs
+A fleet of 2000 points costs `2000 / 140 * 3000 = 42,857` at full price with only the 140-point hulls (`Siren Overseer`, `Tribune`) and `2000 / 460 * 30000 = 130,435` with only the 460-point size 6 hull (`Absolution`); these are the extreme wealth-per-point values among the size-1 to size-6 combat hulls in the `SpaceShip` dump.
+
+`AcolyteVoidweaver` is a size-1 combat hull with `pointValue` 2500, so it is not in the size table. Its prefab has `noRandomSpawn` set. `Faction.GetNPCShipTypes` and `Faction.GetArmedIndustrialTypes` both skip ships with that flag, and every warship pick goes through one of them (`Faction.GetWarshipTypes`, used by `FactionGarrison.PickShip` and `ConquestFleetComposer`). No faction yard, garrison or fleet can build it. `UmbralMissions` creates it as a Champion-rank guard for the Smugglers in an Umbral story mission (`GamePatch` lists it under `ConquestUmbral8b`). `NB-15` and `SL-406` carry the same flag.
+
+Source: `FactionShipPricing.GetCost`, `GameMath.FactionShipPricePoints`, `FactionShipPricing.GetBuildSeconds`, `Faction.GetWarshipTypes`, `Faction.GetNPCShipTypes`, `Faction.GetArmedIndustrialTypes`; point values read from the `SpaceShip.pointValue` field of the ship prefabs
 
 #### Code: Build Time
 
@@ -682,7 +685,7 @@ For each yard with a free slot (`QueueWarshipBuilds`), `ChooseBuildOrder` takes 
 3. Founding. Spare fleet slots times 2000 points, minus what is already queued, capped at 2000 points for the ship.
 4. Top-up. The fleet furthest below 100% of its target.
 
-A separate path refills garrisons without a build (`FactionGarrison.Repair`), but it only receives anything from a system's `combatStrength`, which the code never raises above 0, so in practice garrisons are refilled only by the yard queue.
+A separate path refills garrisons without a build (`FactionGarrison.Repair`), but it only receives anything from a system's `combatStrength`. The field is only ever assigned 0 (`ConquestOwnership.Abandon`, `ConquestOwnership.ReleaseToIndependent`, the siege capture in `BattleManager`, the debug console) and is otherwise only saved and loaded with the system. `GamePatch.ResetConquestCombatStrength` zeroes it for saves below version 0.8.3. Nothing adds to it, so `Conquest.DrainCombatStrengthIntoGarrisons` never reaches `Repair` and garrisons are refilled only by the yard queue.
 
 Source: `ConquestFleetPlanner.ChooseBuildOrder`, `ConquestFleetPlanner.ChooseGarrisonToSupply`, `ConquestFleetPlanner.ChooseFleetToSupply`, `ConquestFleetPlanner.GetFoundingPointsNeeded`, `FactionGarrison.GetWantedCount`, `FactionGarrison.PickShip`, `FactionGarrison.ProgressRefit`, `ConquestFleetComposer.PickReinforcement`, `FactionShipCollection.GetUnit`, `Conquest.DrainCombatStrengthIntoGarrisons`
 
@@ -743,9 +746,11 @@ The target freezes (`interceptHeld`) while the encounter runs.
 
 Reputation is charged per ship (`InterceptForceAttack`, `LootManager`). The no-penalty case for an enemy faction is read from `CanForceAttack`, which returns false for ships that are already player enemies.
 
+`InterceptForceAttack.Attack` sets `unitData.playerHostile` on the clicked ship and charges -1,000 only if that flag was not already set. `InterceptRules.AppliesKillPenalty` needs the dying ship's own `playerHostile` flag (`WasForceAttacked`) and a standing of Wary or better. The first damage that lands runs `AbstractUnit.TakeDamage`. If the target's faction is not an enemy of the player at that moment and the damage comes from the player's faction, it calls `BasePoiManager.MarkFactionPlayerHostile`, which sets `playerHostile` on every unit of that faction in the point of interest's unit list (`poi.GetUnits(includeInactive: true)`). `InterceptManager.PlaceEncounterShips` puts every encounter ship in that list through `InterceptZone.AddEncounterShip`, so a convoy's or fleet's ships are all marked. Marked ships skip the -1,000 in `Attack` and each carries the -3,500 kill penalty. `Faction.IsEnemy` is true when the faction is at war with you or the reputation is below -500, and it is read after the -1,000 was charged. When the -1,000 leaves the reputation below -500, the call is skipped and only the clicked ship is flagged.
+
 A delivery is on the map for only `30 + 30 x jumps` seconds (the delivery travel time), so the intercept window is that long.
 
-Source: `InterceptManager.TryIntercept`, `InterceptManager.LockOn`, `InterceptManager.ReleaseTarget`, `InterceptManager.OnShipDestroyed`, `WarshipDeliveryInterceptTarget.OnShipDestroyed`, `WarshipDeliveries.Lose`, `WarshipDeliveryMapIcon.isInterceptable`, `CargoRouteInterceptTarget.OnShipDestroyed`, `CargoRoute.LoseActiveRun`, `CargoRoute.ConvoyShipsFor`, `InterceptRules.RollCargoDrop`, `InterceptRules.AppliesKillPenalty`, `InterceptForceAttack.Attack`, `InterceptForceAttack.CanForceAttack`
+Source: `InterceptManager.TryIntercept`, `InterceptManager.LockOn`, `InterceptManager.PlaceEncounterShips`, `InterceptManager.ReleaseTarget`, `InterceptManager.OnShipDestroyed`, `InterceptZone.AddEncounterShip`, `WarshipDeliveryInterceptTarget.OnShipDestroyed`, `WarshipDeliveries.Lose`, `WarshipDeliveryMapIcon.isInterceptable`, `CargoRouteInterceptTarget.OnShipDestroyed`, `CargoRoute.LoseActiveRun`, `CargoRoute.ConvoyShipsFor`, `InterceptRules.RollCargoDrop`, `InterceptRules.AppliesKillPenalty`, `InterceptRules.WasForceAttacked`, `InterceptForceAttack.Attack`, `InterceptForceAttack.CanForceAttack`, `AbstractUnit.TakeDamage`, `BasePoiManager.MarkFactionPlayerHostile`, `Faction.IsEnemy`
 
 ### Code: Raids and the Economy
 
@@ -779,10 +784,3 @@ Source: `FactionStationDestruction.OnDestroyedByPlayer`, `FactionStationDestruct
 ### Code: Ways to Slow a Faction
 
 Row 5 income is the `Trade` or `Sales` income of the run. The reputation cost of row 6 is the same as for a yard (`FactionStationDestruction`). Rows 1 and 3 use the intercept reputation costs from the "Intercepting Deliveries and Convoys" section. In "What Does Not Work", the fleet slots in use are `fleetSlotsUsed`.
-
-### Code: Not Verified
-
-- Whether `combatStrength` is ever raised elsewhere (for example by a mod patch or an asset-driven path). In the decompiled code it is only reset to 0, which makes `FactionGarrison.Repair` dead.
-- One size-1 combat hull in the prefab data (`AcolyteVoidweaver`) carries a point value of 2,500. It is left out of the size table. Whether any faction can build it is not verified.
-- Whether attacking one ship of an intercepted convoy flags the whole convoy as hostile, which would change the reputation cost per convoy.
-- Whether story time runs while the game is paused or on a menu. Build times are in story seconds.

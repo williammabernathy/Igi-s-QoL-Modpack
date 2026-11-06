@@ -99,13 +99,13 @@ Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mi
 
 ### Spoiler: Is the Faction Choice Permanent?
 
-Not by the game's own words. The "Sector Control" mission description says "The choice of faction is not permanent", and the confirmation dialog says "You are not permanently bound to them and may work with others later." The game only shows a yes/no prompt, so how you would change the choice is not verified. The game always tracks your standing with all conquest factions and accepts any of the three 30% missions as the requirement for what follows.
+Yes, in practice. The "Sector Control" mission description says "The choice of faction is not permanent", and the confirmation dialog says "You are not permanently bound to them and may work with others later." But nothing in the game undoes the choice. Your first yes finishes "Sector Control", so the other representatives offer nothing more, and the faction's missions cannot be abandoned. What stays open is standing: the game tracks your standing and contribution with all conquest factions, so you can keep running missions for the others. If you answer no at the prompt, nothing starts and you can ask again, so decide before you say yes.
 
 Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission).
 
 ### Spoiler: Can I Work on More Than One Faction's Chain?
 
-Yes. You can start the missions for more than one faction, and finishing any one of the three 30% missions is enough. The cheapest route is whichever of your factions the war favors. Check each faction's Area Conquered row on the Factions tab (press E on the galaxy map) before you commit.
+No. Only one faction's chain can be started. Your first yes at an embassy finishes "Sector Control" and adds that faction's first mission, and nothing else adds another faction's first mission. Finishing the 30% mission of the faction you chose is what unlocks "Beyond the Front". You can still run missions for the other factions, which raises your standing and contribution with them, but that does not start their chain. Check each faction's Area Conquered row on the Factions tab (press E on the galaxy map) before you say yes.
 
 Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission), [A Step-by-Step Plan](sector-control.md#a-step-by-step-plan).
 
@@ -238,7 +238,7 @@ The system is abandoned and has no owner, and every fight there ends. Who gets i
 2. With claiming unlocked, you are offered the claim first instead, and no fleet can claim the system while the offer is open. If you decline, the system goes to the hub siege's lead attacker if that fleet is still there. If you take it, the old owner's Defense stations are destroyed and your reputation with that faction drops to Hostile.
 3. Otherwise the system stays unowned until a fleet lands. A fleet already flying in to attack it claims it on landing. In every other case, each faction that owns a neighbouring system sends the fleet that its planning picks at its next planning pass (within 600 s, or at once for a faction that was in a fight there), and the first to land wins. A fleet already standing in the system claims it at once, so the old owner's idle fleet there takes it straight back. A faction with no frontline looks at any open system.
 
-When a fleet claims a system that a different faction abandoned, that faction's Defense stations in it are destroyed first. In your player sector the system goes back on sale instead. The game does not check for a headquarters here, so destroying a headquarters hub abandons it (not verified in play).
+When a fleet claims a system that a different faction abandoned, that faction's Defense stations in it are destroyed first. In your player sector the system goes back on sale instead. The game does not check for a headquarters here, so destroying a headquarters hub abandons it.
 
 Hub parts have 20 times the normal hit points (30 times at a headquarters). Part kills cost 5 reputation each if you are at -500 or lower with the owner, and 100 each otherwise. A hub is not a faction station, so the -5,000 station penalty does not apply.
 
@@ -333,13 +333,13 @@ Killing a warship delivery removes one ship for good. The faction paid for it wh
 
 Killing a cargo convoy cuts the run's trade or sales income in proportion to the ships you kill. Killing every ship ends the run with no income booked, and the next run goes out normally. That is minor next to taxes. Each convoy ship drops 40% to 60% of each non-ammo cargo stack as loot under your name.
 
-If the faction is not your enemy, opening fire costs -1,000 reputation per ship and each kill another -3,500 while you are Wary or better. If it is already your enemy, it costs nothing.
+If the faction is not your enemy, opening fire costs -1,000 reputation for the ship you click, and each kill of a force-attacked ship costs another -3,500 while you are Wary or better. If you had +500 or more with the faction, the first hit flags every ship of that faction in the encounter, so the others cost only the -3,500 per kill. Below +500 the -1,000 already makes the faction your enemy, and its other ships cost nothing. If it is already your enemy, nothing costs anything.
 
 Details: [Intercepting Deliveries and Convoys](faction-economy.md#intercepting-deliveries-and-convoys).
 
 ### Do My Embassy Missions Help a Faction?
 
-Yes. Each one adds 80,000 to 120,000 wealth to that faction (halved for idle ones), and the faction gets it whether or not you later fight it. A full 2000-point fleet costs roughly 40,000 to 130,000 at full price (not verified). The wealth helps rebuild a lost fleet at once. It does nothing for a faction whose fleets are already full, and it does not raise the fleet cap of Kolyatov, Stellar or Luminate. To slow a faction, stop doing its embassy missions.
+Yes. Each one adds 80,000 to 120,000 wealth to that faction (halved for idle ones), and the faction gets it whether or not you later fight it. A full 2000-point fleet costs about 43,000 to 130,000 at full price, depending on the ships. The wealth helps rebuild a lost fleet at once. It does nothing for a faction whose fleets are already full, and it does not raise the fleet cap of Kolyatov, Stellar or Luminate. To slow a faction, stop doing its embassy missions.
 
 Details: [Your Embassy Missions Feed the Faction](faction-economy.md#your-embassy-missions-feed-the-faction), [Ways to Slow a Faction](faction-economy.md#ways-to-slow-a-faction).
 
@@ -368,7 +368,7 @@ Yard tiers run 1 to 5. Tier 1 has 1 slot at 1.0 times the build time, and tier 5
 3. Founding a new fleet.
 4. Topping up the fleet furthest below 100%.
 
-A finished ship flies for 30 s plus 30 s per jump. A fleet of 2000 points costs roughly 40,000 to 130,000 at full price (not verified).
+A finished ship flies for 30 s plus 30 s per jump. A fleet of 2000 points costs about 43,000 to 130,000 at full price, depending on the ships.
 
 Details: [How Warships Get Built](faction-economy.md#how-warships-get-built), [Construction Yards](faction-economy.md#construction-yards).
 
@@ -454,7 +454,7 @@ Details: [Defense Stations and Garrisons](war-stations.md#defense-stations-and-g
 | Destroying a faction station (not a hub) while you hit it live, if a part you hit was among those destroyed | -5,000, or -1,000 if you are already Hostile or worse |
 | Killing parts of a hub | 5 each if you are at -500 or lower with the owner, 100 each otherwise |
 | Destroying a Construction Yard | -5,000, or -1,000 if already Hostile or worse |
-| Force-attacking a ship of a faction that is not your enemy | -1,000 per ship, then -3,500 more per kill while you are Wary or better |
+| Force-attacking a ship of a faction that is not your enemy | -1,000 for the ship you click, then -3,500 more per kill while you are Wary or better. A hit can flag the faction's other ships in the encounter, which then skip the -1,000 |
 
 A station destroyed only by the simulation costs you nothing. No station or part cost applies while a Decoy Transponder is active ([the gate](../late-game/README.md)). A full Large conquest layout has 45 parts, so wrecking a friendly station can cost several thousand reputation in part kills before the 5,000 for the station itself.
 

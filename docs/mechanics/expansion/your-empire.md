@@ -1,6 +1,6 @@
 # Your Empire
 
-This page covers what changes for the war zone and for you once you accept "Beyond the Front". The topics are the expansion sectors, buying and claiming systems, your capital, Empire Level and upkeep, your own stations, reputation from capture and claim, and the faction economy once the expansion war is open. It applies from the moment you accept that mission, which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Anything the code does not confirm is marked `(not verified)`.
+This page covers what changes for the war zone and for you once you accept "Beyond the Front". The topics are the expansion sectors, buying and claiming systems, your capital, Empire Level and upkeep, your own stations, reputation from capture and claim, and the faction economy once the expansion war is open. It applies from the moment you accept that mission, which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten.
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md). Your fleets are covered in [Empire Fleets](empire-fleets.md).
 
@@ -146,7 +146,7 @@ In the code: [Player Stations](#code-player-stations).
 
 ### War Effort on Your Own Systems
 
-War effort from a mission counts for a system only if the mission's source faction owns that system. Whether it applies to systems you hold is `(not verified)`. What war effort does is explained in [war](../conquest/war.md#war-effort).
+War effort never applies to a system you hold. A mission raises war effort only at its source station's system when the mission's source faction owns that system, and at that faction's neighbouring systems. The game gives a mission its war effort reward only when the station's faction is one of the ten conquest factions, and you are not one of them, so missions from a system you hold carry no such reward. What war effort does is explained in [war](../conquest/war.md#war-effort).
 
 In the code: [War Effort on Your Own Systems](#code-war-effort-on-your-own-systems).
 
@@ -300,7 +300,9 @@ Source: `StationSiteRules.GetRefusal`, `StationClaim.GetCooldownSeconds`, `Playe
 
 #### Code: War Effort on Your Own Systems
 
-War effort from a mission counts for a system only if the mission's source faction (`mission.sourceFaction`) owns it. Whether it applies to systems you hold is `(not verified)`.
+`ConquestWarEffort.Apply(mission, step)` is called only from `ConquestStrength.OnComplete`, and only when the reward's `wealth` is 0. `MissionGenerator.AddRewards` adds a `ConquestStrength` reward only when `Conquest.conquestFactions.Contains(faction)` (the source station's faction) and the source POI is an `EmbassyStation` or `ConquestStation`. `Conquest.conquestFactions` holds the ten conquest factions (Kolyatov, Stellar, Luminate, Mining Guild, Salvage Guild, Marauders, Meridia's Chosen, Darkspace Compact, Stranded, Malcyte), so `Faction.player` is not in it. `MissionGenerator` sets `Mission.sourceFaction` from `poi.faction`; the only missions with `Faction.player` as source are tutorial missions. `Apply` raises the bonus at the mission's system only if `missionSystem.faction == mission.sourceFaction`, and at neighbours only if their owner is that employer. The targeted-faction penalty also needs a conquest faction. A system you hold has `faction == Faction.player`, so none of these branches reaches it.
+
+Source: `ConquestWarEffort.Apply`, `ConquestWarEffort.GetMissionSystem`, `ConquestStrength.OnComplete`, `MissionGenerator.AddRewards`, `Conquest.conquestFactions`
 
 ### Code: Reputation
 

@@ -1,6 +1,6 @@
 # Beyond the Front
 
-This stage covers what opens once you accept the "Beyond the Front" mission: the expansion sectors, claiming and buying systems, your empire, and your own Empire Fleets. It needs captain level 60 and one finished 30% sector-control mission. Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Anything the code does not confirm is marked `(not verified)`.
+This stage covers what opens once you accept the "Beyond the Front" mission: the expansion sectors, claiming and buying systems, your empire, and your own Empire Fleets. It needs captain level 60 and one finished 30% sector-control mission. Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten.
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md).
 
