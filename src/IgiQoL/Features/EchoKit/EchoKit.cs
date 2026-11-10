@@ -163,18 +163,29 @@ public sealed class EchoKit : Feature
         }
         yield return CheckWreckTarget(ctx, ship);
 
+        // Earlier checks fire abilities (ShipStats/ability), so an untargeted one may be cooling down; its cooldown is
+        // cleared for the test and set back after, so the run leaves it as it found it.
         ActivatedAbility pick = null;
         foreach (var a in ship.GetActivatedAbilities())
-            if (!a.toggledAbility && a.isReady && a.targetType == AbilityTargetType.None) { pick = a; break; }
-        if (pick == null) ctx.Skip("ability", "the flagship has no ready untargeted ability");
+            if (!a.toggledAbility && a.targetType == AbilityTargetType.None && (pick == null || a.isReady && !pick.isReady)) pick = a;
+        if (pick == null) ctx.Skip("ability", "the flagship has no untargeted ability");
         else
         {
-            SetRule(Abilities, pick.identifier, KitWhen.InCombat, 50);
-            int used = UseAbilities(ship, hot);
-            string d = $"{Translation.Translate(pick.displayName)} ({pick.identifier}): used={used} ready after={pick.isReady} cooldown={pick.cooldownRemaining:0}";
-            if (used == 1 && !pick.isReady) ctx.Pass("ability", d);
-            else ctx.Fail("ability", d);
-            SetRule(Abilities, pick.identifier, KitWhen.Off, 0);
+            float cooling = pick.cooldownRemaining;
+            pick.cooldownRemaining = 0f;
+            try
+            {
+                SetRule(Abilities, pick.identifier, KitWhen.InCombat, 50);
+                int used = UseAbilities(ship, hot);
+                string d = $"{Translation.Translate(pick.displayName)} ({pick.identifier}){(cooling > 0f ? $", cooldown {cooling:0} s cleared first" : "")}: used={used} ready after={pick.isReady} cooldown={pick.cooldownRemaining:0}";
+                if (used == 1 && !pick.isReady) ctx.Pass("ability", d);
+                else ctx.Fail("ability", d);
+            }
+            finally
+            {
+                SetRule(Abilities, pick.identifier, KitWhen.Off, 0);
+                if (cooling > 0f) pick.cooldownRemaining = cooling;
+            }
         }
 
         // A deployable from cargo goes out, then comes back with the pick-up.
@@ -202,6 +213,10 @@ public sealed class EchoKit : Feature
         cargo.Add(deployable, 1);
         SetRule(Deployables, deployable.identifier, KitWhen.InCombat, 50);
         nextDeploy = 0f;
+        // With AlsoWithoutEcho and PickUpTurrets on, the 0.5 s tick collects deployed turrets once the ship has been
+        // out of a fight for 5 s, which took this one back within the 1.5 s wait. Restart that quiet clock so the
+        // measurement below sees the deploy alone.
+        quietSince = -1f;
         var used2 = Deploy(ship, hot);
         yield return new WaitForSeconds(1.5f);
         DefensiveTurret placed = null;

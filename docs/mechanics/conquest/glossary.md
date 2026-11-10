@@ -2,7 +2,7 @@
 
 This page covers the terms introduced by the Conquest stage, which opens at level 28 with the Sector Control missions and the embassies. Earlier terms are in the [basics glossary](../basics/glossary.md); terms that come later are on later stage pages.
 
-Wording is read from the game's translation strings and the decompiled interface code of version 0.8.3.4, not from play. The interface code was compared with the 0.8.3.5 source. The translation strings were not re-read for 0.8.3.5. The table columns are explained in the basics glossary. The code names for each term are in the last section, "In the Game Code".
+Wording is read from the game's translation strings and the decompiled interface code of version 0.8.3.4, not from play. The interface code was compared with the 0.8.3.5 and 0.8.3.7 sources. The war footing, war fleet, Faction overview and contribution strings were re-read from the 0.8.3.7 text table; the other translation strings were last read in 0.8.3.4. The table columns are explained in the basics glossary. The code names for each term are in the last section, "In the Game Code".
 
 Pages: [war](war.md), [sector control](sector-control.md), [war stations](war-stations.md), [faction economy](faction-economy.md).
 
@@ -33,8 +33,9 @@ In the code: [Places and Stations](#code-places-and-stations).
 | Term used here | What the game shows | Meaning |
 |---|---|---|
 | Defense row | "Defense" row in the system card's conquest section | The strength the defenders put into a siege round: station firepower plus garrison ships plus defending fleets. It is 0 for an unowned system. |
-| next-battle strength | The game never shows this term. | What the factions' fleet planning compares attackers against. With Defense stations in the system, it is the weakest Defense station's strength (its own firepower, its garrison and all defending fleets). Otherwise it is the full Defense number. Fleets already traveling to relieve the system are added, and it is 0 for an unowned system. A fleet or assault attacks at 1.15 times this figure. You can estimate it: with no Defense station it equals the Defense row, and with Defense stations it is usually lower. The exception is a settling system, where the row halves the station profile but a Defense station's own strength is not halved. |
-| war effort | "Your war effort" row ("+10% firepower (2h 59m)"); mission reward "+10% Station firepower, -10% for {faction} next system"; the "ECHO The Conqueror" skill text | A multiplier on a system's station firepower, raised by Conquest missions you complete and lasting 3 hours from the last one. |
+| next-battle strength | The game never shows this term. | What the factions' fleet planning compares attackers against. With Defense stations in the system, it is the weakest Defense station's strength (its own firepower, its garrison and all defending fleets). Otherwise it is the full Defense number. Fleets already traveling to relieve the system are added, and it is 0 for an unowned system. A fleet or assault attacks when its strength (points times 1 + its faction's war footing bonus) is at least 1.15 times this figure. You can estimate it: with no Defense station it equals the Defense row, and with Defense stations it is usually lower. The exception is a settling system, where the row halves the station profile but a Defense station's own strength is not halved. |
+| war footing | Faction overview rows "War Footing", "Footing Contribution", "War Fleets", "Next War Fleet"; mission reward "+12 Contribution"; the "ECHO The Conqueror" skill text | A bonus of up to +25% on a faction's fleets, garrisons and defending fleets, and on the Combat Power, Drone Power and Torpedo Power of its units in live conquest battles. It comes from the contribution of the Conquest missions you complete at the faction's war-zone hubs (2,000 contribution is the full bonus) and clears 3 hours after the last mission. It replaced the per-system "war effort" in 0.8.3.7. |
+| war fleet | "War Fleet" fleet type; names such as "Spearhead Battlegroup I"; the notice "{faction}: your contribution raised {fleet} at {system}." | A temporary 1,500-point fleet that a faction gets for every 250 contribution (at most 2 at once, 3 hours each). It never retreats, uses no fleet slot and is never topped up. |
 | Control | The game has a "Control" text line that the system card never shows. "Tenuous", "Contested" and "Secure" also exist as text, but no code shows them. | An internal counter from 0 to 2. The pages mostly ignore it and call it the "control level", which is not a game label. |
 | Area Conquered | "Area Conquered" (Faction overview, Conquest section) | A conquest faction's share of all Conquest-sector systems, refreshed at each conquest update and whenever a system is abandoned. |
 | Your Contribution | "Your Contribution" (Faction overview) | The total contribution you have earned with a faction. It sets your conquest rank. |
@@ -62,7 +63,7 @@ In the code: [Conquest Map](#code-conquest-map).
 | points (in battles) | "strength" on fleet cards ("{n} ships, {m} strength", "STRENGTH") | Fleet strength, garrison size and damage in simulated battles are all counted in points, the ship value described in the [basics glossary](../basics/glossary.md) and [scaling](../basics/scaling.md). |
 | Combat Power (faction) | "Combat Power" tile on the Faction overview | The sum of a faction's fleet points. Not the same as the Combat Power ship stat; see the [stats table](../basics/glossary.md#stats-and-combat-abbreviations) in the basics glossary. |
 | fleet | "Fleets Fielded" (Faction overview), "Battlefleet", "Battlegroup" names | A group of ships that moves and fights together on the map. NPC fleets aim for 2000 points. |
-| fleet cap | The game does not show this term. | How many fleet slots a faction may fill. For the three majors it rises with war-zone systems held. For Mindus Holdings, Steel Vultures and Stranded it follows the embassy wealth you deliver. |
+| fleet cap | The game does not show this term. | How many fleet slots a faction may fill. For the three majors it rises with war-zone systems held. For Mindus Holdings, Steel Vultures and Stranded it follows the embassy wealth you deliver. War fleets use no slot. |
 | garrison | "joined a station garrison" (build log) | The warships held by an NPC Defense station. They count toward Defense. |
 | hull rating, hull edge | "hull rating" (fleet card tooltip), "Hull edge {x} vs {faction} fleets nearby" | The hull rating is how upgraded a ship's hull is. The hull edge is the swing of up to 15% in strength between two sides' hull ratings in simulated battles. |
 | warship delivery | "{ship} flying to its fleet at {system}" (Faction overview) | A newly built ship flying from a yard to its fleet or garrison. You can intercept it. |
@@ -108,10 +109,10 @@ In the code: [Faction Economy](#code-faction-economy).
 
 | Term used here | What the game shows | Meaning |
 |---|---|---|
-| Conquest mission | missions from a hub or embassy mission board; reward line "+x% Station firepower" | A mission at a war-zone hub that raises war effort, or at an embassy that gives wealth. |
+| Conquest mission | missions from a hub or embassy mission board; reward line "+N Contribution" | A mission at a war-zone hub that adds its contribution to the faction's war footing, or at an embassy that gives wealth (and no war footing). Both kinds also add to Your Contribution. |
 | idle mission | "Idle Conquest missions" (skill text) | A mission your ship AI ECHO accepts and completes for you while you are away. |
-| contribution | "Your Contribution" (Faction overview); "Run missions for {faction}" step; "Wealth your missions brought {n}: x of 1,500,000" | Three related counters. The first is your conquest standing with a faction, earned by Conquest missions. The second is the 10 points the first sector-control mission asks for. The same mission amounts also add to your standing, but they only count toward the 10 while that step is current. The third is the wealth your embassy missions delivered, which you need to join a small faction's war. |
-| conquest rank | "Intern" to "Sector Partner" (Stellar), "Conscript" to "Hero of the People's Glory" (Kolyatov), "Seeker" to "Oracle's Chosen" (Luminate) and similar | Your title with one faction, from Your Contribution. Higher ranks unlock ships. There are six ranks, plus having no rank. |
+| contribution | "Your Contribution" (Faction overview); "Footing Contribution" (Faction overview); "Run missions for {faction}" step; "Wealth your missions brought {n}: x of 1,500,000" | Four related counters. The first is your conquest standing with a faction, earned by Conquest missions. The second is the 10 points the first sector-control mission asks for. The same mission amounts also add to your standing, but they only count toward the 10 while that step is current. The third is the faction's war footing counter, "Footing Contribution", fed only by Conquest missions at its war-zone hubs (ECHO's idle multiplier applies here and nowhere else). The fourth is the wealth your embassy missions delivered, which you need to join a small faction's war. |
+| conquest rank | "Intern" to "Sector Partner" (Stellar), "Conscript" to "Hero of the People's Glory" (Kolyatov), "Seeker" to "Oracle's Chosen" (Luminate) and similar | Your title with one faction, from Your Contribution. Higher ranks unlock ships and raise the item level of the gear in that faction's Conquest Shop. Since 0.8.3.7 that level is exact: the shop station's level plus 1, 2, 4, 6, 8 or 10 for ranks 1 to 6 (0.8.3.5 used the station level + 1 + rank squared, within one level). There are six ranks, plus having no rank. |
 | Vanguard Marks | "Vanguard Marks" | A currency from missions, used to buy ships. Pages write "marks". |
 | sector control mission | "Sector Control", "Hostile Takeover" (Stellar), "The People's Sector" (Kolyatov), "Harmony" (Luminate) | The mission that asks for 30% of the Conquest sector. The pages also call it "the 30% mission". |
 
@@ -121,7 +122,7 @@ In the code: [Missions and Standing](#code-missions-and-standing).
 
 | Term | What the game shows | Meaning |
 |---|---|---|
-| Combat Power, Drone Power, Torpedo Power (war effort) | "Combat Power", "Drone Power", "Torpedo Power" | War effort multiplies these three stats on conquest stations. The Faction overview's "Combat Power" tile is a different thing (a faction's total fleet points). |
+| Combat Power, Drone Power, Torpedo Power (war footing) | "Combat Power", "Drone Power", "Torpedo Power" | War footing multiplies these three stats on the units of a live conquest battle. The Faction overview's "Combat Power" tile is a different thing (a faction's total fleet points). |
 
 In the code: [Stats and Combat Abbreviations](#code-stats-and-combat-abbreviations).
 
@@ -135,7 +136,7 @@ In the code: [Stats and Combat Abbreviations](#code-stats-and-combat-abbreviatio
 ## Easily Confused Terms
 
 - Combat Power is both a ship stat and the Faction overview tile.
-- Contribution means your conquest standing, the 10-point mission step or embassy wealth.
+- Contribution means your conquest standing, the 10-point mission step, a faction's Footing Contribution or embassy wealth.
 - Rank means conquest rank, ship rank or Patrol Officer rank. Conquest ranks have faction-specific titles.
 - The word "tick" can mean the conquest update or the hourly economy tick. They are separate 3600 s timers, and fleet orders are also assigned on a third timer, the 600 s planning pass.
 - The game uses "war zone" in fleet messages, but the map shows no label for it.
@@ -145,7 +146,7 @@ In the code: [Stats and Combat Abbreviations](#code-stats-and-combat-abbreviatio
 
 ## In the Game Code
 
-The wording above comes from the translation strings (`resources.assets`, read in 0.8.3.4) and the decompiled interface code of version 0.8.3.4, compared with the 0.8.3.5 source. Each table below maps a term to the class, method, field or enum name that carries it, so you can search the decompiled source for it. Where the game shows a text key that has no visible text, the key is named here.
+The wording above comes from the translation strings (`resources.assets`, read in 0.8.3.4, with the war footing, war fleet, Faction overview and contribution keys re-read in 0.8.3.7) and the decompiled interface code of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources. Each table below maps a term to the class, method, field or enum name that carries it, so you can search the decompiled source for it. Where the game shows a text key that has no visible text, the key is named here.
 
 ### Code: Places and Stations
 
@@ -168,7 +169,8 @@ The wording above comes from the translation strings (`resources.assets`, read i
 |---|---|
 | Defense row | `SystemCardDefense`, `ConquestCombat.GetDefenseStrength` |
 | next-battle strength | `ConquestCombat.GetNextBattleStrength` |
-| war effort | `warEffortBonus`, `warEffortPenalty`, `warEffortMultiplier` |
+| war footing | `ConquestFactionStanding.warContribution` ("Footing Contribution"), `warFootingSeconds`, `warFootingBonus`, `WarFooting.GetMultiplier`, `WarFooting.GetJudgedStrength`, `ConquestWarContribution` |
+| war fleet | `ConquestFleet.isWarFleet`, `lifetimeHoursLeft`, `ConquestFactionStanding.warFleetProgress`, `WarFleets` (text keys `ConquestWarFleetTypeLabel`, `WarFleetArrived`) |
 | Control | `controlLevel` ("Control" is a text key that exists but the system card never shows it) |
 | Area Conquered | `currentConqueredPercentage` |
 | Your Contribution | `ConquestFactionStanding.playerContribution` |
@@ -231,10 +233,10 @@ Battle outcomes:
 
 | Term | Code name |
 |---|---|
-| Conquest mission | `ConquestStrength` reward |
+| Conquest mission | `ConquestStrength` reward (`MissionRewardContribution`); `ConquestWarContribution.Apply` for hub missions, `ConquestJoin.DeliverMissionWealth` for embassy missions |
 | idle mission | `mission.idle` |
-| contribution | `playerContribution`, `ConquestFleetStrength`, `joinWealth` |
-| conquest rank | `ConquestRank`, `GetConquestRankTranslation` |
+| contribution | `playerContribution`, `ConquestFleetStrength`, `warContribution`, `joinWealth` |
+| conquest rank | `ConquestRank`, `GetConquestRankTranslation`, `ConquestRankExtension.GetShopItemLevel` and `GetShopLevelBonus` (used by `SpaceStation.GenerateConquestShopInventory`) |
 | Vanguard Marks | `vanguardMarks`, item `VanguardMark` |
 | sector control mission | "Sector Control" is `ConquestThreeFactions`; `ConquestStellar2`, `ConquestKolyatov2`, `ConquestLuminate2` |
 
@@ -242,4 +244,4 @@ Battle outcomes:
 
 | Term | Code name |
 |---|---|
-| Combat Power, Drone Power, Torpedo Power (war effort) | `EquipStat.CombatPower`, `DronePower`, `TorpedoPower` |
+| Combat Power, Drone Power, Torpedo Power (war footing) | `EquipStat.CombatPower`, `DronePower`, `TorpedoPower` |

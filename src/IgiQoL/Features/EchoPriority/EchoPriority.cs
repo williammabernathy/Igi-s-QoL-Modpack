@@ -301,24 +301,36 @@ public sealed class EchoPriority : Feature
             ModWindow.Close();
         });
 
-        Autopilot autopilot = null;
-        foreach (var a in Resources.FindObjectsOfTypeAll<Autopilot>())
-            if (a.gameObject.scene.IsValid() && a.loadoutDropdown != null) { autopilot = a; break; }
+        // The game builds the Autopilot tab only while it's open; open it the way its ECHO tile does (Ship tab, page 2).
+        Autopilot autopilot = FindAutopilot();
+        var panel = Behaviour.UI.Side_Menu.SidePanel.instance;
+        if (autopilot == null && panel != null && player.autoPlayUnlocked)
+        {
+            panel.SwitchToTab(Behaviour.UI.Side_Menu.SidePanel.SideTabType.Ship, 2);
+            ctx.Cleanup(() => { if (Behaviour.UI.Side_Menu.SidePanel.instance != null) Behaviour.UI.Side_Menu.SidePanel.instance.CloseTab(); });
+            float until = Time.realtimeSinceStartup + 5f;
+            while ((autopilot = FindAutopilot()) == null && Time.realtimeSinceStartup < until) yield return null;
+            yield return null;
+        }
 
         SetList(new[] { EchoActivity.Combat, EchoActivity.MiningSurface });
         string detail = $"type={ap.preferredGameplayType} layer={ap.preferredTargetLayer}";
         bool fieldsOk = ap.preferredGameplayType == GameplayType.Combat && ap.preferredTargetLayer == TargetLayer.Both;
-        if (!fieldsOk) ctx.Fail("sync", detail);
-        else if (autopilot == null) ctx.Pass("sync", detail + " (dropdown not checked: no Autopilot tab in scene)");
-        else if (autopilot.loadoutDropdown.value == 5) ctx.Pass("sync", detail + " dropdown=5");
-        else ctx.Fail("sync", detail + $" dropdown={autopilot.loadoutDropdown.value} expected 5");
+        if (fieldsOk) ctx.Pass("sync", detail);
+        else ctx.Fail("sync", detail);
 
         if (autopilot == null)
         {
-            ctx.Skip("dropdown-to-list", "no Autopilot tab in scene");
+            string why = player.autoPlayUnlocked ? "the Autopilot tab didn't open" : "ECHO isn't unlocked in this save";
+            ctx.Skip("sync-dropdown", why);
+            ctx.Skip("dropdown-to-list", why);
         }
         else
         {
+            // The game's dropdown follows the list head: 5 is Combat in its option order.
+            if (autopilot.loadoutDropdown.value == 5) ctx.Pass("sync-dropdown", "dropdown=5 for Combat at the head");
+            else ctx.Fail("sync-dropdown", $"dropdown={autopilot.loadoutDropdown.value} expected 5 for Combat at the head");
+
             SetList(new[] { EchoActivity.Combat, EchoActivity.MiningSurface, EchoActivity.SalvageSurface });
             autopilot.loadoutDropdown.SetValueWithoutNotify(1);
             autopilot.ChangeLoadout();
@@ -329,6 +341,13 @@ public sealed class EchoPriority : Feature
 
         ModWindow.Open("echo");
         yield return ctx.Screenshot("window-echo");
+    }
+
+    private static Autopilot FindAutopilot()
+    {
+        foreach (var a in Resources.FindObjectsOfTypeAll<Autopilot>())
+            if (a.gameObject.scene.IsValid() && a.gameObject.activeInHierarchy && a.loadoutDropdown != null) return a;
+        return null;
     }
 }
 

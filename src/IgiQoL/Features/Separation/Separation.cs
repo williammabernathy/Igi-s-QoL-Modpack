@@ -86,43 +86,75 @@ public sealed class Separation : Feature
         var we = ShipSettings.Edit(wing.spaceShipData.guid);
         var wingBefore = we.separation;
         Vector2 home = flagship.rigidbody.position;
-        Vector2 pushDir = Vector2.zero;
+        // The steps below place the fleet ship, up to 300 u away; it goes back here afterwards, so later checks (the
+        // formation checks of ShipCollisions among them) don't start with it far off.
+        Vector2 wingHome = wing.rigidbody.position;
+        // Spots for the pair: where the flagship is, else 300 u off it on each side, for when other ships crowd it.
+        var spots = new[] { Vector2.zero, Vector2.right * 300f, Vector2.left * 300f, Vector2.up * 300f, Vector2.down * 300f };
+        Vector2 pushDir = Vector2.zero, pushAt = home;
         string crowd = "";
-        foreach (var dir in new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down })
+        foreach (var off in spots)
         {
-            crowd = SeparationPatches.Nearby(wing, flagship, home + dir * 0.5f, Gap.Value);
-            if (crowd.Length == 0) { pushDir = dir; break; }
+            Vector2 o = home + off;
+            if (off != Vector2.zero && SeparationPatches.Nearby(flagship, wing, o, Gap.Value).Length > 0) continue;
+            foreach (var dir in new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down })
+            {
+                string c = SeparationPatches.Nearby(wing, flagship, o + dir * 0.5f, Gap.Value);
+                if (c.Length == 0) { pushDir = dir; pushAt = o; break; }
+                if (crowd.Length == 0) crowd = c;
+            }
+            if (pushDir != Vector2.zero) break;
         }
-        if (pushDir == Vector2.zero) ctx.Skip("push", "other ships crowd the flagship: " + crowd);
+        if (pushDir == Vector2.zero) ctx.Skip("push", "other ships crowd the flagship here and 300 u off: " + crowd);
         else
         {
-            Vector2 start = home + pushDir * 0.5f;
+            flagship.transform.position = pushAt;
+            flagship.rigidbody.position = pushAt;
+            Vector2 start = pushAt + pushDir * 0.5f;
             wing.transform.position = start;
             wing.rigidbody.position = start;
             Physics2D.SyncTransforms();
             var push = SeparationPatches.ComputePush(wing, Gap.Value);
             float along = Vector2.Dot(push, pushDir), across = Mathf.Abs(Vector2.Dot(push, new Vector2(-pushDir.y, pushDir.x)));
-            string pushDetail = $"push=({push.x:0.00},{push.y:0.00}) wing at +0.5u {pushDir} of the flagship, along {along:0.00} across {across:0.00}, other ships near: {SeparationPatches.NearbyText(wing, flagship, start, Gap.Value)}";
+            string pushDetail = $"push=({push.x:0.00},{push.y:0.00}) wing at +0.5u {pushDir} of the flagship{(pushAt != home ? " (pair moved 300 u to a quiet spot)" : "")}, along {along:0.00} across {across:0.00}, other ships near: {SeparationPatches.NearbyText(wing, flagship, start, Gap.Value)}";
             if (along > 0.5f && across < along * 0.5f) ctx.Pass("push", pushDetail);
             else ctx.Fail("push", pushDetail);
+            flagship.transform.position = home;
+            flagship.rigidbody.position = home;
+            Physics2D.SyncTransforms();
         }
 
         // Apart: lined up side by side with a gap between the hulls, the bounding circles still overlap but the
-        // outlines don't, so there is no push.
+        // outlines don't, so there is no push. Other ships near the pair add pushes of their own; when the flagship's
+        // spot is crowded, the pair is moved 300 u away to a quiet spot for this step and the flagship put back after.
         wing.rigidbody.rotation = flagship.rigidbody.rotation;
         wing.transform.rotation = flagship.transform.rotation;
         float side = flagship.height + wing.height + Gap.Value + 1f;
         Vector2 up = flagship.transform.up;
-        Vector2 beside = home + up * side;
-        string apartCrowd = SeparationPatches.Nearby(wing, flagship, beside, Gap.Value);
-        if (apartCrowd.Length > 0)
+        Vector2 origin = home, beside = home + up * side;
+        string apartCrowd = "";
+        foreach (var off in spots)
         {
-            beside = home - up * side;
-            string otherSide = SeparationPatches.Nearby(wing, flagship, beside, Gap.Value);
-            if (otherSide.Length > 0) apartCrowd = apartCrowd + " / " + otherSide;
-            else apartCrowd = "";
+            Vector2 o = home + off;
+            string above = SeparationPatches.Nearby(wing, flagship, o + up * side, Gap.Value);
+            string below = above.Length == 0 ? "" : SeparationPatches.Nearby(wing, flagship, o - up * side, Gap.Value);
+            if (above.Length == 0 || below.Length == 0)
+            {
+                origin = o;
+                beside = o + (above.Length == 0 ? up : -up) * side;
+                apartCrowd = "";
+                break;
+            }
+            if (apartCrowd.Length == 0) apartCrowd = above + " / " + below;
         }
-        if (apartCrowd.Length > 0) ctx.Skip("apart", "other ships crowd the flagship's sides: " + apartCrowd);
+        bool moved = origin != home;
+        if (moved)
+        {
+            flagship.transform.position = origin;
+            flagship.rigidbody.position = origin;
+            Physics2D.SyncTransforms();
+        }
+        if (apartCrowd.Length > 0) ctx.Skip("apart", "other ships crowd the flagship's sides here and 300 u off: " + apartCrowd);
         else
         {
             wing.transform.position = beside;
@@ -140,7 +172,7 @@ public sealed class Separation : Feature
             // only at the pushed point, so following it would keep a ship on its ring turning forever.
             if (hullGap.isValid && hullGap.distance >= Gap.Value && apart == Vector2.zero)
             {
-                Vector2 inward = (home - beside).normalized;
+                Vector2 inward = (origin - beside).normalized;
                 Vector2 near = beside + inward * (hullGap.distance - (Gap.Value - 0.1f));
                 wing.transform.position = near;
                 wing.rigidbody.position = near;
@@ -155,6 +187,14 @@ public sealed class Separation : Feature
             }
             else ctx.Skip("settle", "no clean side-by-side placement: " + apartDetail);
         }
+        if (moved)
+        {
+            flagship.transform.position = home;
+            flagship.rigidbody.position = home;
+        }
+        wing.transform.position = wingHome;
+        wing.rigidbody.position = wingHome;
+        Physics2D.SyncTransforms();
 
         // Live: in the game's own physics step, the fleet ship's destination is its normal one plus the push.
         var targetModule = wing.targetProvider;
@@ -176,9 +216,17 @@ public sealed class Separation : Feature
         we.separation = true;
         string liveDetail;
         bool applied;
+        // Separation only works while a ship chases its target. A manual target alone leaves a fleet ship under a Hold,
+        // Move or formation order flying to its anchor (WingmanActions.RunCurrentOrder), as after a trip, so the check
+        // gives the game's Attack order (FleetCommands.IssueAttack, which runs WingmanActions.Chase) and puts the ship's
+        // own orders back afterwards.
+        var wingman = wing.autoActions as Source.SpaceShip.Auto.WingmanActions;
+        var orders0 = wingman != null ? new List<Source.SpaceShip.Auto.FleetOrder>(wingman.queuedOrders) : null;
+        string order0 = wingman == null ? "not a fleet ship" : wingman.currentOrder == null ? "none" : wingman.currentOrder.type.ToString();
         try
         {
             targetModule.SetManualTarget(enemy);
+            if (wingman != null) Behaviour.UI.Movement.FleetCommands.IssueAttack(new List<SpaceShip> { wing }, enemy, false);
             // The flagship may have moved toward its own target during the wait for enemies: place the wing now.
             Vector2 start = flagship.rigidbody.position + Vector2.right * 0.5f;
             SeparationPatches.Reset();
@@ -190,13 +238,19 @@ public sealed class Separation : Feature
             // Steered at the pushed point during ApplyThrust, with the game's own destination restored afterwards.
             applied = st != null && st.push.sqrMagnitude > 0.01f && (st.applied - (st.baseDestination + st.push)).sqrMagnitude < 0.0001f
                 && (wing.currentDestination - wing.ClampDestination(st.baseDestination)).sqrMagnitude < 0.0001f;
-            liveDetail = st == null
+            liveDetail = (st == null
                 ? $"no state (override={wing.overrideTarget.HasValue} hold={wing.holdPosition} target={(targetModule.priorityTarget != null)})"
-                : $"{wing.spaceShipData.GetShipName()}: push=({st.push.x:0.0},{st.push.y:0.0}) steered at {st.applied}, game destination {wing.currentDestination} kept";
+                : $"{wing.spaceShipData.GetShipName()}: push=({st.push.x:0.0},{st.push.y:0.0}) steered at {st.applied}, game destination {wing.currentDestination} kept")
+                + $"; order before {order0}, now {(wingman?.currentOrder != null ? wingman.currentOrder.type.ToString() : "none")}, stance {wing.spaceShipData.fleetStance}";
         }
         finally
         {
             targetModule.ResetCurrentTargets();
+            if (wingman != null)
+            {
+                wingman.ClearOrders();   // not StopOrders, which also moves the ship's idle anchor to where it is now
+                foreach (var o in orders0) wingman.GiveOrder(o, queue: true);
+            }
             we.separation = wingBefore;
             GamePlayer.current.waypoints.AddRange(route);
         }
@@ -205,33 +259,44 @@ public sealed class Separation : Feature
 
         // Own target: the game parks the ship on a ring around its target, so that target must not push it off the ring.
         // Wing placed half a unit from the enemy it is fighting, on a side where nothing else crowds it: the old
-        // code pushed it straight away from the enemy, the new code leaves it alone.
+        // code pushed it straight away from the enemy, the new code leaves it alone. A crowded enemy is moved 300 u
+        // away to a quiet spot for this step and put back after.
         if (enemy == null) ctx.Skip("own-target", "the enemy died before the check");
         else
         {
-            Vector2 enemyAt = enemy.transform.position;
-            Vector2 spot = Vector2.zero;
+            Vector2 enemyHome = enemy.transform.position;
+            Vector2 enemyAt = enemyHome, spot = Vector2.zero;
             string ownCrowd = "";
-            foreach (var dir in new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down })
+            foreach (var off in new[] { Vector2.zero, Vector2.right * 300f, Vector2.left * 300f, Vector2.up * 300f, Vector2.down * 300f })
             {
-                ownCrowd = SeparationPatches.Nearby(wing, enemy, enemyAt + dir * 0.5f, Gap.Value);
-                if (ownCrowd.Length == 0) { spot = enemyAt + dir * 0.5f; break; }
+                Vector2 o = enemyHome + off;
+                if (off != Vector2.zero && SeparationPatches.Nearby(enemy, wing, o, Gap.Value).Length > 0) continue;
+                foreach (var dir in new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down })
+                {
+                    string c = SeparationPatches.Nearby(wing, enemy, o + dir * 0.5f, Gap.Value);
+                    if (c.Length == 0) { spot = o + dir * 0.5f; enemyAt = o; break; }
+                    if (ownCrowd.Length == 0) ownCrowd = c;
+                }
+                if (spot != Vector2.zero) break;
             }
-            if (spot == Vector2.zero) ctx.Skip("own-target", "other ships crowd the enemy: " + ownCrowd);
+            if (spot == Vector2.zero) ctx.Skip("own-target", "other ships crowd the enemy here and 300 u off: " + ownCrowd);
             else
             {
                 var routeBefore = new List<Source.Galaxy.MapPointOfInterest>(GamePlayer.current.waypoints);
+                Vector2 wingAt = wing.rigidbody.position;
                 GamePlayer.current.waypoints.Clear();
                 try
                 {
                     targetModule.SetManualTarget(enemy);
+                    enemy.transform.position = enemyAt;
+                    if (enemy.rigidbody != null) enemy.rigidbody.position = enemyAt;
                     wing.transform.position = spot;
                     wing.rigidbody.position = spot;
                     Physics2D.SyncTransforms();
                     bool isTarget = wing.targetProvider != null && wing.targetProvider.priorityTarget == enemy;
                     var skipped = SeparationPatches.ComputePush(wing, Gap.Value);
                     var unskipped = SeparationPatches.ComputePush(wing, Gap.Value, false);
-                    string ownDetail = $"{wing.spaceShipData.GetShipName()} 0.5 u from its target {enemy.name}: push with the target left out {skipped.magnitude:0.00}, counting it {unskipped.magnitude:0.00}, target is its priority target {isTarget}";
+                    string ownDetail = $"{wing.spaceShipData.GetShipName()} 0.5 u from its target {enemy.name}{(enemyAt != enemyHome ? " (both moved 300 u to a quiet spot)" : "")}: push with the target left out {skipped.magnitude:0.00}, counting it {unskipped.magnitude:0.00}, target is its priority target {isTarget}";
                     if (!isTarget) ctx.Skip("own-target", "the ship's target provider doesn't hold the enemy: " + ownDetail);
                     else if (skipped == Vector2.zero && unskipped.magnitude > 0.5f) ctx.Pass("own-target", ownDetail);
                     else ctx.Fail("own-target", ownDetail);
@@ -240,6 +305,17 @@ public sealed class Separation : Feature
                 {
                     targetModule.ResetCurrentTargets();
                     GamePlayer.current.waypoints.AddRange(routeBefore);
+                    if (enemy != null && enemyAt != enemyHome)
+                    {
+                        enemy.transform.position = enemyHome;
+                        if (enemy.rigidbody != null) enemy.rigidbody.position = enemyHome;
+                    }
+                    if (wing != null)
+                    {
+                        wing.transform.position = wingAt;
+                        wing.rigidbody.position = wingAt;
+                    }
+                    Physics2D.SyncTransforms();
                 }
             }
         }

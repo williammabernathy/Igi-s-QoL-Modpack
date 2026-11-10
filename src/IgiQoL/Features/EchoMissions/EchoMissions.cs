@@ -48,6 +48,7 @@ public sealed class EchoMissions : Feature
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
+        yield return ctx.EnsureDocked(s => s.HasFacility(Source.Galaxy.POI.SpaceStationFacility.MissionBoard) && s.faction.offersMissionsForShip);
         MissionKinds.Check(ctx);
         MissionBatch.Check(ctx);
         MissionCheck.Run(ctx);

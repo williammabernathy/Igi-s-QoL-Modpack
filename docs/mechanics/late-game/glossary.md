@@ -2,7 +2,7 @@
 
 This page covers the terms from the story lines that run behind the war (spoilers). Earlier terms are in the [basics glossary](../basics/glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [Beyond the Front glossary](../expansion/glossary.md).
 
-Wording is read from the game's translation strings and the decompiled interface code of version 0.8.3.4, not from play. The interface code was compared with the 0.8.3.5 source. The translation strings were not re-read for 0.8.3.5. The table columns are explained in the basics glossary. The code names are in the last section.
+Wording is read from the game's translation strings and the decompiled interface code of version 0.8.3.4, not from play. The interface code was compared with the 0.8.3.5 and 0.8.3.7 sources. The strings "Umbral Reach control", "Defense", "Conquest Update" and the Meridia questgiver line were checked in the 0.8.3.7 table; the rest were not re-read after 0.8.3.4. The table columns are explained in the basics glossary. The code names are in the last section.
 
 Pages: [The control story line](control-story.md), [The closed sector story line](closed-sector-story.md).
 
@@ -47,7 +47,7 @@ In the code: [Factions](#code-factions).
 
 ## In the Game Code
 
-This part maps the terms above to their names in the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 source. The translation strings are in `resources.assets`.
+This part maps the terms above to their names in the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources. The translation strings are in `resources.assets`.
 
 ### Code: Places and Stations
 

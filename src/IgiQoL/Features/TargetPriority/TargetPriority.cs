@@ -492,10 +492,23 @@ public sealed class TargetPriority : Feature
         {
             wingModule.ResetCurrentTargets();
             wingModule.SetAutoTarget(startOn);
+            // The chain only sees enemies inside the fleet ship's scanner (FleetPick), and spawn spots are random, so
+            // the attacker is brought inside it. One run in eight on 2026-11-10 kept its start target here; the line
+            // now gives the distance, since that run didn't log it.
+            float reach = wingScanner != null ? wingScanner.range : 0f;
+            Vector2 wingAt = wingData.unit.transform.position;
+            float attackerDist = Vector2.Distance(wingAt, attacker.transform.position);
+            if (reach > 0f && attackerDist > reach * 0.8f && attacker.rigidbody != null)
+            {
+                Vector2 spot = wingAt + Vector2.down * (reach * 0.5f);
+                attacker.transform.position = spot;
+                attacker.rigidbody.position = spot;
+                Physics2D.SyncTransforms();
+            }
             HitFlagship(ship, attacker);
             var afterFlagship = FactionFleet.PickFor(wingData.unit, wingModule.IsValidTarget);
             assisted = afterFlagship != null && afterFlagship != startOn && TargetRanking.AttacksFlagship(afterFlagship, ship);
-            assistDetail = $"start={Name(startOn)} attacker={Name(attacker)} pick after the hit={Name(afterFlagship)} attacksFlagship={assisted}";
+            assistDetail = $"start={Name(startOn)} attacker={Name(attacker)} ({attackerDist:0} u from the fleet ship, scanner {reach:0}{(attackerDist > reach * 0.8f ? ", moved inside" : "")}) pick after the hit={Name(afterFlagship)} attacksFlagship={assisted}";
 
             // Lower in the chain, "Attacking my flagship" only breaks ties: the same hit on the flagship moves nobody.
             SetChain(aw, new[] { TargetRule.Nearest, TargetRule.AttackingFlagship });
@@ -519,11 +532,21 @@ public sealed class TargetPriority : Feature
 
         // A hit on another of your ships doesn't make its attacker an attacker of the flagship: the mod keeps its own
         // record of which ship was hit, since the game's threat is shared by the whole fleet.
+        // The enemies here now, not the snapshot from the start (which stops at the first two that arrived); two more
+        // are called in when no third one is about.
         AbstractUnit ally = null;
-        foreach (var c in candidates)
-            if (c is AbstractUnit cu && cu != startOn && cu != attacker && !cu.isDestroyed && wingModule.IsValidTarget(cu)
-                && !TargetRanking.AttacksFlagship(cu, ship)) { ally = cu; break; }
-        if (ally == null) ctx.Skip("flagship-assist-ally", "needs a third live enemy not attacking the flagship");
+        bool Third()
+        {
+            foreach (var u in Object.FindObjectsByType<AbstractUnit>(FindObjectsInactive.Exclude))
+                if (u != null && u != startOn && u != attacker && !u.isDestroyed && wingModule.IsValidTarget(u) && !TargetRanking.AttacksFlagship(u, ship)) { ally = u; return true; }
+            return false;
+        }
+        if (!Third() && SelfCheckContext.SpawnEnemies(2))
+        {
+            float thirdBy = Time.realtimeSinceStartup + 30f;
+            while (!Third() && Time.realtimeSinceStartup < thirdBy) yield return new WaitForSeconds(0.5f);
+        }
+        if (ally == null) ctx.Skip("flagship-assist-ally", "no third live enemy that isn't attacking the flagship, after calling in two more");
         else
         {
             TargetRanking.RecordHit(ally, wingData.unit, 10f);

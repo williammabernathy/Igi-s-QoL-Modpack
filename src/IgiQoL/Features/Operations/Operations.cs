@@ -377,12 +377,9 @@ public sealed class Operations : Feature
             ModWindow.Open("operations");
             yield return null;
             yield return null;
-            Button button = null;
-            foreach (var b in ModWindow.Content.GetComponentInChildren<OperationsList>().GetComponentsInChildren<Button>())
-            {
-                var label = b.GetComponentInChildren<TMP_Text>();
-                if (label != null && label.text == "Abandon") { button = b; break; }
-            }
+            // The save can have operations of its own running, so take the button of the check's own row.
+            Button button = ModWindow.Content.GetComponentInChildren<OperationsList>().ExitButton(op);
+            if (button != null && button.GetComponentInChildren<TMP_Text>().text != "Abandon") button = null;
             if (button == null) { ctx.Fail("exit-button", $"no Abandon button for {type}"); yield break; }
             ScrollToRunning();
             yield return ctx.Screenshot("window-operations-abandon");
@@ -672,7 +669,7 @@ public sealed class OperationsList : MonoBehaviour
             Kit.Tooltip(r.exit.targetGraphic, "Extract or abandon", ExitHelp);
             r.shown = ExitAction.Abandon;
             var line2 = Kit.Row(column, 6f, 22f);
-            r.time = Kit.Fixed(line2, "", 100f, TextAlignmentOptions.Left, ColorHelper.poiTooltipMuted);
+            r.time = Kit.Fixed(line2, "", 130f, TextAlignmentOptions.Left, ColorHelper.poiTooltipMuted);
             r.counts = Kit.Label(line2, "", 12f);
             var line3 = Kit.Row(column, 6f, 26f);
             Kit.Fixed(line3, Translation.Translate("@BoardingStealth"), 72f, TextAlignmentOptions.Left, ColorHelper.offWhite);
@@ -797,6 +794,14 @@ public sealed class OperationsList : MonoBehaviour
             Add("buyout", r.buyOut);
         }
         return sb.ToString();
+    }
+
+    // The exit button on the row of one operation, for the self-check.
+    internal Button ExitButton(DungeonOperation op)
+    {
+        foreach (var r in rows)
+            if (r.op == op) return r.exit;
+        return null;
     }
 
     // The measured width of the row's name line against the text it holds, for the self-check that nothing is cut off.

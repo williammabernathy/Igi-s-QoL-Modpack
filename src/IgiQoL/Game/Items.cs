@@ -2,7 +2,9 @@ using Behaviour.Equipment.Module;
 using Behaviour.Equipment.Turret;
 using Behaviour.Item;
 using Behaviour.Item.Usable;
+using Source.Galaxy.POI;
 using Source.Item;
+using Source.MissionSystem.Objectives;
 using Source.Player;
 using Source.SpaceShip;
 
@@ -24,6 +26,19 @@ public static class Items
         if (item.itemCategory == ItemCategory.Usable) return item.storageOverride == StorageOverride.None;
         if (item.TryGetState<WarpFuelState>(out _)) return true;
         return GamePlayer.current.RequiredItemCountForMissions(item) > 0;
+    }
+
+    // How many of this item your missions want delivered to a station other than `station`. A delivery (TradeOffer)
+    // counts its own station's material storage, the armory, the data inventory and the fleet's holds, so the same
+    // items put in any other station's material storage stop counting toward it.
+    public static int MissionNeedElsewhere(InventoryItemType item, SpaceStation station)
+    {
+        int n = 0;
+        foreach (var mission in GamePlayer.current.allMissions)
+            foreach (var step in mission.steps)
+                foreach (var objective in step.objectives)
+                    if (objective is TradeOffer t && t.itemType == item && t.deliverTo != station) n += t.requiredAmount;
+        return n;
     }
 
     // Whether the ship's fitted turrets or torpedo bay fire this ammo. Read from the fit, as the game's private

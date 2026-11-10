@@ -111,14 +111,37 @@ public sealed class TextScale : Feature
         int test = percent == 130 ? 120 : 130;
 
         // Same path as the Settings tab: the value changes while the window is open on it, and the window rebuilds.
+        // A label on the tab must draw at the new size: its width scales by test / percent.
         ModWindow.Open("settings");
+        yield return null;
+        string probe = null;
+        float before = Width(null, ref probe);
         Percent.Value = test;
-        string setDetail = $"factor={Factor:0.##} open={ModWindow.IsOpen} tab={ModWindow.CurrentTab}";
-        if (Mathf.Approximately(Factor, test / 100f) && ModWindow.IsOpen && ModWindow.CurrentTab == "settings") ctx.Pass("setting", setDetail);
+        yield return null;
+        float after = Width(probe, ref probe);
+        float want = test / (float)percent;
+        string setDetail = $"factor={Factor:0.##} open={ModWindow.IsOpen} tab={ModWindow.CurrentTab}; '{probe}' width {before:0.#} -> {after:0.#} (x{(before > 0f ? after / before : 0f):0.00}, want x{want:0.00})";
+        bool reflowed = before > 0f && Mathf.Abs(after / before - want) < 0.05f;
+        if (Mathf.Approximately(Factor, test / 100f) && ModWindow.IsOpen && ModWindow.CurrentTab == "settings" && reflowed) ctx.Pass("setting", setDetail);
         else ctx.Fail("setting", setDetail);
         yield return ctx.Screenshot("text-130");
         Percent.Value = percent;
         ModWindow.Close();
+    }
+
+    // The unwrapped width of a label on the open window: the one with the given text, or the first plain label of at
+    // least 8 characters, whose text goes to probe.
+    private static float Width(string text, ref string probe)
+    {
+        if (!ModWindow.IsOpen) return 0f;
+        foreach (var t in ModWindow.Content.GetComponentsInChildren<TMP_Text>())
+        {
+            if (!t.isActiveAndEnabled || t.text == null) continue;
+            if (text != null ? t.text != text : t.text.Length < 8 || t.text.IndexOf('<') >= 0) continue;
+            probe = t.text;
+            return t.preferredWidth;
+        }
+        return 0f;
     }
 }
 

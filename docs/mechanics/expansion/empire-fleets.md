@@ -1,6 +1,6 @@
 # Empire Fleets
 
-This page covers your own Empire Fleets and patrol fleets: slots and size, service levels, orders, stances, the outmatched warning, how your fleets show on the map and in the Defense number, and what the war looks like above level 60. Fleets need captain level 10 and a held system. The war options on this page open with "Beyond the Front", which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten.
+This page covers your own Empire Fleets and patrol fleets: slots and size, service levels, orders, stances, the outmatched warning, how your fleets show on the map and in the Defense number, and what the war looks like above level 60. Fleets need captain level 10 and a held system. The war options on this page open with "Beyond the Front", which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. The war, fleet and level statements were checked again against the 0.8.3.7 source, which changed war footing, system levels, NPC fleet levels and the station fleet buttons.
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md). Buying and claiming systems, upkeep and your stations are covered in [Your Empire](your-empire.md).
 
@@ -103,7 +103,7 @@ In the code: [Defense Stances and Other Behaviour](#code-defense-stances-and-oth
 
 The game shows this warning when you give an Attack order and the fleet's points are below 1.15 x the target's next-battle strength. NPC fleet planning uses the same threshold. The warning reads: "{fleet} ({points} points) is outmatched here ({defense} defense) and will likely be wiped out." It offers "Attack anyway".
 
-The number in the warning, which the game labels "defense", is the next-battle strength (defined in the [Conquest glossary](../conquest/glossary.md)). It can be lower than the full number in the Defense row when the system has Defense stations.
+The number in the warning, which the game labels "defense", is the next-battle strength (defined in the [Conquest glossary](../conquest/glossary.md)). It can be lower than the full number in the Defense row when the system has Defense stations. If the owner is an NPC faction with war footing, its garrison and defending fleets are already scaled up in both numbers ([War Footing and War Fleets](../conquest/war.md#war-footing-and-war-fleets)). Your own fleet is compared at its plain points.
 
 In the code: [Outmatched Warning](#code-outmatched-warning).
 
@@ -114,6 +114,7 @@ In the code: [Outmatched Warning](#code-outmatched-warning).
 - The "Withdrew" outcome appears in the Empire Log as "withdrew before relief arrived" (see [Outcomes](../conquest/war.md#outcomes)). It happens when the lead attacker is ordered away and has no standing supporters. Only Empire Fleets get this outcome, because the only code that ends a battle this way is the one that gives an Empire Fleet a new order or makes it retreat.
 - Your Attack order on a headquarters is refused with "A faction's headquarters can't be taken by a fleet."
 - The Fleets tab of the Empire window lists your own Empire Fleets.
+- In a station, the fleet buttons are small icons above the hangar tab: the Personal Fleet icon and, once Empire Fleets are unlocked, the Empire Fleets icon (a flag; tooltip "Empire Fleets: form fleets from your ships."). In 0.8.3.5 they were text buttons. The Personal Fleet icon is greyed out until captain level 10, with the hint "Your personal fleet opens at level 10."
 - The game checks Empire Fleet orders every 5 s.
 
 One label applies only to your fleets. In the label order in [war](../conquest/war.md#fleet-labels-on-the-map), "Moving" also covers an Empire Fleet Move order. This row sits between "Supporting" and "Defending an outpost from raiders":
@@ -193,7 +194,7 @@ In the code: [Above Level 60, After "Beyond the Front"](#code-above-level-60-aft
 | Field Empire Fleets | Your level sets the slots and budget (see [Slots and Size](#slots-and-size)): 2500 points and 12 ships at level 60, and 4000 points and 25 ships at level 100. |
 | Build Defense stations and patrol fleets | Each system has 2 station slots, and captured economic outposts use them too. Each station holds 1 to 3 patrol fleets of 120 to 500 points, depending on tier. |
 | Raid, join sieges and set defense stances | These are Empire Fleet orders. |
-| Level past 60 | The cap is 100 once the expansion is unlocked. |
+| Level past 60 | The cap is 100 once the expansion is unlocked. Past 100, Vanguard levels start only after you accept the offer from Stella Chion (version 0.8.3.7; the choice appears at your capital hub, or at the Darkspace embassy, once you are at level 100). Vanguard levels raise your effective level, and with it the war-zone level targets and the NPC fleet level. |
 
 | You still cannot | Why |
 |---|---|
@@ -207,9 +208,9 @@ In the code: [What You Can and Cannot Do](#code-what-you-can-and-cannot-do).
 
 ### What You Face
 
-- Systems: expansion systems are created at level 60 and rise toward your level by the rule in [How System Levels Rise](../conquest/war.md#how-system-levels-rise). Once you are past 60, they sit near your level plus up to 4 (worked out from the formulas). Their ore levels ramp from 60 to 100 across the expansion.
-- NPC fleet ship level: this is still the higher of your effective level and the highest conquest system level, plus 6 ([Fleet Levels](../conquest/war.md#fleet-levels)). With expansion systems in the list, the highest system level is at least 60. NPC ships are therefore at least level 66 from the moment the expansion unlocks, and about your level plus 10 once you are above 60 (worked out from the formulas).
-- Station turrets: every expansion system is level 60 or higher, so every generated conquest station gets the M2 or L1 turret layouts. Ara Martis stations switch to them when their system level reaches 45.
+- Systems: expansion systems are created at level 60. Their ore level is set separately, ramping from 60 to 100 with up to 4 levels of jitter across the expansion, and system level drift does not change it (worked out from the code). Because they are war-zone systems, the level drift in [How System Levels Rise](../conquest/war.md#how-system-levels-rise) moves their system level: each steps toward its own target, your effective level plus a fixed offset of -6 to +6, and not under its floor of 30 to 36. A system above its target is set to it when a save loads, so the level 60 start does not last (worked out from the code, not tested in a game).
+- NPC fleet ship level: the higher of your effective level and 30 ([Fleet Levels](../conquest/war.md#fleet-levels)). Version 0.8.3.5 added 6 levels and counted the highest system level, which put NPC ships at level 66 and up once the expansion opened; 0.8.3.7 removed both, so NPC ships are at your level.
+- Station turrets: every expansion system is created at level 60, and its target stays at your level minus 6 or higher, so every generated conquest station gets the M2 or L1 turret layouts. Ara Martis stations use them while their system level is 45 or above. Stations are rebuilt every hour from their seed at the current level, and levels now move both ways, so an Ara Martis system near 45 can change layout in either direction (worked out from the code).
 - Fleets: NPC fleets are 2000 points. The fleet caps once the expansion is open are in [Fleet Caps Once the Expansion War Is Open](your-empire.md#fleet-caps-once-the-expansion-war-is-open). Great Gate reinforcement fleets are 1500 points. Raid parties are 200 to 300 points.
 - Hostility: taking a system sets your reputation with the former owner to -5000. The game tells you "Factions hostile to you will attack this system".
 
@@ -217,7 +218,7 @@ In the code: [What You Face](#code-what-you-face).
 
 ### Taking a System With Empire Fleets
 
-The worked cases below come from the Defense formula in [war](../conquest/war.md#what-the-defense-number-means) and from the patrol and mix terms above. They use station firepower with the sector station multiplier at 1, no war effort, and a system that is not settling.
+The worked cases below come from the Defense formula in [war](../conquest/war.md#what-the-defense-number-means) and from the patrol and mix terms above. They use station firepower with the sector station multiplier at 1, no war footing on either side, and a system that is not settling.
 
 Next-battle strength is the figure that NPC fleet planning compares attackers against. See [What NPC Factions Use Instead of the Defense Number](../conquest/war.md#what-npc-factions-use-instead-of-the-defense-number).
 
@@ -251,7 +252,7 @@ flowchart TD
 - Station structure takes damage only after every defender ship is dead. A siege with large defenders needs most of its 29 rounds just to clear them.
 - Capture is allowed at 600 s once the station is broken and nothing defends. You do not have to stay until the cap if those conditions hold.
 - Attack right after a system changes hands. For the first 5 to 6 hours its station firepower is halved (settling), and for the first 1 to 2 hours it pays no taxes (unrest).
-- Missions against the owner, done next to the target, lower the target's station firepower by up to half. One mission adds one step, which is 10% of the station firepower (more for missions that ECHO completes with the "ECHO The Conqueror" skill; see [War Effort](../conquest/war.md#war-effort)). It also restarts the 3-hour timer on the penalty. A red "Your war effort" row shows the effect.
+- Kill the defending fleets and garrison ships first. Version 0.8.3.7 removed the mission reward that lowered a target's station firepower (the per-system war effort), so nothing you run for a faction changes a single target's station term any more. Conquest missions for an NPC faction raise that faction's war footing, which makes its fleets and garrisons count up to 25% more (see [War Footing and War Fleets](../conquest/war.md#war-footing-and-war-fleets)). Those are NPC fleets and garrisons, so do not run them for the owner of a system you are about to attack.
 - A hull rating lead over the defenders is worth up to 15% of strength. The hull ratings of garrisons come from level and rank. The upgrades on your ships raise yours.
 - You can also take a system by destroying its hub in a live battle, from inside the system. That abandons the system and shows "{faction} lost {system} - the system is unclaimed".
     - With claiming unlocked, the game offers you the claim first. Taking it destroys the old owner's Defense stations there and drops your reputation with that owner to Hostile.
@@ -268,9 +269,9 @@ In the code: [Taking a System With Empire Fleets](#code-taking-a-system-with-emp
 
 - Keep a fleet in the system with a defense stance. It counts in full for Defense, plus the mix bonus (2 or more ship sizes, up to 3% per size at Empire Level 10).
 - Build Defense stations and assign patrol fleets. They count in full for Defense, and a hub siege goes straight to the hub instead of through station stages. Patrol ships lost in a siege are lost for good.
-- War effort does not apply to systems you hold. Missions that raise it never reach a system you own (see [War Effort on Your Own Systems](your-empire.md#war-effort-on-your-own-systems)), so it adds nothing to your Defense number. Against NPC-held systems, a +1.0 bonus doubles the station term, which adds 250 to 700 of Defense (the term goes from 250 to 700 up to 500 to 1400).
-- Stay out of reach of the 1.15 threshold that NPC fleet planning uses. NPC fleets attack when their points are at least 1.15 times the weakest-station strength plus any fleets already traveling to relieve it. A lone NPC fleet is 2000 points, so a Defense number above about 1740 stops single-fleet attacks. Assaults combine 2 or more fleets and can exceed that.
-- If a flagship or fleet of yours is in the system, the battle turns live and the simulation freezes. The fight then depends on the ships alone. The real station HP is multiplied by 20 (30 at a headquarters), and war effort scales the station weapons.
+- War footing does not apply to systems you hold. Missions that raise it never reach a system you own or a faction you are not part of (see [War Footing on Your Own Systems](your-empire.md#war-footing-on-your-own-systems)), so your garrisons, fleets and patrol ships always count at their plain points. Against an NPC faction, its footing multiplies its garrison points by up to 1.25 and adds up to 0.25 to its defending fleets' mix bonus.
+- Stay out of reach of the 1.15 threshold that NPC fleet planning uses. NPC fleets attack when their points, times 1 plus their faction's war footing bonus, are at least 1.15 times the weakest-station strength plus any fleets already traveling to relieve it. A lone NPC fleet is 2000 points, so a Defense number above about 1740 stops single-fleet attacks from a faction with no footing, and above about 2170 at the full +25%. Assaults combine 2 or more fleets and can exceed that.
+- If a flagship or fleet of yours is in the system, the battle turns live and the simulation freezes. The fight then depends on the ships alone. The real station HP is multiplied by 20 (30 at a headquarters). The war footing of an NPC faction multiplies the combat, drone and torpedo power of the ships it fields in that battle, but not the station turrets, which no longer have any war multiplier.
 - A defending fleet or patrol in the system stops a raid from running unopposed. An undefended raid finishes at its 600 s minimum once the station structure (15% of normal hull) is broken.
 
 In the code: [Defending a System You Hold](#code-defending-a-system-you-hold).
@@ -280,19 +281,19 @@ In the code: [Defending a System You Hold](#code-defending-a-system-you-hold).
 | Question | Level 60 or below, no system | Above 60, claim unlocked |
 |---|---|---|
 | What can I hold? | You cannot hold any system. | You can hold systems, with 1 fleet slot per threshold. |
-| What is the main lever on a war? | Interception, live hub kills at the right moment, and war effort bursts. | Your own fleets, attacking and defending. War effort is a small add-on. |
-| How useful is war effort? | It is most of what you can do to the war. | It is a minor boost of at most 250 to 700 Defense at the cap. |
+| What is the main lever on a war? | Interception, live hub kills at the right moment, and killing the fleets a faction attacks with. | Your own fleets, attacking and defending. |
+| How useful is war footing? | It is slow and not aimed at any one system: it takes about 2,000 contribution for the full +25%. | It still does not apply to systems you hold, so it adds nothing to your Defense number. |
 | What does intercepting cost? | It is cheap to start. It costs -1000 reputation for the ship you click and -3500 per kill with factions at Wary or better. A first hit can flag the faction's other ships in the encounter (see [faction-economy](../conquest/faction-economy.md#intercepting-deliveries-and-convoys)). It costs nothing against factions that are already your enemies. | The cost is the same, but a big fleet of yours can usually fight the real fight instead. |
 | What does a hub kill do? | It hands the system to the lead attacker of a hub siege at once. Otherwise it leaves the system unowned until a fleet lands. | It offers the claim to you first, with a reputation drop to Hostile with the old owner. A player-sector system goes back on sale instead. |
 | What happens to my reputation? | You lose it station by station. | You lose it system by system (to -5000), and the owner attacks you afterwards. |
-| What level are enemy ships? | Your level plus about 10. | At least 66, and your level plus about 10 above level 60. |
+| What level are enemy ships? | Your level or 30, whichever is higher. | Your level. |
 | What are the station turrets? | Small below level 45, then M2 and L1. | M2 and L1 throughout the expansion. |
 
 The 1.15 NPC attack margin also sets the outmatched warning for your Attack orders. The 1.25 capture margin applies to captures by your own fleets. Both rows are in [Numbers to Watch](../conquest/sector-control.md#numbers-to-watch).
 
 ## In the Game Code
 
-This part holds the code names, call details and `Source:` lines behind the sections above. It comes from the decompiled game code of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, look up the class and method named in the `Source:` line.
+This part holds the code names, call details and `Source:` lines behind the sections above. It comes from the decompiled game code of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources. To check a claim, look up the class and method named in the `Source:` line.
 
 ### Code: Slots and Size
 
@@ -375,15 +376,15 @@ Source: `SystemClaim`, `EmpireFleets.MaxFleets`, `FleetLevelSteps`, `PlayerStati
 
 #### Code: What You Face
 
-Ore levels ramp from 60 to 100 across the expansion (`ExpansionLevels.FloorAt`). The NPC fleet ship level is `max(your effective level, highest conquest system level) + 6` ([Fleet Levels](../conquest/war.md#fleet-levels)).
+`ConquestWorld.CreateExpansionSystem` creates every expansion system at level 60 and sets `oreLevel` to `plannedLevel + RandomRange(-4, 5)` (minimum 1), where `plannedLevel` ramps from 60 to 100 (`ExpansionLevels.FloorAt`). `SystemMapData.UpdateLevel` does not touch `oreLevel`. Level drift then applies: `Conquest.UpdateSystemLevels` calls `SystemLevelDrift.Creep` on every `ConquestSystem` hourly, and `Conquest.Start` calls `SettleSystemLevels` (`SystemLevelDrift.Settle`) on every load; expansion sectors count as war-zone sectors once `expansionUnlocked`. The target is `max(playerLevel + offset, floor)` with the offset from `SystemLevelDrift.GetOffset` (-6 to +6) and the floor from `SystemLevelDrift.GetFloor` (30 to 36). `ExpansionLevels.SeamLevel` has no other caller in 0.8.3.7. The station turret layout is chosen when a station is built with `poi.level >= 45` (`CombatStationFactory`), and `Conquest.RepairConquestStations` rebuilds stations hourly. The NPC fleet ship level is `max(1, max(your effective level, 30))` (`FleetLevels.GetNpcFleetLevel`, [Fleet Levels](../conquest/war.md#fleet-levels)). `CaptainData.canCommitToVanguardLevels` is true at the maximum level with the final cap and no commitment yet; `ExpansionDialogues.CreateVanguardChoiceDialogue` asks, and `ExpansionMissions.CommitToVanguardLevels` sets `vanguardCommitted`.
 
-Source: `ConquestWorld.CreateExpansionSystem`, `ExpansionLevels.FloorAt`, `Conquest.RaiseTowardPlayer`, `FleetLevels.GetNpcFleetLevel`, `CombatStationFactory`, `ConquestFleetPlanner.MaxFleetsFor`, `ConquestFleetPlanner.MaxTerritoryFleets`, `SystemClaim.ApplyReputationRule`
+Source: `ConquestWorld.CreateExpansionSystem`, `ConquestWorld.ExpansionOreLevel`, `ExpansionLevels.FloorAt`, `Conquest.UpdateSystemLevels`, `Conquest.SettleSystemLevels`, `SystemLevelDrift.Creep`, `SystemLevelDrift.Settle`, `SystemLevelDrift.GetOffset`, `SystemLevelDrift.GetFloor`, `FleetLevels.GetNpcFleetLevel`, `CombatStationFactory`, `ConquestFleetPlanner.MaxFleetsFor`, `ConquestFleetPlanner.MaxTerritoryFleets`, `SystemClaim.ApplyReputationRule`, `CaptainData.canCommitToVanguardLevels`, `ExpansionMissions.CommitToVanguardLevels`
 
 #### Code: Taking a System With Empire Fleets
 
 The share-rule bullet counts war-zone systems held over all war-zone systems (`ConquestScope.GetWarZoneShare`, threshold `ConquestWarTuning.PeaceShareThreshold`). `ConquestFleetOrders.ApplyPeace` keeps the full candidate list when the filter would leave none.
 
-A live hub kill reaches `ConquestOwnership.Abandon` through `ConquestOwnership.OnStationDestroyed`, for the hub of an owned war-zone system. `Abandon` records `abandonedBy`, clears the headquarters flag, hub owner, control level, combat strength and war effort, and posts `@ConquestSystemAbandoned`.
+A live hub kill reaches `ConquestOwnership.Abandon` through `ConquestOwnership.OnStationDestroyed`, for the hub of an owned war-zone system. `Abandon` records `abandonedBy`, clears the headquarters flag, hub owner, control level and combat strength, and posts `@ConquestSystemAbandoned`.
 
 In the player sector, `ReturnToSale` ends the battles without a claim. Elsewhere, `HandOverToClaimant` checks `SystemClaim.GetRefusal`. When it is null (claiming unlocked, open to you, unowned, not player sector, not free territory, your flagship or an idle Empire Fleet in the system), `BattleManager.EndBattlesAt` ends the battles without a capture and `SystemClaim.OfferClaim` offers you the system. `SystemClaim.Decline` gives the system to the lead attacker of the hub siege (`BattleStage.StationSiege`) if that fleet still has ships in the system.
 
@@ -391,12 +392,12 @@ When the refusal is not null, `EndBattlesAt` returns that lead attacker if its f
 
 `Claim` destroys the old owner's Defense stations when the claimant is another faction, and `SystemClaim.OnOwnerChanged` then applies `SystemClaim.ApplyReputationRule`.
 
-The worked-case table uses station firepower with `m = 1` (the sector station-defense multiplier).
+The worked-case table uses station firepower with `m = 1` (the sector station-defense multiplier) and no war footing. NPC attack decisions and sieges use `WarFooting.GetJudgedStrength` (a fleet's points times `1 + warFootingBonus`; 0 bonus for `Faction.player`) in `ConquestFleetOrders.CanBeat`, `TryAttack`, the assault check and `BattleManager.GetAttackerStrength`. Your own fleets are judged at their plain points.
 
 Source: `ConquestCombat.GetNextBattleStrength`, `EmpireFleets.GetOutmatchingDefense`, `BattleManager.CanCaptureEarly`, `ConquestFleetOrders.ApplyPeace`, `ConquestWarTuning.PeaceShareThreshold`, `ConquestScope.GetWarZoneShare`, `ConquestOwnership.OnStationDestroyed`, `ConquestOwnership.Abandon`, `ConquestOwnership.HandOverToClaimant`, `ConquestOwnership.Claim`, `BattleManager.EndBattlesAt`, `BattleManager.IsClaimableOnArrival`, `SystemClaim.GetRefusal`, `SystemClaim.OfferClaim`, `SystemClaim.Decline`
 
 #### Code: Defending a System You Hold
 
-War effort never reaches a system you hold. `ConquestWarEffort.Apply` is called only from `ConquestStrength.OnComplete`, and `MissionGenerator.AddRewards` adds a `ConquestStrength` reward only when the source station's faction is in `Conquest.conquestFactions`, which does not contain `Faction.player`. See [War Effort on Your Own Systems](your-empire.md#code-war-effort-on-your-own-systems).
+War footing never reaches a system you hold. `ConquestWarContribution.Apply` is called only from `ConquestStrength.OnComplete`, and `MissionGenerator.AddRewards` adds a `ConquestStrength` reward only when the source station's faction is in `Conquest.conquestFactions`, which does not contain `Faction.player`. `WarFooting.GetBonus` returns 0 for `Faction.player`. See [War Footing on Your Own Systems](your-empire.md#code-war-footing-on-your-own-systems). For NPC factions, `FactionGarrison` multiplies garrison points by `WarFooting.GetMultiplier`, `FleetMixBonus.GetBattleStrength` adds the bonus to the mix bonus, and `AbstractUnit.ApplyWarFooting` multiplies combat, drone and torpedo power only for units whose `generationIdentity` starts with `conquestbattle:`. Station parts carry the identity `stationpartN`, so footing does not reach them.
 
-Source: `EmpireFleets.JoinsDefense`, `ConquestWarEffort.Apply`, `ConquestStrength.OnComplete`, `MissionGenerator.AddRewards`, `Conquest.conquestFactions`
+Source: `EmpireFleets.JoinsDefense`, `ConquestWarContribution.Apply`, `WarFooting.GetBonus`, `ConquestStrength.OnComplete`, `MissionGenerator.AddRewards`, `Conquest.conquestFactions`

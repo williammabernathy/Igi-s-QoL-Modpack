@@ -8,7 +8,7 @@ Every tab of the modpack lives in one window. You can open and close it in three
 
 - Press F6. This is the "Mod window hotkey" setting. It accepts any key name and is ignored while you type in a text field.
 - Click the QoL button in space.
-- While docked, click the QoL tab next to the game's Fleet button, above the station's tabs.
+- While docked, click the QoL icon button above the station's tabs, in the same style as the game's Fleet buttons.
 
 Hovering either button names the hotkey. The tabs are Scanner, DPS Parser, Log, ECHO, Item Rules, Operations, Stations, Loadouts, Notes, Stat Reference, Mods and Settings. A tab whose feature is switched off isn't there. The window opens on the tab you last used.
 
@@ -34,9 +34,9 @@ You can drag the button away from either place. A drag never opens the window, a
 
 ![The QoL button above the Dock button](../../images/qol-button-dock.jpg)
 
-While you're docked, the same toggle is a QoL tab that floats above the station's tabs, beside the game's Fleet button:
+While you're docked, the same toggle is a small icon button that floats above the rightmost station tab, in the same style as the game's Fleet buttons above the Personal Hangar tab:
 
-![The QoL tab above the station's Airlock tab](../../images/qol-station-tab.jpg)
+![The QoL button above the station's Airlock tab](../../images/qol-station-tab.jpg)
 
 ### Hover Cards Stay on Screen
 
@@ -161,6 +161,12 @@ Each fleet row shows three bars: shield above, the game's hull bar (restyled) in
 Panels keep their size, so larger text can be cut off with "..." or wrap inside narrow labels. For example, cargo stack counts wrap at 130%. Labels keep the lines they show at 100% and spill past their box instead of disappearing.
 
 ![The mod window and HUD at 130% text size](../../images/text-size-130.jpg)
+
+## Zoom Out Further
+
+"Furthest zoom out (%)" (100-150, default 100) sets how far the mouse wheel zooms the camera out while you fly in space. 100 is the game's own limit, and 150 shows half as far again in each direction. Docked, on the galaxy map and in other menus the zoom is the game's own. Lowering the value zooms the camera back in at once.
+
+The cap is 150 because the game draws the near layer of background smoke only that wide. Further out, its edge shows as a darker rectangle in the middle of the screen. The camera position is the game's: it still follows your ship and can be dragged as before, though it pans less far up and down at wider zoom, because the game keeps the edge of the view within 80 units of the ship.
 
 ## Jumps Remaining
 

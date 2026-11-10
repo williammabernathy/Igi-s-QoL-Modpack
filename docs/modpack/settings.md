@@ -31,6 +31,14 @@ The Window section in the mod window also has a "QoL button position" row with a
 |---|---|---|---|
 | `Percent` | Text size (%) | `100` | 50 to 200 |
 
+### `[CameraZoom]`
+
+[Zoom Out Further](features/interface.md#zoom-out-further)
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `Percent` | Furthest zoom out (%) | `100` | 100 to 150 |
+
 ### `[FleetVitals]`
 
 [Fleet Shield and Armor Bars](features/interface.md#fleet-shield-and-armor-bars)
@@ -151,6 +159,7 @@ The Window section in the mod window also has a "QoL button position" row with a
 | `SellFromData` | Sell from the data inventory | `true` | `true`, `false` |
 | `SellFromStorage` | Sell from station storage | `false` | `true`, `false` |
 | `SellFromArmory` | Sell from the armory | `false` | `true`, `false` |
+| `KeepMissionItems` | Keep items your missions need | `true` | `true`, `false` |
 
 ## Fleet and Combat
 
@@ -179,6 +188,19 @@ The Window section in the mod window also has a "QoL button position" row with a
 | `Default` | Keep distance from other ships | `false` | `true`, `false` |
 | `Gap` | Gap between hulls (units) | `2` | 0.5 to 10 |
 | `OtherShips` | Other ships keep distance too | `false` | `true`, `false` |
+
+### `[ShipCollisions]`
+
+[Ship Collisions](features/fleet-combat.md#ship-collisions): at most one of `FleetPassThrough` and `PassThroughWhileTurning` is on, and at most one of `AnchorStations` and `HeavyStations`. Turning one on turns the other off. If you edit the file to turn both on, the first one in the file wins at the next start.
+
+| Key | In the window | Default | Values |
+|---|---|---|---|
+| `FleetPassThrough` | Fleet passes through your ships | `false` | `true`, `false` |
+| `PassThroughWhileTurning` | Fleet passes through while turning in formation | `false` | `true`, `false` |
+| `KeepOwnHeading` | Formation ships keep their own heading | `false` | `true`, `false` |
+| `AnchorStations` | Stations can't be pushed | `false` | `true`, `false` |
+| `HeavyStations` | Heavier stations | `false` | `true`, `false` |
+| `StationWeight` | Station weight (x) | `10` | 2 to 100 |
 
 ### `[FleetRetreat]`
 

@@ -1,6 +1,6 @@
 # War Zone and Battles
 
-This page covers the Conquest war as the Conquest Map shows it. It describes the war zone and the kinds of system in it, what the Defense number on a system tooltip is made of, what war effort does, how battles and sieges run and end, what capture and abandonment do, how NPC (non-player character) factions pick fights and raids, and what each fleet label on the map means. The war opens with the level 28 story step described in [Conquest](README.md). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Quoted in-game wording comes from the game's English text table, which was read in 0.8.3.4 and not re-read for 0.8.3.5. The last section, "In the Game Code", holds the class and method names behind each claim.
+This page covers the Conquest war as the Conquest Map shows it. It describes the war zone and the kinds of system in it, what the Defense number on a system tooltip is made of, what war footing and war fleets do, how battles and sieges run and end, what capture and abandonment do, how NPC (non-player character) factions pick fights and raids, and what each fleet label on the map means. The war opens with the level 28 story step described in [Conquest](README.md). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Version 0.8.3.7 replaced the per-system war effort with faction-wide war footing and war fleets, changed how system and NPC fleet levels are set, and counted war footing in every strength a battle compares; those sections were rewritten from the 0.8.3.7 source. Quoted in-game wording comes from the game's English text table: the war footing, war fleet and Faction overview wording was read from the 0.8.3.7 table, and the rest was read in 0.8.3.4 and not re-read for 0.8.3.5 or 0.8.3.7. The last section, "In the Game Code", holds the class and method names behind each claim.
 
 Terms and abbreviations are explained in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -14,7 +14,7 @@ Faction income, shipyards, warship delivery, the Great Gate and raid economics a
 
 The war zone is every system where factions fight over ownership: the Conquest sector (Ara Martis, the original war zone). The Frontier, Staging and Darkspace regions are not part of it. Systems outside the war zone are not part of fleet conquest. More war-zone sectors open with Beyond the Front ([gate](../expansion/README.md)).
 
-Every war-zone system stores who owns it, its war effort timers and its settling state. Each one also has a hub, which is its main station (shown as "Space Station" on the map) and carries the owner's flag. Destroying the hub abandons the system.
+Every war-zone system stores who owns it and its settling state. Each one also has a hub, which is its main station (shown as "Space Station" on the map) and carries the owner's flag. Destroying the hub abandons the system.
 
 | Kind | System card title or hint | What it means |
 |---|---|---|
@@ -29,7 +29,7 @@ In the code: [The War Zone and the Kinds of System](#code-the-war-zone-and-the-k
 
 ## What the System Tooltip Shows
 
-The conquest section of a war-zone system tooltip (the system card) has up to three kinds of row. The first is the Defense row. The second is "Your war effort" (green for a bonus, red for a penalty, with the time left). The third is the "Umbral Reach control" row, which only shows once the Umbral Reach has spread into that system and is a late-game story row (see [the gate](../late-game/README.md)). The game has a "Control" label, but the card code is the same in 0.8.3.4 and 0.8.3.5 and never adds it, so no Control row appears. Each system still has a control level (0, 1 or 2). The section "Control Level" below covers what it does.
+The conquest section of a war-zone system tooltip (the system card) has up to two kinds of row. The first is the Defense row. The second is the "Umbral Reach control" row, which only shows once the Umbral Reach has spread into that system and is a late-game story row (see [the gate](../late-game/README.md)). Until 0.8.3.5 a "Your war effort" row sat between them; 0.8.3.7 removed it together with the per-system war effort. The game has a "Control" label, but the card code never adds it, so no Control row appears. Each system still has a control level (0, 1 or 2). The section "Control Level" below covers what it does.
 
 In the code: [What the System Tooltip Shows](#code-what-the-system-tooltip-shows).
 
@@ -39,10 +39,10 @@ The Defense number, shown as the Defense row, is the strength the defenders put 
 
 ```
 Defense = station firepower term
-        + garrison points of every faction Defense station in the system
-        + points of every defending fleet in the system
+        + garrison points of every faction Defense station in the system, times 1 + the owner's war footing bonus
+        + strength of every defending fleet in the system (its points times 1 + mix bonus + the owner's war footing bonus)
 
-station firepower term = max(250 x m, min(firepower, 700 x m) x structure fraction) x war effort multiplier + sector flat bonus
+station firepower term = max(250 x m, min(firepower, 700 x m) x structure fraction) + sector flat bonus
 ```
 
 `m` here is the sector's station-defense multiplier and the flat bonus is a sector bonus. Nothing in versions 0.8.3.4 or 0.8.3.5 creates either one, so in a standard game m = 1 and the flat bonus is 0. Sector bonuses are part of the save file, so a save that already lists such a bonus on a sector keeps it. The game removes one only from your player sector, which it turns into a safe sector when the save loads.
@@ -81,9 +81,9 @@ Each faction Defense station holds a garrison, a group of warships stationed in 
 
 For each slot, the game picks the biggest warship that costs at most the budget divided by the number of ships (90 to 120 points). A full garrison therefore costs at most its budget. How close it gets depends on the hulls the faction owns, because the pick is the largest own hull at or under the per-ship budget. Stellar and Luminate each own a 100-point hull, so their garrisons use 100-point ships from tier 2 (400 of 405 points at tier 2, 500 of 540 at tier 3, 800 of 900 at tier 5), and Luminate's 120-point Exemplar fills tier 4 (720 of 720). At tier 1 their largest hull under the 90-point budget is 40 points, so a tier-1 garrison costs 120 of 270. Kolyatov and the Darkspace Compact have no hull between 80 and 180 points, so they stop at 80 points a ship (640 of 900 at tier 5). The garrison counts for a system's Defense in full, summed across every Defense station in it. Ships lost from a garrison are restocked by warships built at a Construction Yard (a faction station that builds warships); see [faction-economy](faction-economy.md). An older mechanism in which combat strength drains into garrisons never fires in this version.
 
-A defending fleet counts if it belongs to the owner's faction, is in the system, is not traveling, and is set to join defense. NPC fleets always are. In the systems you hold, the number also gets a term for your patrol ships and a fleet mix bonus on your own fleets. Both unlock with Beyond the Front ([Your fleets and patrols in the Defense number](../expansion/empire-fleets.md#your-fleets-and-patrols-in-the-defense-number)).
+A defending fleet counts if it belongs to the owner's faction, is in the system, is not traveling, and is set to join defense. NPC fleets always are. A war fleet standing in the system counts like any other fleet there. A defending fleet adds its points times 1 + its fleet mix bonus + the owner's war footing bonus. In the systems you hold, the number also gets a term for your patrol ships, and your own fleets get a fleet mix bonus. Both unlock with Beyond the Front ([Your fleets and patrols in the Defense number](../expansion/empire-fleets.md#your-fleets-and-patrols-in-the-defense-number)).
 
-Here is an illustrative case. A hub scores 480 firepower. One tier-3 Defense station has one platform carrying two medium turrets (160 firepower) and a garrison at its 540-point budget. One full NPC fleet of 2000 points is in the system. The station term is min(480 + 160, 700) = 640, so the Defense number is 640 + 540 + 2000 = 3180. That is a worked figure from the formulas, not a value read from the game.
+Here is an illustrative case. A hub scores 480 firepower. One tier-3 Defense station has one platform carrying two medium turrets (160 firepower) and a garrison at its 540-point budget. One full NPC fleet of 2000 points is in the system, and the owner has no war footing. The station term is min(480 + 160, 700) = 640, so the Defense number is 640 + 540 + 2000 = 3180. At the top footing of +25% the garrison counts 675 and the fleet 2500, so the number is 640 + 675 + 2500 = 3815. These are worked figures from the formulas, not values read from the game.
 
 In the code: [What the Defense Number Means](#code-what-the-defense-number-means).
 
@@ -97,9 +97,9 @@ You can estimate it from what the game shows. With no Defense station in the sys
 
 A system with no owner has a next-battle strength of 0. No fleet is too weak to attack it, and a fleet that arrives claims it instead of fighting.
 
-The war effort multiplier is part of the figure in both branches. It scales the station firepower in the full Defense number, and it scales the weakest Defense station's own firepower otherwise. A penalty therefore lowers what attackers must bring, and a bonus raises it. Defending fleets count in full in both branches.
+War footing is part of the figure through the defenders. The owner's war footing multiplies the garrison points of its Defense stations by 1 + bonus and counts in its defending fleets' strength as an extra bonus on top of the fleet mix bonus (see "War Footing and War Fleets"). The station firepower term no longer has a multiplier of its own. Defending fleets count in full in both branches.
 
-A fleet or assault attacks at 1.15 times next-battle strength, and the usual fleet is 2000 points. The number of full fleets an attack needs is therefore 1.15 times the figure divided by 2000, rounded up: one fleet up to 1,739, two up to 3,478, and so on (derived). Killing a defending 2000-point fleet takes 2,300 points off what attackers need, which always lowers the count by at least one. A full war effort penalty takes 125 to 350 off the station term, so 144 to 403 points off what attackers need. It lowers the count only if it carries the figure under a multiple of 1,739.
+A fleet or assault attacks at 1.15 times next-battle strength, and the usual fleet is 2000 points. The game compares the fleets' judged strength, which is their points times 1 + the attacking faction's war footing bonus. With no footing, the number of full fleets an attack needs is 1.15 times the figure divided by 2000, rounded up: one fleet up to 1,739, two up to 3,478, and so on (derived). At the top footing of +25% the limits rise to 2,173 and 4,347. Killing a defending fleet of 2000 points that has no footing or mix bonus takes 2,300 points off what attackers need. With no footing on the attackers' side, that always lowers the count by at least one. At +25% footing the attackers' fleets are worth 2500 each, and 2,300 is 0.92 of a fleet. A defending fleet that has footing counts for more than its points, so killing it removes more.
 
 In the code: [What NPC Factions Use Instead of the Defense Number](#code-what-npc-factions-use-instead-of-the-defense-number).
 
@@ -107,12 +107,12 @@ In the code: [What NPC Factions Use Instead of the Defense Number](#code-what-np
 
 | Lever | Effect |
 |---|---|
-| War effort penalty on the system | Multiplies the station term by 0.5 at the maximum penalty. See "War Effort". |
-| Destroy defender ships or fleets | Removes their points from the Defense number one for one. Intercepting fleets that are still traveling removes the relief term. |
+| War footing of the attacker | Its fleets count 1 + bonus times their points when they decide to attack and when they fight, up to x1.25. See "War Footing and War Fleets". |
+| Destroy defender ships or fleets | Removes their strength (points times 1 + mix bonus + the owner's war footing bonus) from the Defense number. Intercepting fleets that are still traveling removes the relief term, which counts plain points. |
 | Destroy turret platforms or the core by hand | Removes each platform's hull and firepower from the profile. Parts must be fully destroyed (HP 0 with damage taken). |
 | Attack within a few hours of a capture | Halves the station profile while the system is settling. |
 | Siege progress | Each hub siege round that breaks station structure lowers the station term toward the floor of 250. |
-| To raise it: war effort bonus | Multiplies the station term by up to 2. See "War Effort". |
+| To raise it: war footing of the owner | Multiplies garrison points by up to 1.25 and adds up to 0.25 per point to defending fleets' strength. See "War Footing and War Fleets". |
 | To raise it: more turret platforms | Helps only until the station reaches 700 firepower. |
 
 In the code: [Ways to Lower or Raise Defense](#code-ways-to-lower-or-raise-defense).
@@ -135,24 +135,31 @@ The general level curves (what a level does to HP, damage and loot) are on [scal
 
 | Name | Where it comes from | What it drives |
 |---|---|---|
-| Effective level | Your commander level plus your Vanguard level | Galaxy level, NPC fleet level and system level catch-up. It also drives the item level cap and kill XP (experience points), which are listed in the [level table](../basics/scaling.md#which-level-is-used-for-what) on the basics page. |
+| Effective level | Your commander level plus your Vanguard level | Galaxy level, NPC fleet level and each war-zone system's level target. It also drives the item level cap and kill XP (experience points), which are listed in the [level table](../basics/scaling.md#which-level-is-used-for-what) on the basics page. |
 
-Effective level sets the NPC fleet level (+6) and the system level catch-up, so raising it makes new NPC ships stronger too.
+Effective level sets the NPC fleet level and the level each war-zone system drifts toward, so raising it makes new NPC ships stronger too.
 
 In the code: [Effective Level](#code-effective-level).
 
 ### How System Levels Rise
 
-Once an hour, when the "Conquest Update" countdown on the galaxy map runs out (3600 s of game time), every system in the war moves toward your effective level. How far it moves depends on the gap:
+Version 0.8.3.7 gave every war-zone system its own level target instead of one rule for all. Once an hour, when the "Conquest Update" countdown on the galaxy map runs out (3600 s of game time), every system in the war steps toward its target by 1 to 4 levels, up or down:
 
-| Your level compared with the system | Change each hour |
-|---|---|
-| More than 3 levels above it | +2 |
-| 1 to 3 levels above it | +1 |
-| Level with it, or 1 to 3 levels below it | +1, with a 50% chance |
-| 4 or more levels below it | none |
+```
+target = max(your effective level + offset, floor)
+floor  = 30 to 36, fixed for each system
+```
 
-Levels never go down. A system settles at about 4 levels above your effective level. At 3 levels above you it still has a 50% chance to step up, and at 4 levels above you it stops. Frontier systems only rise this way after a hidden switch is flipped. Only a debug command flips it, and the switch is saved with the game. No story event, mission or scene sets it, so in a normal game Frontier systems do not rise this way.
+The offset is fixed for each system and comes from its temperament. The share of systems in each band shifts from west to east across the war zone:
+
+| Temperament | Offset | Share, west to east |
+|---|---|---|
+| Backwater | -6 to -4 | 20% to 15% |
+| Settled | -3 to -1 | 55% to 50% |
+| Contested | 0 to +1 | 20% to 25% |
+| Hot | +2 to +6 | 5% to 10% |
+
+A system above its target drops toward it, so levels can go down. When a save loads, a system above its target is set to the target at once. The hourly step and the load-time settle cover every war-zone system, which includes the Beyond the Front sectors once they are war zones. Frontier systems only step up toward their target, with no floor, and only after a hidden switch is flipped. Only a debug command flips it, and the switch is saved with the game. No story event, mission or scene sets it, so in a normal game Frontier systems do not move this way.
 
 In the code: [How System Levels Rise](#code-how-system-levels-rise).
 
@@ -161,8 +168,8 @@ In the code: [How System Levels Rise](#code-how-system-levels-rise).
 Conquest fleets and garrisons use a single galaxy-wide level instead of the level of the system they stand in. The "NPC fleet level" below is the level NPC factions give their new warships.
 
 ```
-galaxy level    = max(your effective level, highest conquest system level)
-NPC fleet level = max(1, galaxy level + 6)
+galaxy level    = max(your effective level, 30)
+NPC fleet level = max(1, galaxy level)
 ```
 
 | Question | Answer |
@@ -173,9 +180,9 @@ NPC fleet level = max(1, galaxy level + 6)
 | What does an NPC refit do? | Raises every ship's stored level to the current NPC fleet level. It takes 300 s at a Construction Yard. |
 | How does a fleet catch up slowly without a Construction Yard? | At each hourly economy tick (not the conquest update), every due fleet that is not refitting gains 1 level on each ship, up to the NPC fleet level. |
 
-So NPC warships sit about 6 levels above you or the highest system, whichever is higher. A fleet counts as due once it is 3 or more levels behind, so old fleets mostly sit 0 to 2 levels behind between hourly economy ticks, and further behind for a few ticks after the NPC fleet level rises.
+So NPC warships sit at your level, or at level 30 when you are below it. A fleet counts as due once it is 3 or more levels behind, so old fleets mostly sit 0 to 2 levels behind between hourly economy ticks, and further behind for a few ticks after the NPC fleet level rises. When a save loads, the game also caps every NPC ship, warship delivery and garrison ship at the NPC fleet level (`FleetLevels.LowerNpcShipsToCap`), which lowers ships built at the old +6 level.
 
-Remember the 6 extra levels on NPC fleets. A conquest fleet facing you at your level has the NPC fleet level, which is 6 above the galaxy level. That is more than the +5 column and less than the +10 column of the table in [scaling](../basics/scaling.md#how-much-tougher-is-an-enemy-five-or-ten-levels-higher). At level 30, the +5 column is x1.56 damage and x1.57 HP, and the HP ratio is higher further up.
+Remember that NPC fleets no longer get extra levels. Since 0.8.3.7 a conquest fleet has the galaxy level, which is your effective level or 30, whichever is higher. Versions 0.8.3.4 and 0.8.3.5 added 6 levels on top, and used the highest system level in place of 30. A fleet facing you at your level is therefore at your level, not above it. See the table in [scaling](../basics/scaling.md#how-much-tougher-is-an-enemy-five-or-ten-levels-higher) for what a level gap is worth.
 
 In the code: [Fleet Levels](#code-fleet-levels).
 
@@ -187,44 +194,64 @@ NPC fleet entries start with at most 85 hull nodes. If hull nodes set later exce
 
 In the code: [Ship Rank and Hull Nodes of Conquest Fleets](#code-ship-rank-and-hull-nodes-of-conquest-fleets).
 
-## War Effort
+## War Footing and War Fleets
 
-War effort is a multiplier on station firepower that each system has. It is set by the Conquest missions you complete. These are missions from a war-zone hub, and the game shows them with a reward line such as "+10% Station firepower". The tooltip shows the multiplier in the "Your war effort" row as "{percent} firepower ({time left})". Idle missions are the ones ECHO, your ship's AI companion, completes while you are away.
+Version 0.8.3.7 removed the per-system war effort (a multiplier on one system's station firepower, with a "Your war effort" row on the system card) and replaced it with two effects that belong to a whole faction. Both are fed by the Conquest missions you complete for that faction. These are missions from a war-zone hub, and the game shows them with a reward line such as "+12 Contribution". Embassy missions give the faction wealth in place of contribution. Idle missions are the ones ECHO, your ship's AI companion, completes while you are away. Once you have helped a faction, its Faction overview shows War Footing (the bonus and the time left), Footing Contribution out of 2000, War Fleets out of 2, Next War Fleet out of 250 (or "Waiting"), and the totals War Fleets Earned, Systems Taken, Raids Won and Enemy Ships Destroyed.
 
 ```
-multiplier = max(0, 1 + bonus - penalty)
-step       = 0.1 x (1 + 0.2 x points in ECHO The Conqueror)    for idle missions (done by ECHO)
-step       = 0.1                                                otherwise
+contribution of one mission = amount x (1 + 0.2 x points in ECHO The Conqueror)    for idle missions (done by ECHO)
+contribution of one mission = amount                                               otherwise
+amount                      = 3 to 6 (idle: 1 to 3), doubled when the mission's enemy is a conquest faction other than the Marauders or Fanatics,
+                              times 1 + the rank bonus for fleet strength rewards, rounded to a whole number
 ```
 
-When you complete a mission whose source station is in a war-zone system:
+Each mission adds its contribution to the faction whose hub or station gave it (the mission's source faction), and the mission has to come from a war-zone system.
 
-| Where | Condition | Change |
+| Faction value | Rule | Limit |
 |---|---|---|
-| The mission's system | The system is owned by the mission's source faction | Bonus rises by one step |
-| Each neighbouring system | The system is owned by the source faction | Bonus rises by half a step |
-| Each neighbouring system | The system is owned by the mission's targeted enemy faction | Penalty rises by one step |
+| Contribution | Adds up, and resets to 0 when the timer runs out | 2000 |
+| Timer | Resets to 10800 s (3 hours) on every mission | Counts down in game time, not once per conquest update |
+| War footing bonus | 0.25 x contribution / 2000 | +25% |
+| War fleet progress | Adds up with every mission and has no timer. A war fleet is granted at 250 and the progress resets to 0. While the faction already has 2 war fleets it stays at 250, and the overview shows "Waiting" | 250 |
 
-The targeted faction is the mission's enemy faction, if it is a conquest faction and is not the employer. The mission reward line says so ("+10% Station firepower, -10% for X next system").
+War footing multiplies a faction's strength by 1 + bonus, in these places:
 
-| Limit | Value |
-|---|---|
-| Bonus cap | +1.0 (multiplier x2) |
-| Penalty cap | 0.5 (multiplier x0.5 if no bonus) |
-| Duration | 10800 s (3 hours) |
+- Fleets attacking. The game judges a fleet at its points times 1 + bonus whenever it decides to attack alone, to gather an assault, whether a gathering group is strong enough, and who wins a fleet clash, a hub siege or a Defense station siege. A siege round itself adds the bonus to the fleet mix bonus.
+- Defending. The garrison points of the faction's Defense stations are multiplied by 1 + bonus, and its defending fleets get the bonus added to their fleet mix bonus. Both count in the Defense number and in next-battle strength.
+- Live fights. The combat power, drone power and torpedo power of the ships the faction fields in a battle you watch are multiplied by 1 + bonus.
 
-Each side (bonus and penalty) has one timer, and every new step on that side resets it to the full 10800 s. When the timer runs out, the whole bonus or penalty clears at once. It does not decay gradually. The timers count down in real game time, not once per conquest update. War effort is cleared on any change of owner, and when a system is abandoned.
+Contribution is the same for every system of the faction, so no single system can be aimed at. The full bonus takes 2000 contribution. A Conquest mission you fly gives 3 to 12 (1 to 6 for an idle one) before your conquest rank bonus, and ECHO's idle missions get more with points in ECHO The Conqueror, so it is a long effort.
 
-The multiplier applies in two places:
+War fleets: a faction is granted a war fleet when its war fleet progress is at 250 and all of these hold: it has fewer than 2 war fleets, it has a headquarters, the game lets it field fleets at all (a dormant faction cannot), and the game can compose a roster for it. The grant is a roster built to 1,500 points at the NPC fleet level, placed at the headquarters, with a notice: "{faction}: your contribution raised {fleet name} at {system}." The fleet's name is in the faction's own style with a Roman numeral. Kolyatov Collective has "Spearhead Battlegroup", Luminate Combine "Armada of the Forlorn Hope", Stellar Industries "Legio Oathbound", Meridia's Chosen "Host of the Martyrs", the Darkspace Compact "Pyre Flotilla" and the Corsair Syndicate "Bloodsworn Warband". Any other faction gets "{faction} Spearhead {numeral}". The numeral is the lowest one that no other war fleet of that faction uses. The fleet's map card shows the type "War Fleet", the description "A temporary fleet your missions raised for this faction." and a "Time left" row. A war fleet:
 
-- In the Defense formula, it applies to the whole station firepower term, including the 250 floor. With m = 1, the maximum bonus (x2) puts the term between 500 (the floor) and 1400 (the cap). The maximum penalty (x0.5) puts it between 125 and 350.
-- On live stations, it applies while you are at a conquest hub or a faction Defense station in a war-zone system. The multiplier then scales the combat power, drone power and torpedo power of that station's parts. See [war-stations](war-stations.md) for the live HP multipliers (x20, and x30 at a headquarters).
+- lasts 3 hours of game time. It is removed at the next planning pass after that, unless it is in a battle, held by an intercept or defending a besieged or raided system on site, so it can outlast the 3 hours
+- never retreats, never counts as below target, has no fleet slot and is never sent for a refit or topped up with warships
+- takes no part in refits, distress or raid responses, assaults or the faction's regular frontline orders. It gets its own order at each hourly tick and planning pass: attack a target it can beat (the same 1.15 rule as other fleets), else raid, else attack the target with the lowest next-battle strength within reach even if it cannot beat it (4 jumps from the frontline, or 60 without one), else rally to the frontline
+- counts as a defending fleet in the system where it stands, and is not given new orders while it defends a besieged or raided system on site
+- adds to the faction's tallies in the Faction overview: Systems Taken when it leads a battle that ends Captured, Raids Won when it leads one that ends Raided, and Enemy Ships Destroyed for each defending ship destroyed in a battle it attacks in (derived from the code)
 
-"ECHO The Conqueror" (a skill node) adds 20% of the base step per point, to idle Conquest missions only.
+The game checks for a grant when a mission completes and at every planning pass (the 600 s pass, and for the factions of a battle that just ended). The hourly economy tick does not check, and the expiry check also runs only at the planning pass.
 
-Each mission adds one step. The full penalty of 0.5 therefore takes 5 steps of 0.1, and the full bonus of +1.0 takes 10 steps (20 at a neighbouring system, which gets half a step). Every step resets its side's timer to 10800 s, so the steps do not have to fall in one 3-hour window. Each step has to come within 3 hours of the one before, and the whole bonus or penalty clears 3 hours after the last step. An idle mission with points in ECHO The Conqueror adds a bigger step, so fewer are needed. NPC fleet planning reads the multiplier too (see "What NPC Factions Use Instead of the Defense Number").
+In the code: [War Footing and War Fleets](#code-war-footing-and-war-fleets).
 
-In the code: [War Effort](#code-war-effort).
+### Compared with the 0.8.3.5 War Effort
+
+Nothing local replaced the per-system war effort. War footing took over the mission's contribution value and moved the live combat bonus from station parts to ships, but it applies to every system of the faction at once. The old tooltip row is gone, and the new values show on the Faction overview (War Footing, Footing Contribution, War Fleets, Next War Fleet).
+
+| | 0.8.3.4 and 0.8.3.5: war effort | 0.8.3.7: war footing and war fleets |
+|---|---|---|
+| Where it applies | The system of the mission's hub +10%, neighbours owned by the mission's faction +5%, neighbours owned by the mission's enemy -10% | The whole faction. Where the mission's hub stands makes no difference |
+| What it raises | The station firepower term (Defense number, next-battle strength) and the weapons of the station's parts in a live fight | Garrison ships and fleets, when they defend, attack and fight live. Station firepower gets no bonus |
+| Size per mission | +10% flat (idle: 10% x (1 + 0.2 x points in ECHO The Conqueror)) | 3 to 24 contribution, for a bonus of 25% x contribution / 2,000 |
+| Cap | +100% bonus, -50% penalty | +25% at 2,000 contribution |
+| Duration | 3 hours per system, reset by each mission there, cleared when the system changes owner | 3 hours for the faction, reset by any mission. When it runs out, contribution drops to 0 |
+| Shown on | The system tooltip, for example "+5% to firepower for 2h" | The Faction overview |
+| Penalty on enemy neighbours | Yes | None |
+| Extra | None | A 1,500-point war fleet at the headquarters for every 250 contribution, at most 2 at once |
+
+Because the station term counts at most 700 points, +15% of war effort added at most 105 points to a system. At +25% footing a resident 2,000-point fleet counts 2,500 and a 900-point garrison 1,125, so footing adds more to a defended system than the old bonus did, but nothing to a system with no fleet or garrison, and it takes about 84 missions at the top amount to reach (derived). What this means for steering attackers is in [Steering Attackers with Missions](sector-control.md#steering-attackers-with-missions-0835-and-earlier).
+
+In the code: [Turning Up at Battles](sector-control.md#code-turning-up-at-battles) has the 0.8.3.5 war effort methods; [War Footing and War Fleets](#code-war-footing-and-war-fleets) has the 0.8.3.7 ones.
 
 ## Battles
 
@@ -260,9 +287,9 @@ flowchart TD
     F -- "station destroyed, more left" --> F
     F -- "no Defense station left" --> H["Hub siege<br/>1800 s cap"]
     F -- "not won at the cap" --> G
-    H -- "structure broken, points ≥ 1.25 x Defense" --> I["Captured"]
-    H -- "points ≥ Defense" --> J["Skirmish"]
-    H -- "points below Defense" --> G
+    H -- "structure broken, strength ≥ 1.25 x Defense" --> I["Captured"]
+    H -- "strength ≥ Defense" --> J["Skirmish"]
+    H -- "strength below Defense" --> G
     K["At any stage, no attacker ships left:<br/>Attacker destroyed"]
 ```
 
@@ -274,7 +301,7 @@ When you are not in the battle's venue (see "When You Are There: Live Battles" b
 
 ```
 damage pool of a side = leftover damage + strength x random(0.04, 0.06)
-attackers: strength = sum of fleet points x (1 + hull edge)
+attackers: strength = sum of fleet strength x (1 + hull edge)
 defenders: strength = (Defense, Defense-station strength, or raid defense) x (1 - hull edge)
 ```
 
@@ -282,7 +309,7 @@ Each pool is spent on the other side's ships: the attackers' pool destroys defen
 
 The attackers' pool can go past the defenders' last ship. That spill is the only damage the station structure takes: the station hull falls only after every garrison ship and defending fleet in the fight is dead.
 
-Over a full 29-round siege, each side deals roughly 29 x 0.05 = 1.45 times its own strength in total damage (derived from the constants, not read as one number). A 9-round clash deals about 0.45 times its strength. A clash is therefore usually decided on points at its cap, not by wiping a fleet. In these strengths, your own fleets count their points plus the fleet mix bonus from Beyond the Front, as in the Defense number.
+Over a full 29-round siege, each side deals roughly 29 x 0.05 = 1.45 times its own strength in total damage (derived from the constants, not read as one number). A 9-round clash deals about 0.45 times its strength. A clash is therefore usually decided on strength at its cap, not by wiping a fleet. In these strengths, a fleet counts its points times 1 + its fleet mix bonus (your own fleets, from Beyond the Front) + its faction's war footing bonus, as in the Defense number.
 
 In the code: [One Round](#code-one-round).
 
@@ -309,14 +336,23 @@ In the code: [Hull Edge](#code-hull-edge).
 
 ### When You Are There: Live Battles
 
-If your ship is in the battle's venue (the Fleet Battle zone, the besieged station, or the raided economic outpost), the game spawns the real ships of both sides there and the battle is live. In a live battle:
+A battle runs live only while your ship is at its venue. The venue depends on the stage: the "Fleet Battle" location during a clash, the besieged Defense station during that station's stage, the hub during the hub stage, and the raided economic outpost during a raid. Being somewhere else in the same system does not count, so the battle keeps running as simulated rounds while you fly around the system or sit at the hub during a Defense station stage. When the venue is where you are, or where you are flying to, the game spawns the real ships of both sides there. In a live battle:
 
-- Simulated rounds and the time cap stop. Nothing is resolved by the clock while you are present.
-- Every 5 s the game checks which spawned ships died and removes them from their fleets.
-- A clash ends when one side has no ships left in the zone.
-- A siege ends early as Attacker destroyed when the attackers have none left.
-- If you destroy the hub, the system is abandoned. If you destroy a Defense station, the siege ends as Defense station destroyed.
+- Simulated rounds and the time cap stop. The minutes in "Under Attack! Holds {n} min at most" and "Under Attack, resolves in {n} min" do not go down while you are there. The 600 s minimum before an early capture counts on the same clock, so it stops too.
+- Every 5 s the game checks which spawned ships died and removes them from their fleets and garrisons.
+- A clash ends when one side has no ships left in the zone. The losing fleet is wiped.
+- A hub siege ends only when the attackers have no ships left (Attacker destroyed) or the hub is destroyed. The clock cannot end it. The hub counts as destroyed when its last part other than a Connector dies, whoever kills it, so the attacking ships can destroy it too. The system is then abandoned, and a siege in its hub stage hands it to its lead attacker (see "Unowned and Abandoned Systems").
+- A Defense station siege ends when the attackers have no ships left or the station is destroyed (Defense station destroyed).
 - Ships that die in NPC fleets are removed permanently.
+- A defending fleet that arrives during a siege, such as a distress responder, spawns into the fight.
+
+What you find when you arrive is not what the simulation has done so far:
+
+- Every spawned ship has full hull. The simulation never damages part of a ship. A round destroys whole ships and keeps the rest of its damage as a number (leftover damage, and carried damage between battles), and spawned ships do not take that number. The ships the simulation destroyed are not spawned. A battle that has run for 15 minutes therefore shows fewer ships, not damaged ones.
+- The station spawns with the hit points of its own parts. The structure a simulated siege wears down is a separate number kept on the battle (the "Station structure" in the battle report), and it never reaches the live station. A hub whose simulated structure is broken still spawns undamaged, unless it took damage in a live fight since the hourly rebuild (see [How Long Damage Lasts in a War Zone](war-stations.md#how-long-damage-lasts-in-a-war-zone)).
+- Spawned ships stay at the venue until the battle ends. If you leave and come back during the same battle, the damage from your earlier visit is still on them, and the ships the simulation destroyed in the meantime are gone.
+
+When you leave the venue, the battle goes back to simulated rounds with the ships that are left, and its clock carries on from where it stopped. Ending a battle sooner also frees its fleets sooner, because every faction in a battle plans again the moment it ends (see [Cadence](#cadence)).
 
 An undefended raid is simulated by rounds even if you are present. A raid with defenders runs live.
 
@@ -334,23 +370,23 @@ The early capture conditions require all of:
 - The system is capturable (not a headquarters or your capital).
 - The station structure is at 0.
 - There are no defenders left: no garrison ships or defending fleets.
-- Attacker points (summed over attacker fleets still standing) are at least 1.25 x the current Defense number.
+- Attacker strength (summed over attacker fleets still standing, each at its points times 1 + its faction's war footing bonus) is at least 1.25 x the current Defense number.
 
-For a Defense station siege, the checks are the same, but attacker points are compared with that station's strength (scaled by its structure fraction). "Defenders" there means that station's garrison and the defending fleets.
+For a Defense station siege, the checks are the same, but attacker strength is compared with that station's strength (scaled by its structure fraction). "Defenders" there means that station's garrison and the defending fleets.
 
-At the cap (1800 s), a hub siege is judged like this:
+At the cap (1800 s), a hub siege is judged like this. "Strength" is the attackers' judged strength: their points times 1 + the war footing bonus, summed over the attacker fleets still standing.
 
 ```
-structure broken, system capturable, points >= 1.25 x Defense  ->  Captured (Raided if the attacker cannot conquer)
-points >= Defense                                              ->  Skirmish
-otherwise                                                      ->  Repelled
+structure broken, system capturable, strength >= 1.25 x Defense  ->  Captured (Raided if the attacker cannot conquer)
+strength >= Defense                                              ->  Skirmish
+otherwise                                                        ->  Repelled
 ```
 
 The cap check does not require defenders to be dead. The defenders still alive are already in the Defense figure.
 
-A Defense station siege at the cap is judged differently. If the structure is broken and attacker points are at least 1.25 x the station's strength, all defending fleets in the system are wiped and the station is destroyed. The outcome is then Defense station destroyed, or Raided if the attacker cannot conquer. Otherwise the outcome is Repelled.
+A Defense station siege at the cap is judged differently. If the structure is broken and attacker strength is at least 1.25 x the station's strength, all defending fleets in the system are wiped and the station is destroyed. The outcome is then Defense station destroyed, or Raided if the attacker cannot conquer. Otherwise the outcome is Repelled.
 
-A clash at its cap (600 s) goes to the attackers if their combined points beat the defender fleet's points, and they then continue to a siege. Otherwise they go idle, and the outcome is Repelled (or Attacker destroyed if the lead attacker is gone).
+A clash at its cap (600 s) goes to the attackers if their combined judged strength (points times 1 + war footing bonus) is above the defender fleet's judged strength, and they then continue to a siege. Otherwise they go idle, and the outcome is Repelled (or Attacker destroyed if the lead attacker is gone).
 
 In the code: [How a Siege Ends](#code-how-a-siege-ends).
 
@@ -359,8 +395,8 @@ In the code: [How a Siege Ends](#code-how-a-siege-ends).
 | Outcome | Empire Log text (attacker's view / defender's view) | What triggers it | Result |
 |---|---|---|---|
 | Captured | "system captured" / "system lost" | A hub siege breaks through and the attacker's faction can conquer, or a besieger claims an abandoned system. | The system changes hands. See "Capture by Siege". |
-| Skirmish | "inconclusive skirmish" | A hub siege reaches its cap with points at or above Defense, but the capture conditions are not met (the structure is still standing, or points are under 1.25 x Defense). | Control level drops by 1 if it is above 0. Attackers go idle. There is no re-attack block. |
-| Repelled | "attack repelled" | Attacker points are below Defense at the cap, the attackers lose a clash at the cap, a raid is broken off, or a Defense station siege is not won at the cap. | Attackers go idle. A Defense station siege that ends Repelled blocks re-attack for 3600 s. A hub siege Repelled at its cap, a lost clash and a broken-off raid do not. |
+| Skirmish | "inconclusive skirmish" | A hub siege reaches its cap with strength at or above Defense, but the capture conditions are not met (the structure is still standing, or strength is under 1.25 x Defense). | Control level drops by 1 if it is above 0. Attackers go idle. There is no re-attack block. |
+| Repelled | "attack repelled" | Attacker strength is below Defense at the cap, the attackers lose a clash at the cap, a raid is broken off, or a Defense station siege is not won at the cap. | Attackers go idle. A Defense station siege that ends Repelled blocks re-attack for 3600 s. A hub siege Repelled at its cap, a lost clash and a broken-off raid do not. |
 | Attacker destroyed | "fleet destroyed" / "attackers destroyed" | No attacker ships are left in any stage. | The fleet dissolves if it is empty. |
 | Aborted | It has no text of its own | The target or station vanished, the station was wrecked, or the raided economic outpost changed hands. | Attackers go idle. |
 | Defense station destroyed | "Defense station destroyed" / "Defense station lost" | A Defense station siege is won as described above, or you destroy the station yourself in a live fight. | The station is destroyed and remains as a wreck for 3600 s that holds 10% of its stock. The garrison counts as lost. There is no re-attack block. |
@@ -419,7 +455,7 @@ When a hub siege ends in Captured, this happens in order:
 
 1. Every defending fleet of an NPC faction is wiped.
 2. Every Defense station of the old owner is destroyed (it becomes a wreck).
-3. The system's owner becomes the attacker. The hub and economic outposts of the old owner flip to the new owner. War effort in the system clears.
+3. The system's owner becomes the attacker. The hub and economic outposts of the old owner flip to the new owner.
 4. Cargo routes that now cross owners are cancelled. The old owner's pending station constructions are removed, as are its queued warship constructions for Construction Yards in that system. Work bays are emptied.
 5. The headquarters flag is removed, control level is set to 1, and the settling timer starts.
 6. The old owner is checked: a faction with no systems left starts a 5-update cooldown (counted in conquest updates) before it can rejoin the war.
@@ -443,7 +479,7 @@ In the code: [Settling and Unrest](#code-settling-and-unrest).
 
 Destroying the conquest hub of an owned war-zone system abandons it. In practice this means you are flying at the station when its last part dies. The Empire Log says "Lost control of {system} - its station was destroyed." and the notice reads "{faction} lost {system} - the system is unclaimed".
 
-The system becomes unowned and remembers the faction that abandoned it. Its control level and war effort reset, and the headquarters flag drops. The code does not check whether the system is a headquarters here, so destroying a headquarters hub abandons it. The faction then names a new headquarters at once from the systems it still owns, if it has any (see "Control Level"). A simulated siege that ends in Captured does not go through this path. In your player sector, the system goes back on sale instead ([Your empire](../expansion/your-empire.md)).
+The system becomes unowned and remembers the faction that abandoned it. Its control level resets, and the headquarters flag drops. The code does not check whether the system is a headquarters here, so destroying a headquarters hub abandons it. The faction then names a new headquarters at once from the systems it still owns, if it has any (see "Control Level"). A simulated siege that ends in Captured does not go through this path. In your player sector, the system goes back on sale instead ([Your empire](../expansion/your-empire.md)).
 
 Every fight at the system ends at once, and the system goes to whoever comes first:
 
@@ -467,7 +503,7 @@ In the code: [Unowned and Abandoned Systems](#code-unowned-and-abandoned-systems
 |---|---|
 | Conquest update (the "Conquest Update" card on the galaxy map): updates Area Conquered, control level, settling and station rebuilds, and checks the headquarters | 3600 s |
 | Hourly economy tick (not shown in the game): handles taxes, the home subsidy, builds and fleet orders | 3600 s |
-| Planning pass between the hourly steps (not shown in the game): queues warships and assigns fleet orders for every faction | Every 600 s, and at once for the factions of a battle that just ended (attacker, defender, owner of the system, supporters) |
+| Planning pass between the hourly steps (not shown in the game): queues warships, assigns fleet orders for every faction, removes expired war fleets and grants new ones | Every 600 s, and at once for the factions of a battle that just ended (attacker, defender, owner of the system, supporters) |
 | Distress response check | 60 s, only while a battle is active |
 | Fleet travel time | 60 s + 150 s per jump |
 
@@ -491,7 +527,7 @@ In the code: [Frontline Score](#code-frontline-score).
 
 ### Choosing a Target
 
-Each idle fleet that is not defending on site goes through these steps in order:
+Each idle fleet that is not defending on site goes through these steps in order. War fleets do not; they have their own order (see "War Footing and War Fleets").
 
 1. Retreat check (see "Retreats, Recovery and Distress").
 2. Refit, if the fleet is due and a Construction Yard is in reach (at most 3 refits at once per faction).
@@ -501,7 +537,7 @@ Each idle fleet that is not defending on site goes through these steps in order:
 6. Raid (see "NPC Raids").
 7. Rally to the frontline, and then guard.
 
-A fleet attacks alone only if its points are at least 1.15 times the target's next-battle strength. Among valid targets, it prefers these, in order:
+A fleet attacks alone only if its strength (points times 1 + its faction's war footing bonus) is at least 1.15 times the target's next-battle strength. Among valid targets, it prefers these, in order:
 
 1. A target it is already standing in.
 2. The owner with the most war-zone systems (unowned systems rank above any owner).
@@ -520,7 +556,7 @@ flowchart TD
     C -- yes --> R2["Refit"]
     C -- no --> D["Distress call to answer?"]
     D -- yes --> R3["Respond as a defender"]
-    D -- no --> E["Target where points ≥ 1.15 x<br/>next-battle strength?<br/>4 jumps from the frontline, else 60"]
+    D -- no --> E["Target where strength ≥ 1.15 x<br/>next-battle strength?<br/>4 jumps from the frontline, else 60"]
     E -- yes --> R4["Attack alone<br/>Prefer: target already stood in,<br/>owner with most systems (unowned first),<br/>lowest next-battle strength, fewest jumps"]
     E -- no --> F["2 or more ready fleets<br/>reach 1.15 x?"]
     F -- yes --> R5["Assault"]
@@ -533,7 +569,7 @@ In the code: [Choosing a Target](#code-choosing-a-target).
 
 ### Assaults
 
-When no single fleet can beat a target, the faction looks for 2 or more ready fleets whose combined points reach 1.15 x the target's next-battle strength. An assault is several of one faction's fleets meeting next to a target and merging to attack it.
+When no single fleet can beat a target, the faction looks for 2 or more ready fleets whose combined strength (points times 1 + war footing bonus) reaches 1.15 x the target's next-battle strength. An assault is several of one faction's fleets meeting next to a target and merging to attack it.
 
 1. The staging system is the first war-zone neighbour of the target owned by the faction (neighbour order is shuffled every conquest update).
 2. The nearest ready fleets are chosen until the sum reaches the threshold, and at least 2 are needed. They travel to the staging system with the order shown as "Gathering for an assault".
@@ -541,7 +577,7 @@ When no single fleet can beat a target, the faction looks for 2 or more ready fl
 4. If the staging system is lost, or no member is left gathering, the assault disbands. A member that stops being able to gather just leaves it.
 5. A merged fleet above one fleet slot is split back into 2000-point fleets when idle.
 
-A faction runs one assault at a time.
+A faction runs one assault at a time, and war fleets never join one.
 
 In the code: [Assaults](#code-assaults).
 
@@ -618,7 +654,7 @@ Everything above was read from the decompiled code of version 0.8.3.4 (not from 
 
 ### Code: The War Zone and the Kinds of System
 
-In code the war zone is every system whose sector is a conquest sector (the Ara Martis region), excluding reserved slots. Every war-zone system has a `ConquestSystem` that stores who owns it, war effort timers and settling state, and a hub: its main station (`ConquestStation`, shown as "Space Station" on the map). The Frontier, Staging and Darkspace regions are not part of it.
+In code the war zone is every system whose sector is a conquest sector (the Ara Martis region), excluding reserved slots. Every war-zone system has a `ConquestSystem` that stores who owns it and its settling state, and a hub: its main station (`ConquestStation`, shown as "Space Station" on the map). The Frontier, Staging and Darkspace regions are not part of it.
 
 | Term | Code name |
 |---|---|
@@ -633,17 +669,18 @@ The localization key `SystemCardControl` ("Control") exists, but `BuildConquestS
 
 Nothing in the code of 0.8.3.4 or 0.8.3.5 references `SystemCardControl`, and nothing references the text keys `ConquestSystemStatus0` to `ConquestSystemStatus2` ("Tenuous", "Contested", "Secure") either.
 
-Source: `MapTooltipCardBuilder.BuildConquestSection`, `MapTooltipCardBuilder.AddWarEffortRows`
+Source: `MapTooltipCardBuilder.BuildConquestSection` (`AddWarEffortRows` is gone in 0.8.3.7)
 
 ### Code: What the Defense Number Means
 
 ```
 Defense = StationFirepower
-        + sum over faction Defense stations: garrison ship points
-        + sum over defending fleets: totalPoints
+        + sum over faction Defense stations: garrison ship points * WarFooting.GetMultiplier(owner)
+        + sum over defending fleets: FleetMixBonus.GetBattleStrength = totalPoints * (1 + mix bonus + WarFooting.GetBonus(owner))
+        + your patrol ships in a system you own (PatrolFleet.GetShipPoints)
 
 StationFirepower = bound(profile.firepower) + sectorFlatBonus
-bound(fp)        = max(250*m, min(fp, 700*m) * structureFraction) * warEffortMultiplier
+bound(fp)        = max(250*m, min(fp, 700*m) * structureFraction)
 ```
 
 `m` is the sector StationDefense multiplier (`StationDefense.GetSectorDefenseMultiplier`, which multiplies the matching `SectorBonus` entries through `SectorMapData.GetBonusMultiplier`) and `sectorFlatBonus` the sector flat bonus (`StationDefense.GetSectorDefenseFlat`). No code in 0.8.3.4 or 0.8.3.5 creates a StationDefense sector bonus (only SafeSector is created, in `ConquestWorld.CreateSafeSectorBonus`), so in a standard game `m = 1` and the flat bonus is 0. Sector bonuses are saved in the sector's `bonuses` array and read back by `SectorMapData.LoadBonuses`, so a save that already lists a StationDefense bonus keeps it. The only code that removes one is `GamePatch.MakePlayerSectorSafe`, which strips the StationDefense bonuses from the player sector and adds SafeSector.
@@ -658,9 +695,9 @@ Source: `ConquestCombat.GetDefenseStrength`, `ConquestCombat.GetStationFirepower
 
 ### Code: What NPC Factions Use Instead of the Defense Number
 
-Next-battle strength is `GetNextBattleStrength`. If the system has Defense stations, `ConquestCombat.ChooseNextDefenseStation` picks the weakest and `ConquestCombat.GetDefenseStationStrength` gives its strength; `ConquestCombat.GetIncomingRelief` adds the points of every same-faction fleet that is Traveling toward the system.
+Next-battle strength is `GetNextBattleStrength`. If the system has Defense stations, `ConquestCombat.ChooseNextDefenseStation` picks the weakest and `ConquestCombat.GetDefenseStationStrength` gives its strength; `ConquestCombat.GetIncomingRelief` adds the plain `totalPoints` (no mix bonus or footing) of every same-faction fleet that is Traveling toward the system.
 
-It returns 0 for an unowned system. Both branches go through `GetBonusedFirepower`, so `warEffortMultiplier` applies in each. The number of full fleets an attack needs is derived: `ceil(1.15 x next-battle strength / 2000)` (`FleetTargetPoints`).
+It returns 0 for an unowned system. Both branches add `FactionGarrison.GetStrength` (garrison points times `WarFooting.GetMultiplier` of the owner) and `FleetMixBonus.GetBattleStrength` of the defending fleets (`totalPoints * (1 + mix bonus + WarFooting.GetBonus)`); `ConquestCombat.BoundStationFirepower` no longer has a war effort factor. The attacking side is judged with `WarFooting.GetJudgedStrength(fleet)`, which is `totalPoints * WarFooting.GetMultiplier(fleet.faction)`. The number of full fleets an attack needs is derived: `ceil(1.15 x next-battle strength / (2000 x WarFooting.GetMultiplier(attacker)))` (`FleetTargetPoints`).
 
 Source: `ConquestCombat.GetNextBattleStrength`, `ConquestCombat.ChooseNextDefenseStation`, `ConquestCombat.GetIncomingRelief`, `ConquestCombat.GetDefenseStationStrength`
 
@@ -688,27 +725,28 @@ The subsections below hold the code behind the level rules.
 
 #### Code: How System Levels Rise
 
-`Conquest.DoConquestTick` runs every 3600 s of game time and calls `Conquest.UpdateSystemLevels`, which applies `Conquest.RaiseTowardPlayer` to every conquest system:
+`Conquest.DoConquestTick` runs every 3600 s of game time and, except in the setup call (`inSetup`), calls `Conquest.UpdateSystemLevels`, which calls `SystemLevelDrift.Creep` for every conquest system with the player level from `FleetLevels.GetPlayerLevel`:
 
 ```
-gap = effectiveLevel - system.level
-gap > 3             -> +2
-0 < gap <= 3        -> +1
--4 < gap <= 0       -> +1 with 50% chance
-gap <= -4           -> +0
+target = max(playerLevel + GetOffset(system), GetFloor(system))
+GetFloor(system)  = 30 + random 0..6, seeded by the system's guid
+GetOffset(system) = from the temperament band rolled from the system's guid and its east-west position
+Creep: level moves to target by StepToward = random 1..4 (up or down, not past the target)
 ```
 
-Frontier systems are included only after the `frontierLevelsRise` flag is set. The only caller of `StartFrontierLevelRise` is the debug console (`ConsoleScreen.RaiseFrontierLevels`). The method name appears once in the game assembly and in none of the asset files, so no story event, mission or scene sets the flag. It is written to the save only when set and read back on load.
+`SystemLevelDrift.Bands` gives the offsets and shares: Backwater -6 to -4 (0.2 west, 0.15 east), Settled -3 to -1 (0.55, 0.5), Contested 0 to 1 (0.2, 0.25), Hot 2 to 6 (0.05, 0.1). `EastScale.For` places each system between the westmost conquest system and the average of the planned Meridia sector systems. `Conquest.Start` calls `SettleSystemLevels`, which lowers a system above its target to the target when the war loads. Version 0.8.3.5 raised every system toward your level with `Conquest.RaiseTowardPlayer`; that method and `Conquest.GetHighestSystemLevel` are gone.
 
-Source: `Conquest.UpdateSystemLevels`, `Conquest.RaiseTowardPlayer`, `Conquest.DoConquestTick`
+Frontier systems are included only after the `frontierLevelsRise` flag is set, and then only step up (`SystemLevelDrift.CreepUpOnly`, with no floor). The only caller of `StartFrontierLevelRise` is the debug console (`ConsoleScreen.RaiseFrontierLevels`). The method name appears once in the game assembly and in none of the asset files, so no story event, mission or scene sets the flag. It is written to the save only when set and read back on load.
+
+Source: `Conquest.UpdateSystemLevels`, `Conquest.SettleSystemLevels`, `SystemLevelDrift.Creep`, `SystemLevelDrift.CreepUpOnly`, `SystemLevelDrift.Settle`, `SystemLevelDrift.GetOffset`, `SystemLevelDrift.GetFloor`, `Conquest.DoConquestTick`
 
 #### Code: Fleet Levels
 
 The code class is `FleetLevels`. The hourly economy tick that does the slow catch-up is `ConquestFleetPlanner.Tick`, not the conquest update.
 
 ```
-galaxy level      = max(effectiveLevel, highest conquest system level)
-NPC fleet level   = max(1, galaxy level + 6)
+galaxy level      = max(effectiveLevel, 30)             (SystemLevelDrift.WarZoneLevelFloor)
+NPC fleet level   = max(1, galaxy level)
 ```
 
 | Question | Code |
@@ -721,7 +759,7 @@ NPC fleet level   = max(1, galaxy level + 6)
 | Refit (300 s at a Construction Yard) | `ConquestFleetOrders.CompleteRefit` (raises entry levels to the NPC fleet level) |
 | Slow catch-up (+1 level per ship each hourly economy tick) | `ConquestFleetOrders.DriftLaggingFleets` |
 
-Source: `FleetLevels.GetGalaxyLevel`, `FleetLevels.GetPlayerLevel`, `FleetLevels.GetNpcFleetLevel`, `FleetLevels.GetFleetLevel`, `FleetLevels.IsDueRefit`, `ConquestFleetOrders.CompleteRefit`, `ConquestFleetOrders.DriftLaggingFleets`
+Source: `FleetLevels.GetGalaxyLevel`, `FleetLevels.GetPlayerLevel`, `FleetLevels.GetNpcFleetLevel`, `FleetLevels.GetFleetLevel`, `FleetLevels.IsDueRefit`, `FleetLevels.LowerNpcShipsToCap`, `ConquestFleetOrders.CompleteRefit`, `ConquestFleetOrders.DriftLaggingFleets`
 
 #### Code: Ship Rank and Hull Nodes of Conquest Fleets
 
@@ -729,19 +767,22 @@ Conquest fleets and fleet hull ratings roll their ship rank with the default tie
 
 Source: `ConquestCombat.BuildShip`, `HullRating.RollStartingPoints`, `ShipUpgradeCalculator.SetNpcHullNodes`, `HullRating.ToRating`
 
-### Code: War Effort
+### Code: War Footing and War Fleets
 
 ```
-warEffortMultiplier = max(0, 1 + warEffortBonus - warEffortPenalty)
-step                = 0.1 * (1 + 0.2 * ECHO_Conqueror_points)    for idle missions (done by ECHO)
-step                = 0.1                                         otherwise
+ConquestWarContribution.GetContribution(amount, idle, level) = amount * (1 + (idle ? 0.2 * level : 0))      level = ECHO_Conqueror_points for idle missions
+warFootingBonus      = 0.25 * clamp01(warContribution / 2000)                                                (ConquestFactionStanding)
+WarFooting.GetMultiplier(faction) = 1 + warFootingBonus                                                      (0 bonus for no faction, the player and non-conquest factions)
+WarFooting.GetJudgedStrength(fleet) = fleet.totalPoints * GetMultiplier(fleet.faction)
 ```
 
-`ConquestWarEffort.Apply` runs when you complete a mission whose source station is in a war-zone system. Each side (bonus and penalty) has one timer of 10800 s, counted down every game update (`ConquestSystem.TickWarEffort`), not once per conquest update. On live stations the multiplier scales stat indices 21, 25 and 26 (combat power, drone power and torpedo power) of that station's parts (`CombatStationPart.ApplyWarEffort`). The skill node behind "ECHO The Conqueror" is `PromptEngineeringFleetStrengthBoost`.
+`ConquestStrength.OnComplete` calls `ConquestWarContribution.Apply` for a mission with no wealth reward (the embassy missions that carry wealth go to `ConquestJoin.DeliverMissionWealth` instead). `Apply` needs `GetMissionSystem` to find a war-zone `ConquestSystem` at the mission's source station and `mission.sourceFaction` to be a conquest faction. It calls `AddToFaction`, which runs `ConquestFactionStanding.AddWarContribution` (contribution up to 2000, `warFootingSeconds` reset to 10800, `warFleetProgress` up to 250) and then `WarFleets.TryGrant`. `Conquest.TickWarFooting` (from `LivingUniverse`'s update) counts `warFootingSeconds` down in game time; when it reaches 0 the contribution clears. The `ConquestWarTuning` values are `WarFootingMax` 0.25, `WarFootingFullContribution` 2000, `WarFootingSeconds` 10800, `WarFleetContribution` 250, `WarFleetPoints` 1500, `WarFleetMaxActive` 2, `WarFleetLifetimeHours` 3 and `EchoConquerorContributionPerLevel` 0.2. Standing numbers are saved in the faction's standing under `warContribution`, `warFootingSeconds`, `warFleetProgress`, `warFleetsGranted`, `warSystemsTaken`, `warRaidsWon` and `warShipsDestroyed`.
 
-`AddWarEffortPenalty` sets the penalty to `min(0.5, penalty + step)` and its timer to 10800 s on every call; `AddWarEffortBonus` does the same with a cap of 1 (`ConquestWarTuning.WarEffortStep` 0.1, `WarEffortMax`, `WarEffortPenaltyMax`, `WarEffortSeconds`, `WarEffortNeighborShare`). `ConquestCombat.BoundStationFirepower` multiplies by `warEffortMultiplier`, and both `GetDefenseStrength` and `GetDefenseStationStrength` reach it through `GetBonusedFirepower`, so next-battle strength carries the multiplier in both branches.
+Where the bonus is read: `FleetMixBonus.GetBattleStrength` (siege, clash and raid strength, and defending fleets in the Defense number), `FactionGarrison.GetStrength` (garrison points times `GetMultiplier`), `ConquestFleetOrders.CanBeat`, `TryAttack`, `PlanAssault`'s gathering test (all through `GetJudgedStrength`), `BattleManager.GetAttackerStrength` (the sum of `GetJudgedStrength` over the attackers, used by `CanCaptureEarly`, `CanTakeDefenseStation`, `JudgeSiegeAtCap`, `ResolveFleetClashAtCap` and the defense-station checks) and `AbstractUnit.ApplyWarFooting`, which multiplies stat indices 21, 25 and 26 (combat power, drone power and torpedo power) of a unit whose generation identity starts with `conquestbattle:`.
 
-Source: `ConquestWarEffort.GetStep`, `ConquestWarEffort.Apply`, `ConquestSystem.AddWarEffortBonus`, `ConquestSystem.AddWarEffortPenalty`, `ConquestSystem.TickWarEffort`, `LivingUniverse.StoryUpdate`, `ConquestStrength.OnComplete`, `CombatStationPart.ApplyWarEffort`, `SystemMapData.SetConquestFaction`
+`WarFleets.TryGrant` runs from `ConquestWarContribution.AddToFaction` and from `ConquestFleetPlanner.PlanBetweenTicks`, the 600 s planning pass. `ConquestFleetPlanner.Tick`, the hourly tick, does not call it or `ExpireWarFleets`. It needs the faction to be in `Conquest.conquestFactions`, `isWarFleetReady` (progress at least 250), fewer than 2 war fleets (`CountActive`), a headquarters, `ConquestFleetPlanner.MaxFleetsFor(faction)` not 0 (0 for a dormant faction), and a non-empty roster from `ConquestFleetComposer.ComposeRoster`. `Spawn` composes the roster for 1,500 points at `FleetLevels.GetNpcFleetLevel`, makes a `ConquestFleet` at the headquarters system with `isWarFleet`, `lifetimeHoursLeft` 3, `nameIndex` -2 and the lowest free `nameNumber` (`GetFreeNumber`), then `OnWarFleetGranted` sets the progress to 0 and adds 1 to `warFleetsGranted`, and you get the `@WarFleetArrived` notice. `LivingUniverse.TickReattackCooldowns` takes `delta / 3600` off `lifetimeHoursLeft` of every war fleet. `ConquestFleetOrders.ExpireWarFleets` removes war fleets whose lifetime is out unless they are held (`interceptHeld`), committed to a battle or defending on site (`IsDefendingOnSite`). `ConquestFleetNames.GetWarFleetName` writes the name: the text key `FleetFormatWarFleet` plus the faction identifier for the factions in `WarFleetWordFactions` (Red, Gold, Blue, Fanatics, Darkspacers, Marauders), otherwise `FleetFormatWarFleetDefault`, with `ItemHelper.ToRoman(nameNumber)`. `ConquestFleetMapIcon` shows `@ConquestWarFleetTypeLabel`, `@ConquestWarFleetDescription` and `@ConquestWarFleetTimeLeft` (`lifetimeHoursLeft` x 3600 s). A war fleet is left out of `AssignAvailableFleets`, `RespondToDistress` (distress and raid responders), `AssignRefit` and `DriftLaggingFleets` (`IsDueRefit` is false), `NeedsToRetreat` (always false), the `isBelowTarget` and `fleetSlots` (0) counts and the planner's reinforcement pick. `GreatGateReinforcement.TryPay` treats a faction whose fleets are all war fleets as having none. `AssignWarFleets` gives each war fleet with lifetime left its own order: `TryAttack`, else `TryOrderRaid`, else `TryAttackWeakest` (the candidate with the lowest next-battle strength within `GetAttackHops`, whatever the fleet's strength and ignoring claimed targets), else `Rally`. `WarFleets.RecordBattle` (from `EndBattle` and `ResolveStationSiegeAtCap`) adds to `warSystemsTaken` for `Captured` and `warRaidsWon` for `Raided` when a war fleet leads the battle. `WarFleets.RecordKills` (from `BattleInstance.RecordLosses` on the defender side) adds the lost ship count to `warShipsDestroyed` when a war fleet is among the attackers.
+
+Source: `ConquestWarContribution.GetContribution`, `ConquestWarContribution.Apply`, `ConquestWarContribution.AddToFaction`, `ConquestFactionStanding.AddWarContribution`, `ConquestFactionStanding.TickWarFooting`, `ConquestFactionStanding.warFootingBonus`, `Conquest.TickWarFooting`, `WarFooting.GetBonus`, `WarFooting.GetMultiplier`, `WarFooting.GetJudgedStrength`, `WarFleets.TryGrant`, `WarFleets.Spawn`, `WarFleets.RecordBattle`, `WarFleets.RecordKills`, `ConquestFleetOrders.AssignWarFleets`, `ConquestFleetOrders.TryAttackWeakest`, `ConquestFleetOrders.ExpireWarFleets`, `FleetMixBonus.GetBattleStrength`, `FactionGarrison.GetStrength`, `BattleManager.GetAttackerStrength`, `AbstractUnit.ApplyWarFooting`, `ConquestStrength.OnComplete`
 
 ### Code: Battles
 
@@ -768,13 +809,13 @@ Simulated rounds run through `BattleManager.TickOffscreen`.
 
 ```
 pool(side)  = carriedDamage(side) + strength(side) * random(0.04, 0.06)
-attackers:  strength = sum of fleet totalPoints * (1 + hullEdge)
+attackers:  strength = sum of FleetMixBonus.GetBattleStrength(fleet) * (1 + hullEdge)    (BattleSimulation.GetSideStrength)
 defenders:  strength = (Defense, Defense-station strength, or raid defense) * (1 - hullEdge)
 ```
 
 Each side's pool is spent on the other side: `BattleSimulation.FireAtDefenders` spends the attackers' pool on defender casualties and returns the spill to `stationHull`, and `FireAtAttacker` spends the defenders' pool on attacker casualties. The next victim is picked at random with weight `pointValue^-0.5` (`BattleTargetSizeBias` 0.5). If the picked ship costs more than what is left, spending stops and the remainder stays in `damageOnAttacker` or `damageOnDefender`, to be added to next round's pool. Fleets keep unspent damage after a battle as `carriedDamage`. The station hull is `stationHull`, and it falls only after every garrison ship and defending fleet in the fight is dead.
 
-A round runs each time `roundTimer` (60 s) runs out. When `timeRemaining` reaches 0, `ResolveAtCap` runs instead of another round, so the last step is never a round: 29 rounds in 1800 s, 9 in 600 s, 14 in 900 s. `FleetMixBonus.GetBattleStrength` is `totalPoints x (1 + mix bonus)`, and the bonus is 0 unless the fleet is an empire fleet.
+A round runs each time `roundTimer` (60 s) runs out. When `timeRemaining` reaches 0, `ResolveAtCap` runs instead of another round, so the last step is never a round: 29 rounds in 1800 s, 9 in 600 s, 14 in 900 s. `FleetMixBonus.GetBattleStrength` is `totalPoints x (1 + mix bonus + WarFooting.GetBonus(faction))`. The mix bonus is 0 unless the fleet is an empire fleet with at least 2 ship types. `BattleSimulation.GetSideStrength` sums it over the attacker fleets.
 
 Source: `BattleSimulation.RollDamage`, `BattleSimulation.SpendPool`, `BattleSimulation.PickTarget`, `BattleSimulation.TargetWeight`, `BattleSimulation.RunSiegeRound`, `BattleSimulation.RunDefenseStationRound`, `BattleSimulation.RunClashRound`, `BattleSimulation.RunRaidRound`, `BattleManager.TickOffscreen`, `ConquestWarTuning.BattleDamageShareMin`, `ConquestWarTuning.BattleTargetSizeBias`
 
@@ -790,9 +831,13 @@ Source: `HullRating.GetEdge`, `HullRating.GetSideRating`, `HullRating.GetFleetRa
 
 #### Code: When You Are There: Live Battles
 
-The 5 s check of which spawned ships died is `SyncLiveLosses`.
+Read in 0.8.3.7. `BattleManager.Tick` calls `TickLive` when `IsPlayerPresent` is true (the battle's target system is current and `MapPointOfInterest.current` is `GetVenue(battle)`), and `TickOffscreen` otherwise. `GetVenue` returns the `BattleZone` for `FleetClash`, the raid target for `Raid`, the Defense station for `DefenseStationSiege` and the hub (`ConquestSystem.station`) for `StationSiege`. Only `AdvanceBattleClock`, called from `TickOffscreen`, lowers `timeRemaining`; `TickLive` adds to `elapsedSeconds` only. `siegeElapsedSeconds` is `1800 - timeRemaining`, and the banners print `ceil(timeRemaining / 60)`.
 
-Source: `BattleManager.Tick`, `BattleManager.TickLive`, `BattleManager.EnsureVenueUnits`, `BattleManager.SyncLiveLosses`, `BattleManager.TryResolveLiveFleetClash`, `BattleManager.OnDefenseStationDestroyedLive`, `BattleManager.IsRaidLeftToRounds`, `CombatStationPart.CheckCombatStationFullyDestroyed`
+`EnsureVenueUnits` spawns when the venue is `MapPointOfInterest.currentOrNext`. `SpawnFleetRoster` spawns every remaining `FleetShipEntry` through `ConquestCombat.SpawnShip`, which passes ship type, level and hull nodes but no damage. `damageOnAttacker` and `damageOnDefender` are read only by `BattleSimulation.FireAtDefenders` and `FireAtAttacker`. A simulated kill calls `ConquestCombat.RemoveFleetShip` (or `FactionGarrison.RemoveShip`) and `ConquestCombat.RemoveBattleUnit`. `ConquestCombat.IsBattleUnitSpawnedOrGone` skips units already at the venue, and `ConquestCombat.ClearBattleUnits` removes them only from `BattleManager.RemoveBattle`, which also calls `RequestReplan`. `BattleInstance.stationHull` is read by the simulation, the capture checks, `BattleReport` and a debug command, never by the live station.
+
+Live resolution: `TryResolveLiveFleetClash` calls `WipeFleet` on the defender or `WipeAttackers` once one side has no units in the zone. `TryResolveLiveStationSiege` ends only through `EndIfLiveAttackersGone`. `TryResolveLiveDefenseStationSiege` ends through `EndIfDefenseStationSiegeGone` or `EndIfLiveAttackersGone`, and `OnDefenseStationDestroyedLive` ends it when the station dies. `CombatStationPart.CheckCombatStationFullyDestroyed` calls `ConquestOwnership.OnStationDestroyed` once no part other than a Connector is left, with no check of who destroyed the parts. The 5 s check of which spawned ships died is `SyncLiveLosses`.
+
+Source: `BattleManager.Tick`, `BattleManager.IsPlayerPresent`, `BattleManager.GetVenue`, `BattleManager.TickLive`, `BattleManager.TickOffscreen`, `BattleManager.AdvanceBattleClock`, `BattleManager.EnsureVenueUnits`, `BattleManager.SpawnFleetRoster`, `BattleManager.SyncLiveLosses`, `BattleManager.TryResolveLiveFleetClash`, `BattleManager.TryResolveLiveStationSiege`, `BattleManager.TryResolveLiveDefenseStationSiege`, `BattleManager.OnDefenseStationDestroyedLive`, `BattleManager.RemoveBattle`, `BattleManager.IsRaidLeftToRounds`, `BattleInstance.siegeElapsedSeconds`, `ConquestCombat.SpawnShip`, `ConquestCombat.IsBattleUnitSpawnedOrGone`, `ConquestCombat.ClearBattleUnits`, `BattleSimulation.FireAtDefenders`, `CombatStationPart.CheckCombatStationFullyDestroyed`, `ConquestOwnership.OnStationDestroyed`
 
 #### Code: How a Siege Ends
 
@@ -804,17 +849,17 @@ A hub siege (`StationSiege`) ends early if the lead attacker has no ships (`Atta
 - The system is capturable (`cannotBeTaken` is false: not a headquarters or your capital).
 - The station structure is at 0.
 - There are no defenders left: no garrison ships or defending fleets.
-- Attacker points (`totalPoints`, summed over attacker fleets still standing) are at least 1.25 x the current Defense number.
+- Attacker strength (`BattleManager.GetAttackerStrength`, the sum of `WarFooting.GetJudgedStrength` over attacker fleets still standing) is at least 1.25 x the current Defense number.
 
 At the cap (1800 s), a hub siege is judged like this:
 
 ```
-structure broken, system capturable, points >= 1.25 * Defense  ->  Captured (Raided if the attacker cannot conquer)
-points >= Defense                                               ->  Skirmish
-otherwise                                                       ->  Repelled
+structure broken, system capturable, strength >= 1.25 * Defense  ->  Captured (Raided if the attacker cannot conquer)
+strength >= Defense                                              ->  Skirmish
+otherwise                                                        ->  Repelled
 ```
 
-A Defense station siege at the cap ends in `DefenseStationDestroyed` (or `Raided` if the attacker cannot conquer) or `Repelled`. A clash at its cap (`ResolveFleetClashAtCap`) goes to the attackers, and a siege starts, if their `GetAttackerPoints` is above the defender fleet's `totalPoints`; otherwise it ends `Repelled` (or `AttackerDestroyed` if the lead attacker is gone).
+A Defense station siege at the cap ends in `DefenseStationDestroyed` (or `Raided` if the attacker cannot conquer) or `Repelled`. A clash at its cap (`ResolveFleetClashAtCap`) goes to the attackers, and a siege starts, if their `GetAttackerStrength` is above `WarFooting.GetJudgedStrength` of the defender fleet; otherwise it ends `Repelled` (or `AttackerDestroyed` if the lead attacker is gone).
 
 Source: `BattleManager.JudgeSiegeAtCap`, `BattleManager.CanCaptureEarly`, `BattleManager.TryEndSiegeEarly`, `BattleManager.ResolveDefenseStationSiegeAtCap`, `BattleManager.ResolveFleetClashAtCap`, `BattleManager.TryEndDefenseStationStageEarly`, `BattleManager.CanTakeDefenseStation`
 
@@ -845,7 +890,7 @@ When a hub siege ends in `Captured`, `ApplyDecisiveStationCapture` runs in this 
 
 1. Every defending fleet of an NPC faction is wiped.
 2. Every Defense station of the old owner is destroyed (it becomes a wreck).
-3. The system's owner becomes the attacker. The hub and economic outposts of the old owner flip to the new owner. The station parts of those stations take the new owner's faction too (new in 0.8.3.5, `SystemMapData.UpdateStationPartFactions`). War effort in the system clears.
+3. The system's owner becomes the attacker. The hub and economic outposts of the old owner flip to the new owner. The station parts of those stations take the new owner's faction too (new in 0.8.3.5, `SystemMapData.UpdateStationPartFactions`).
 4. `SystemCaptureCleanup` cancels cargo routes that now cross owners, removes the old owner's pending station constructions and queued warship constructions for yards in that system, and empties work bays.
 5. The headquarters flag is removed, control level is set to 1, and the settling timer starts.
 6. The old owner is checked: a faction with no systems left starts a 5-update cooldown (counted in conquest updates) before it can rejoin the war.
@@ -865,7 +910,7 @@ Source: `ConquestSystem.StartSettling`, `ConquestSystem.isInUnrest`, `Conquest.T
 
 #### Code: Unowned and Abandoned Systems
 
-Destroying the conquest hub of an owned war-zone system calls `ConquestOwnership.OnStationDestroyed`, which calls `ConquestOwnership.Abandon` (not for a hub flagged `rebuildOnLeave`). `Abandon` stores `abandonedBy`, clears the headquarters flag, control level and war effort, posts the log line `EmpireLogSystemAbandoned` and the notice `ConquestSystemAbandoned`, then calls `ReturnToSale` for a player-sector system and `HandOverToClaimant` for any other. The code does not check whether the system is a headquarters, so destroying a headquarters hub abandons it. `Abandon` ends with `Conquest.OnSystemAbandoned`, which runs `UpdateFactionStandings`, and `EnsureSingleHeadquarters` gives the faction a new headquarters from its remaining systems. A simulated siege that ends in `Captured` does not go through this path.
+Destroying the conquest hub of an owned war-zone system calls `ConquestOwnership.OnStationDestroyed`, which calls `ConquestOwnership.Abandon` (not for a hub flagged `rebuildOnLeave`). `Abandon` stores `abandonedBy`, clears the headquarters flag and control level, posts the log line `EmpireLogSystemAbandoned` and the notice `ConquestSystemAbandoned`, then calls `ReturnToSale` for a player-sector system and `HandOverToClaimant` for any other. The code does not check whether the system is a headquarters, so destroying a headquarters hub abandons it. `Abandon` ends with `Conquest.OnSystemAbandoned`, which runs `UpdateFactionStandings`, and `EnsureSingleHeadquarters` gives the faction a new headquarters from its remaining systems. A simulated siege that ends in `Captured` does not go through this path.
 
 `HandOverToClaimant` reads `SystemClaim.GetRefusal`. It is null when claiming is unlocked, the system is an open war-zone system with no owner that is not player sector or free territory, and your flagship or an idle Empire Fleet is there. `BattleManager.EndBattlesAt(systemGuid, besiegerClaims)` stops every battle at the system (outcome `Aborted`, attackers set idle) and returns the lead attacker of the first `StationSiege` (hub siege) battle whose faction `CanConquer` (is not a raider). With a refusal, `besiegerClaims` is true: that battle ends as `Captured` and `ConquestOwnership.Claim` gives that fleet's faction the system at once. With no refusal, `SystemClaim.OfferClaim` opens an offer (`IsClaimableOnArrival` is false while it is open), and `Decline` calls `Claim` for the besieger if the system is still unowned and its fleet still has ships there. Every stopped battle calls `RequestReplan`, so `LivingUniverse.RequestMilitaryPlanning` queues its attacker, defender, target owner and supporter factions for `PlanBetweenTicks` on the next update.
 
@@ -883,7 +928,7 @@ The subsections below hold the code behind NPC fleet planning.
 |---|---|
 | Conquest update | `Conquest.DoConquestTick`: `TickSettling`, `ApplyControlLevelUpgrades`, `RepairConquestStations`, `UpdateFactionStandings`; it never calls the fleet planner (only `BattleManager`, `LivingUniverse` and `ConquestFleetPlanner` do) |
 | Hourly economy tick | `ConquestFleetPlanner.Tick`: `QueueWarshipBuilds`, `TryBuildDefenseStation`, `ConquestFleetOrders.AssignOrders` |
-| Military planning between the hourly steps | `PlanBetweenTicks` (`QueueWarshipBuilds`, `AssignOrders`), every time `militaryPlanningTime` runs out (reset to 600 s); for the factions of an ended battle, from `PlanRequestedFactions` on the next update |
+| Military planning between the hourly steps | `PlanBetweenTicks` (`ExpireWarFleets`, `WarFleets.TryGrant`, `QueueWarshipBuilds`, `AssignOrders`), every time `militaryPlanningTime` runs out (reset to 600 s); for the factions of an ended battle, from `PlanRequestedFactions` on the next update |
 | Fleet target size | `FleetTargetPoints` (2000 points) |
 
 Source: `Conquest.DoConquestTick`, `LivingUniverse.TickMilitaryPlanning`, `LivingUniverse.RequestMilitaryPlanning`, `LivingUniverse.PlanRequestedFactions`, `LivingUniverse.RunHourlyTick`, `LivingUniverse.TickDistressResponses`, `ConquestFleetPlanner.TravelDuration`, `ConquestFleetPlanner.Tick`, `ConquestFleetPlanner.PlanBetweenTicks`
@@ -900,7 +945,7 @@ Source: `ConquestFrontline.TryBuildFrontlineSystem`, `ConquestFrontline.GetConte
 
 #### Code: Choosing a Target
 
-A fleet attacks alone only if `totalPoints >= 1.15 * GetNextBattleStrength(target)`.
+A fleet attacks alone only if `WarFooting.GetJudgedStrength(fleet) >= 1.15 * GetNextBattleStrength(target)` (`ConquestFleetOrders.CanBeat`, `TryAttack`).
 
 `AssignFrontlineOrders` walks the available fleets (`economy.fleets` in list order, idle, not in a battle, not `IsDefendingOnSite`, after `AssignRefit` and `AssignDistressResponders` took theirs) and calls `TryAttack` for each; `AdvanceAssaults` runs first, so fleets gathering for an assault are not available. `TryAttack` skips targets in `GetClaimedTargets` (fleets Traveling with reason `Attacking`, and every battle the faction is attacking in) and adds the one it picks. A fleet's own system has distance 0 and wins `IsBetterThan` as the "continuing" target. `ApplyPeace` uses `ConquestScope.GetWarZoneShare` (the faction's war-zone systems over every war-zone system) and returns the unfiltered list when the filter would leave nothing.
 
@@ -908,7 +953,7 @@ Source: `ConquestFleetOrders.AssignOrders`, `ConquestFleetOrders.AssignFrontline
 
 #### Code: Assaults
 
-`PlanAssault` looks for 2 or more ready fleets whose combined points reach 1.15 x the target's next-battle strength. Fleets travel to staging with the `Assembling` order. `AdvanceAssaults` calls `LeaveAssault` on a member that is no longer gathering, and disbands the assault when none is left or the staging system is no longer owned.
+`PlanAssault` looks for 2 or more ready fleets whose combined `GetJudgedStrength` reaches 1.15 x the target's next-battle strength. Fleets travel to staging with the `Assembling` order. `AdvanceAssaults` calls `LeaveAssault` on a member that is no longer gathering, and disbands the assault when none is left or the staging system is no longer owned.
 
 Source: `ConquestFleetOrders.PlanAssault`, `ConquestFleetOrders.TryPlanAssault`, `ConquestFleetOrders.AdvanceAssaults`, `ConquestFleetOrders.AdvanceAssault`, `ConquestFleetOrders.Launch`, `ConquestFleetOrders.SplitTaskForces`, `ConquestWarTuning.MinAssaultFleets`
 

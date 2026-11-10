@@ -10,6 +10,7 @@ using Source.Item;
 using Source.Util;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
 namespace IgiQoL.Features.ItemRulesTab;
@@ -469,18 +470,96 @@ public sealed class ItemRulesTab : Feature
             }
         }
 
-        ModWindow.Open("itemrules");
-        ctx.Cleanup(ModWindow.Close);
-        int rows = 0;
-        if (ModWindow.IsOpen)
+        // The tab against a known rule set: one rule of every kind, each with its own pickup limit, must each show as a
+        // row with that limit in its field, and a row's x must remove that rule and only that one.
+        InventoryItemType item = null;
+        foreach (var t in InventoryItemType.all)
+            if (t.identifier != null && t.itemLevel == 0 && Array.IndexOf(Categories, t.itemCategory) >= 0) { item = t; break; }
+        if (item == null)
         {
-            var content = ModWindow.Content;
-            for (int i = 0; i < content.childCount; i++)
-                if (content.GetChild(i).name == "Row") rows++;
+            ctx.Skip("tab", "no item type with an identifier in a listed category");
+            yield break;
         }
-        string tabDetail = $"rows={rows} tab={ModWindow.CurrentTab}";
-        if (ModWindow.CurrentTab == "itemrules" && rows >= 5) ctx.Pass("tab", tabDetail);
+        var cat = item.itemCategory;
+        var rarity = Rarities[Rarities.Length > 1 ? 1 : 0];
+        string itemKey = Items.RuleKey(item);
+        var seededCaps = new Dictionary<string, int>
+        {
+            ["Everything without a rule of its own"] = 21,
+            [CategoryName(cat)] = 22,
+            [CategoryName(cat) + " / " + rarity.GetDisplayName()] = 23,
+            [CategoryName(cat) + " / " + UpToName(rarity)] = 24,
+            ["Any category / " + UpToName(rarity)] = 25,
+            [ItemName(item)] = 26,
+        };
+        string seeded = $"{{\"default\":{{\"tractorCap\":21}},\"categories\":{{\"{cat}\":{{\"tractorCap\":22}}}},\"categoryRarity\":{{\"{cat}/{rarity}\":{{\"tractorCap\":23}}}}," +
+                        $"\"categoryUpTo\":{{\"{cat}/{rarity}\":{{\"tractorCap\":24}}}},\"rarityUpTo\":{{\"{rarity}\":{{\"tractorCap\":25}}}},\"items\":{{\"{itemKey}\":{{\"tractorCap\":26}}}}}}";
+        string before = SaveData.Feature(ItemRules.FeatureKey, false)?.ToString() ?? "{}";
+        string tabDetail, removeDetail;
+        bool tabOk, removeOk;
+        try
+        {
+            ItemRules.UseForTest(seeded);
+            ModWindow.Open("itemrules");
+            yield return null;
+            var shown = RuleRows();
+            var wrong = new List<string>();
+            foreach (var kv in seededCaps)
+                if (!shown.TryGetValue(kv.Key, out var row)) wrong.Add($"'{kv.Key}' missing");
+                else if (row.cap != kv.Value.ToString()) wrong.Add($"'{kv.Key}' shows {row.cap}, want {kv.Value}");
+            tabDetail = $"tab={ModWindow.CurrentTab} {seededCaps.Count - wrong.Count}/{seededCaps.Count} seeded rules shown with their limit" + (wrong.Count > 0 ? ": " + string.Join("; ", wrong) : "");
+            tabOk = ModWindow.CurrentTab == "itemrules" && wrong.Count == 0;
+
+            // Remove the item rule from its own row.
+            bool clicked = false;
+            if (shown.TryGetValue(ItemName(item), out var itemRow) && itemRow.remove != null)
+            {
+                itemRow.remove.onClick.Invoke();
+                clicked = true;
+            }
+            yield return null;
+            var after = RuleRows();
+            int othersLeft = 0;
+            foreach (var kv in seededCaps)
+                if (kv.Key != ItemName(item) && after.TryGetValue(kv.Key, out var r) && r.cap == kv.Value.ToString()) othersLeft++;
+            removeOk = clicked && !ItemRules.ByItem.ContainsKey(itemKey) && !after.ContainsKey(ItemName(item)) && othersLeft == seededCaps.Count - 1;
+            removeDetail = $"x clicked={clicked}; item rule {itemKey} stored={ItemRules.ByItem.ContainsKey(itemKey)} row={after.ContainsKey(ItemName(item))}; other rules still shown {othersLeft}/{seededCaps.Count - 1}";
+        }
+        finally
+        {
+            ItemRules.UseForTest(before);
+            ItemRules.Write();
+        }
+        if (tabOk) ctx.Pass("tab", tabDetail);
         else ctx.Fail("tab", tabDetail);
+        if (removeOk) ctx.Pass("tab-remove", removeDetail);
+        else ctx.Fail("tab-remove", removeDetail);
+        ModWindow.Show("itemrules");
+        ctx.Cleanup(ModWindow.Close);
         yield return ctx.Screenshot("window-itemrules");
+    }
+
+    // The rule rows on the open tab by their label: the pickup limit field's text and the remove button.
+    private static Dictionary<string, (string cap, Button remove)> RuleRows()
+    {
+        var rows = new Dictionary<string, (string cap, Button remove)>();
+        if (!ModWindow.IsOpen) return rows;
+        var content = ModWindow.Content;
+        for (int i = 0; i < content.childCount; i++)
+        {
+            var row = content.GetChild(i);
+            if (row.name != "Row") continue;
+            var field = row.GetComponentInChildren<TMP_InputField>();
+            var label = row.GetComponentInChildren<TMP_Text>();
+            if (field == null || label == null) continue;
+            Button remove = null;
+            foreach (var b in row.GetComponentsInChildren<Button>())
+            {
+                var t = b.GetComponentInChildren<TMP_Text>();
+                if (t != null && t.text == "x") remove = b;
+            }
+            rows[label.text] = (field.text, remove);
+        }
+        return rows;
     }
 }

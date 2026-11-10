@@ -1,6 +1,6 @@
 # Common Questions
 
-These are short answers to questions players ask about the Conquest stage (level 28 and up): the 30% sector-control mission, the war map, battles and captures, faction wealth and warships, and stations. Each answer ends with a link to the section that has the full numbers and how they were read from the game code. Values were read from game version 0.8.3.4, and the code behind each answer was compared with the 0.8.3.5 source. Terms are in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
+These are short answers to questions players ask about the Conquest stage (level 28 and up): the 30% sector-control mission, the war map, battles and captures, faction wealth and warships, and stations. Each answer ends with a link to the section that has the full numbers and how they were read from the game code. Values were read from game version 0.8.3.4, and the code behind each answer was compared with the 0.8.3.5 and 0.8.3.7 sources. Terms are in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
 ## The 30% Sector-Control Mission
 
@@ -31,8 +31,8 @@ Details: [What the Objective Counts](sector-control.md#what-the-objective-counts
 Let your faction's own fleets take the easy systems, help on the harder ones, and time your hand-in. You cannot hold systems yourself yet, so everything you do nudges a war that NPC (non-player character) factions fight on their own. The three major factions are Kolyatov Collective, Stellar Industries and Luminate Combine. Here is a short plan:
 
 1. Pick a faction that is not your enemy, has a headquarters, and borders Darkspace Compact systems.
-2. Look at the neighbours of its frontline. A neighbour with no resident fleet and a Defense row of about 1,739 or less is a job for one fleet. A full 2000-point fleet starts an attack at 1.15 times the target's next-battle strength, a figure the game never shows (see [the glossary](glossary.md#conquest-map)). It captures the system once it has killed the defenders and broken the hub with about 313 points left. The faction takes such a system on its own, so leave it.
-3. For a neighbour with a resident 2000-point fleet, do 5 war effort missions at your faction's hub next to it, each within 3 hours of the one before. Pick missions whose reward line names the target faction, for example "-10% for X next system". That lowers the points attackers need to start an attack by about 144 to 403, and the station fires at half strength through the siege. It does not remove the fleet.
+2. Look at the neighbours of its frontline. A neighbour with no resident fleet and a Defense row of about 1,739 or less is a job for one fleet. A full 2000-point fleet starts an attack at 1.15 times the target's next-battle strength, a figure the game never shows (see [the glossary](glossary.md#conquest-map)). It captures the system once it has killed the defenders and broken the hub with about 313 points of strength left. The faction takes such a system on its own, so leave it.
+3. For a neighbour with a resident 2000-point fleet, kill that fleet. It takes at least 2,300 points off what attackers need, so the faction's fleets can start the attack themselves. Conquest missions for your faction also help, but slowly: they raise its war footing (up to 25% more strength for its fleets) and send it free war fleets.
 4. Kill a hub only where the system can convert to your faction. The owner must already be your enemy, and the target must border one of your faction's systems. Your faction needs a free fleet within 4 jumps, meaning one that is idle and not heading to a refit, a distress call or an assault. The old owner must have no idle fleet inside the system, and no other faction's fleet may land first. Then fly in and kill the hub parts. The system is abandoned, and the first fleet to land claims it. Your faction's fleet claims it at its next planning pass (within 600 s). Skip the Defense stations.
 5. Time it against the Conquest Update card. A hub kill shows in Area Conquered at once. A siege capture or a fleet's claim shows only at the next update, so finish captures well before the countdown ends. Be at the commander in the headquarters as soon as the objective shows 30% or more.
 
@@ -47,9 +47,9 @@ ECHO is your ship's AI companion. In this table, a "non-idle" mission is one you
 | Lever | Effect |
 |---|---|
 | Kill a resident fleet or garrison ships | Every point removed from the target's next-battle strength cuts what attackers must bring by 1.15 points. Killing a resident 2000-point fleet turns a target that needed an assault into one that a single fleet can start. It also leaves 2000 fewer points of defenders to kill before the hub. |
-| War effort penalty on the target | Removes 125 to 350 from the target's station term. That lowers the points attackers need to start an attack by about 144 to 403, and the station fires at half strength through the siege. It takes 5 non-idle missions, each within 3 hours of the one before. |
+| War footing of your faction | Its fleets, garrisons and defending fleets count up to 25% more. At the top, a 2000-point fleet counts as 2500 and starts an attack on a next-battle strength of up to about 2,173. It takes 2,000 contribution from Conquest missions (3 to 12 each for a mission you fly, before your rank bonus) and clears 3 hours after the last mission. Every 250 contribution also earns the faction a 1,500-point war fleet. |
 | Kill the hub | Abandons the system. A fleet of your faction takes it only if your faction borders it, has a free fleet within 4 jumps, and no other fleet lands or already stands there first. The owner must already be your enemy. |
-| War effort bonus at your frontline hubs | Adds up to +250 to 700 of Defense, which protects systems your faction already has. It takes 10 non-idle missions at the system, or 20 at a neighbour, each within 3 hours of the one before. |
+| War footing of a faction under attack | The same bonus raises its garrison and defending fleet strength in the Defense number, which protects systems it already has. It is one number for the whole faction. |
 | Embassy missions | 80,000 to 120,000 wealth each. They only help rebuild a lost fleet and do not raise a major's fleet cap. |
 | Kill enemy warship deliveries | Destroys a ship the enemy has already paid for. It rarely changes how many systems anyone holds. |
 
@@ -62,14 +62,22 @@ Details: [What Moves Your Faction's Share](sector-control.md#what-moves-your-fac
 - You cannot shoot a hub of a faction that is not your enemy. Making it one costs about 4,500 reputation (-1,000 for the force-attack and -3,500 for the kill), which is enough to push most factions under -500.
 - Pushing a faction down to 0 systems only delays it. It sits out 5 conquest updates, then its fleets start claiming systems again.
 - When your faction passes 10%, the smaller major factions that border it can start attacking it. Once it is larger than Darkspace, every NPC faction that borders it prefers it as a target.
-- War effort needs a mission from a hub in a war-zone system. Embassy missions give wealth only, and a mission at another faction's hub strengthens that faction's stations.
+- Footing needs a mission from a hub in a war-zone system. Embassy missions give wealth only, and a mission at another faction's hub strengthens that faction.
 - For Kolyatov, Stellar and Luminate, wealth and fleets do not raise the fleet cap. It rises only with systems held: to 6 at 15 systems and to 7 at 30.
 
 Details: [Pitfalls](sector-control.md#pitfalls).
 
+### Why Does a Battle Look Untouched When I Arrive?
+
+A battle you are not at runs as simulated rounds, and the simulation removes whole ships without leaving damage on the rest. When you reach the battle's venue (the Fleet Battle location, the Defense station under siege, or the hub during the hub stage), the remaining ships spawn at full hull and the station spawns with its own part HP. A siege 15 minutes in can look like it just started, and the ships the simulation destroyed are simply missing. Being somewhere else in the same system does not count, and the simulation keeps running there.
+
+While you are at the venue, the battle's clock stops. A Fleet Battle then ends when one side is out of ships, and a siege when the attackers are out of ships or the station is destroyed. You can use that to end a fight that ties up one of your faction's fleets and send it to a siege elsewhere. When a battle ends, its factions plan again at once, and the owner of a besieged system sends its nearest idle fleet that can land before the siege's clock runs out.
+
+Details: [Turning Up at Battles](sector-control.md#turning-up-at-battles), [When You Are There: Live Battles](war.md#when-you-are-there-live-battles).
+
 ### Why Is My Faction's Share Not Growing on Its Own?
 
-The game has no growth rate to read. It only has limits on what NPC fleets will attack. A single 2000-point fleet acting alone starts an attack only at 1.15 times a target's next-battle strength or better, so it can start on anything up to about 1,739. It captures the system once it has killed every defender and broken the hub's structure inside the 30-minute stage, with about 313 points still left. That is 1.25 times the 250 floor that the Defense number drops to. A siege that runs out of time first ends in a skirmish or a repelled attack. Above 1,739 the faction needs an assault of at least 2 ready fleets, and it runs one assault at a time. Travel takes 60 s plus 150 s per jump, a siege stage takes at least 600 s, and planning runs every 600 s.
+The game has no growth rate to read. It only has limits on what NPC fleets will attack. A single 2000-point fleet acting alone, with no war footing, starts an attack only at 1.15 times a target's next-battle strength or better, so it can start on anything up to about 1,739. It captures the system once it has killed every defender and broken the hub's structure inside the 30-minute stage, with about 313 points of strength still left. That is 1.25 times the 250 floor that the Defense number drops to. A siege that runs out of time first ends in a skirmish or a repelled attack. Above 1,739 the faction needs an assault of at least 2 ready fleets, and it runs one assault at a time. Travel takes 60 s plus 150 s per jump, a siege stage takes at least 600 s, and planning runs every 600 s.
 
 A faction holding under 10% of the sector only targets unowned systems or owners at 10% or more. If that leaves no target at all, it targets everything. At the start, none of the three majors is at 10%, so they ignore each other and go after Darkspace and unowned systems. A resident fleet in a system also pushes it above the single-fleet limit, so those systems wait for an assault.
 
@@ -109,13 +117,13 @@ No. Only one faction's chain can be started. Your first yes at an embassy finish
 
 Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission), [A Step-by-Step Plan](sector-control.md#a-step-by-step-plan).
 
-### Spoiler: What Are the Three Kinds of "Contribution"?
+### Spoiler: What Are the Four Kinds of "Contribution"?
 
-The game uses the word for three separate counters. "Your Contribution" on the Faction overview is your conquest standing with a faction, and it sets your conquest rank. The 10 points in the first mission are a counter that runs for that one step only. The same mission amounts also add to "Your Contribution". "Wealth your missions brought" is what your embassy missions delivered to a faction, and it matters for joining a smaller faction's war.
+The game uses the word for four separate counters. "Your Contribution" on the Faction overview is your conquest standing with a faction, and it sets your conquest rank. The 10 points in the first mission are a counter that runs for that one step only. The same mission amounts also add to "Your Contribution". "Footing Contribution" is the faction's war footing counter: the contribution of the Conquest missions you completed at its war-zone hubs, up to 2000 (embassy missions don't add to it). "Wealth your missions brought" is what your embassy missions delivered to a faction, and it matters for joining a smaller faction's war.
 
 Details: [Spoiler: Getting the Mission](sector-control.md#spoiler-getting-the-mission), [Joining a Faction's War](faction-economy.md#joining-a-factions-war).
 
-## The System Tooltip, War Effort and Fleet Labels
+## The System Tooltip, War Footing and Fleet Labels
 
 ### What Does the Defense Number on a System Tooltip Mean?
 
@@ -139,35 +147,45 @@ Details: [What the Defense Number Means](war.md#what-the-defense-number-means), 
 
 To lower it:
 
-- Apply a war effort penalty. At the maximum, it halves the station term.
 - Destroy defender ships or fleets. Their points come off one for one. Intercepting fleets that are still traveling also removes the points they would add to the defense as relief.
 - Destroy turret platforms or the core by hand. The parts must be fully destroyed.
 - Attack within a few hours of a capture. The station profile (hub and Defense stations, hull and firepower) is halved while the system is settling.
 - Break the station structure (the hull total the attackers wear down; see the [glossary](glossary.md)) in a hub siege. That lowers the station term toward the 250 floor.
 
-To raise it, use a war effort bonus (up to double the station term) or add turret platforms, which only help up to 700 firepower.
+To raise it, run Conquest missions for the owner (its war footing raises garrisons and defending fleets by up to 25%) or add turret platforms, which only help up to 700 firepower.
 
 Details: [Ways to Lower or Raise Defense](war.md#ways-to-lower-or-raise-defense).
 
-### What Is War Effort and What Does It Do?
+### What Is War Footing and What Does It Do?
 
-War effort is a multiplier on a system's station firepower, raised by Conquest missions you complete. The tooltip shows it as "Your war effort", green for a bonus and red for a penalty, with the time left.
+War footing replaced the per-system war effort in version 0.8.3.7. It belongs to a faction, not to a system. Each Conquest mission you complete from a war-zone hub adds its contribution (the reward line, for example "+12 Contribution") to the faction that gave it. The Faction overview shows War Footing, Footing Contribution out of 2000, War Fleets and Next War Fleet once you have helped a faction. A mission at an embassy gives wealth instead and does not add to war footing.
 
 ```
-multiplier = max(0, 1 + bonus - penalty)
+bonus      = 0.25 x contribution / 2000
+multiplier = 1 + bonus
 ```
 
-Each non-idle mission adds a step of 0.1:
+Contribution is capped at 2000, and a 3 hour timer resets on every mission. When the timer runs out, all of it clears at once.
 
-- At the mission's system, the step goes to the bonus if the mission's faction owns that system.
-- Each neighbouring system owned by that faction gets half of that bonus.
-- Each neighbouring system owned by the mission's enemy faction gets the same step as a penalty.
+The multiplier applies to:
 
-The bonus caps at +1.0 (a multiplier of 2) and the penalty at 0.5 (a multiplier of 0.5). Each side has one timer of 3 hours, and every new step resets it. When the timer runs out, the whole bonus or penalty clears at once.
+- how strong the faction's fleets count when they decide to attack and when a battle is judged
+- garrison points and defending fleets in the Defense number
+- the Combat Power, Drone Power and Torpedo Power of the units in a live conquest battle
 
-Idle missions done by ECHO use a step of 0.1 x (1 + 0.2 x points in the "ECHO The Conqueror" skill). The multiplier applies to the station term of the Defense number. While you are fighting at a hub or Defense station, it also applies to the Combat Power, Drone Power and Torpedo Power of that station's parts.
+Every 250 contribution also earns the faction a free 1,500-point war fleet at its headquarters (at most 2 at once, 3 hours each; while two are out, the progress waits at 250 and shows "Waiting"). A war fleet never retreats, is never refitted or topped up, and uses no fleet slot. It attacks a target it can beat, else raids an outpost, else attacks the weakest target in reach, and otherwise rallies to the frontline.
 
-Details: [War Effort](war.md#war-effort), [War Effort on Station Weapons](war-stations.md#war-effort-on-station-weapons).
+Idle missions done by ECHO multiply their contribution by 1 + 0.2 x points in the "ECHO The Conqueror" skill.
+
+Details: [War Footing and War Fleets](war.md#war-footing-and-war-fleets), [War Footing in Live Battles](war-stations.md#war-footing-in-live-battles).
+
+### Can I Still Steer Attackers Away With Missions?
+
+Not since 0.8.3.7. Until 0.8.3.5, each Conquest mission gave the system of its hub +10% station firepower and the faction's neighbouring systems +5%, shown on the system tooltip as, for example, "+5% to firepower for 2h". Attackers prefer the weakest target of the biggest owner, so a few missions at border hubs sent them to other systems. Version 0.8.3.7 removed that bonus and put nothing local in its place. Missions now feed war footing, which applies to the whole faction and raises only garrisons and fleets.
+
+What still moves attackers is owner size, the 10% rule, where fleets and garrisons stand, and fleets on their way to a system. You can pull attackers toward an enemy system by killing its fleet or garrison, but you can no longer push them away from a system you choose.
+
+Details: [Compared with the 0.8.3.5 War Effort](war.md#compared-with-the-0835-war-effort), [What Still Steers Attackers in 0.8.3.7](sector-control.md#what-still-steers-attackers-in-0837).
 
 ### What Does "Reinforcing" on a Fleet Mean?
 
@@ -210,17 +228,17 @@ A hub siege ends in an early capture if all of these hold:
 - The system is not a headquarters or your capital.
 - The station structure is at 0.
 - No garrison ships or defending fleets are left.
-- The attackers have at least 1.25 times the current Defense number in points.
+- The attackers have at least 1.25 times the current Defense number in strength (their points times 1 plus their faction's war footing bonus).
 
 Otherwise the siege is judged at the 1800 s cap:
 
 ```
-structure broken, capturable, points >= 1.25 x Defense  ->  Captured
-points >= Defense                                       ->  Skirmish
+structure broken, capturable, strength >= 1.25 x Defense  ->  Captured
+strength >= Defense                                       ->  Skirmish
 otherwise                                               ->  Repelled
 ```
 
-When a system is captured, the defending NPC fleets are wiped and the old owner's Defense stations are destroyed. The hub and economic outposts pass to the attacker. War effort clears, and the settling timer starts.
+When a system is captured, the defending NPC fleets are wiped and the old owner's Defense stations are destroyed. The hub and economic outposts pass to the attacker, and the settling timer starts.
 
 Details: [How a Siege Ends](war.md#how-a-siege-ends), [Capture by Siege](war.md#capture-by-siege).
 
@@ -246,7 +264,7 @@ Details: [Unowned and Abandoned Systems](war.md#unowned-and-abandoned-systems), 
 
 ### How Do NPC Factions Pick Targets?
 
-Idle fleets decide in a fixed order: retreat if below 35%, refit if due, answer a distress call, attack, join an assault, raid, then rally to the frontline and guard. A fleet attacks alone only at 1.15 times the target's next-battle strength or better. Among valid targets, it prefers these, in this order:
+Idle fleets decide in a fixed order: retreat if below 35%, refit if due, answer a distress call, attack, join an assault, raid, then rally to the frontline and guard. A fleet attacks alone only at 1.15 times the target's next-battle strength or better, counting its points times 1 plus its faction's war footing bonus. War fleets skip that order: they go straight to attack, raid or rally. Among valid targets, it prefers these, in this order:
 
 1. A target it is already standing in.
 2. The owner with the most war-zone systems (unowned systems rank above any owner).
@@ -273,7 +291,7 @@ Details: [Cadence](war.md#cadence).
 
 ### How Strong Are the Fleets and Systems I Face?
 
-NPC warships are built at the higher of your effective level and the highest system level, plus 6. At level 28, systems start at level 32 to 36, so the first fleets are up to level 42 (your level plus up to 14). Systems rise toward your level every hour and never drop. Once they sit about 4 above you, fleets are about your level plus 10.
+NPC warships are built at your effective level, or at level 30 if you are below it (version 0.8.3.7; 0.8.3.5 added 6 levels). Systems move toward their own level targets every hour, up or down, so the fleets sit at your level whatever the systems do.
 
 At level 30, an enemy 5 levels above you has 1.56 times your damage and 1.57 times your HP. An enemy 10 levels above has 2.44 times the damage and 2.53 times the HP (see the [scaling table](../basics/scaling.md#how-much-tougher-is-an-enemy-five-or-ten-levels-higher)). A fleet is refitted once it is 3 or more levels behind, so old fleets mostly sit 0 to 2 levels behind between hourly updates, and further behind for a few updates after the NPC level rises. Fleets are 2000 points regardless of your level.
 
@@ -380,7 +398,7 @@ For Kolyatov, Stellar, Luminate and the Corsair Syndicate (when it holds a war-z
 - The Corsair Syndicate with no war-zone system has 2.
 - Mindus Holdings, Steel Vultures and Stranded field nothing without a war-zone system. With one, their cap is set by the embassy wealth you deliver: 3 below 2,250,000, 4 from 2,250,000 and 5 from 3,000,000.
 
-For the factions whose cap follows systems held, wealth does not raise it. While a faction has fewer fleet slots in use than its cap, every ship costs half and builds three times faster.
+For the factions whose cap follows systems held, wealth does not raise it. War fleets use no slot and do not count toward the cap. While a faction has fewer fleet slots in use than its cap, every ship costs half and builds three times faster.
 
 Details: [Fleet Caps](faction-economy.md#fleet-caps), [The Under-Cap Discount](faction-economy.md#the-under-cap-discount).
 
@@ -443,7 +461,7 @@ A Defense station holds a garrison and fires on enemies. Garrison size follows i
 | Garrison ships | 3 | 4 | 5 | 6 | 8 |
 | Garrison budget (points) | 270 | 405 | 540 | 720 | 900 |
 
-The garrison counts in full toward a system's Defense number, summed across every Defense station there. In practice, garrisons are refilled only by warships built at yards. A system holds at most 2 faction stations of any type. In a live fight at the station, the garrison ships spawn as real ships, and ships you kill are removed from the garrison. A faction builds one Defense station at a time, on a frontline system, at a cost of 100,000 wealth and 3600 s.
+The garrison counts toward a system's Defense number, times 1 plus the owner's war footing bonus, summed across every Defense station there. In practice, garrisons are refilled only by warships built at yards. A system holds at most 2 faction stations of any type. In a live fight at the station, the garrison ships spawn as real ships, and ships you kill are removed from the garrison. A faction builds one Defense station at a time, on a frontline system, at a cost of 100,000 wealth and 3600 s.
 
 Details: [Defense Stations and Garrisons](war-stations.md#defense-stations-and-garrisons), [Defense Stations](faction-economy.md#defense-stations).
 

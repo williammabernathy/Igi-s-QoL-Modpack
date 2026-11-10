@@ -1,6 +1,6 @@
 # Faction Economy and Ship Production
 
-This page covers where an NPC faction's money comes from, what it spends it on, how it builds economic outposts and Construction Yards, how warships are paid for, built and delivered, and which of your actions slow that down. NPC means non-player character: a faction the game controls. Every value was read from the decompiled game code of version 0.8.3.4, not measured in play. The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. Ship point values are not in the decompiled source. They were read from a runtime dump of the ship prefabs in both versions, and none of them changed. This page belongs to the conquest stage, which opens at level 28 with the Sector Control missions. Battles, fleet orders, raids and captures are in [War Zone and Battles](war.md). Stations under attack in the war are in [War Stations](war-stations.md). Attacking stations in general is in [stations](../basics/stations.md).
+This page covers where an NPC faction's money comes from, what it spends it on, how it builds economic outposts and Construction Yards, how warships are paid for, built and delivered, and which of your actions slow that down. NPC means non-player character: a faction the game controls. Every value was read from the decompiled game code of version 0.8.3.4, not measured in play. The code was then compared with the 0.8.3.5 and 0.8.3.7 sources, and every statement that changed in either was rewritten. Ship point values are not in the decompiled source. They were read from a runtime dump of the ship prefabs of 0.8.3.4 and 0.8.3.5, and none of them changed between those two. There is no 0.8.3.7 dump, so the point values below are carried over from 0.8.3.5 (the pricing code did not change). This page belongs to the conquest stage, which opens at level 28 with the Sector Control missions. Battles, fleet orders, raids and captures are in [War Zone and Battles](war.md). Stations under attack in the war are in [War Stations](war-stations.md). Attacking stations in general is in [stations](../basics/stations.md).
 
 Terms and abbreviations are explained in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md). The code names behind the terms are in the last part of the page, [In the Game Code](#in-the-game-code).
 
@@ -28,6 +28,8 @@ The Factions tab of the galaxy map shows, for an NPC faction:
 
 The card that lists the income and spending ledger, the Construction Yards count, active ship builds, deliveries and recent builds exists in the game files, but the game only enables it when running inside the Unity editor. It does not appear in the released game. The ledger entries below are therefore only visible indirectly, as movement in the Economic Power tile.
 
+For a conquest faction, the faction's detail view also has a Conquest section with Headquarters, Area Conquered and Your Contribution. Once Conquest missions you completed at one of its war-zone hubs have given it war footing, the section adds War Footing, Footing Contribution (out of 2000), War Fleets (out of 2), Next War Fleet (out of 250, or "Waiting" when a war fleet is earned but cannot be sent yet) and the totals War Fleets Earned, Systems Taken, Raids Won and Enemy Ships Destroyed. What they mean is in [War Footing and War Fleets](war.md#war-footing-and-war-fleets).
+
 In the code: [What the Faction Overview Shows](#code-what-the-faction-overview-shows).
 
 ## When Things Happen
@@ -37,7 +39,7 @@ In the code: [What the Faction Overview Shows](#code-what-the-faction-overview-s
 | Every story second | Economic outpost builds, warship builds, warship deliveries and work-bay ship orders all advance |
 | Every 3600 s (1 hour), the hourly economy tick, not shown in the game | Taxes are paid. Then each faction's planner runs: economic outposts, the warship queue with Defense stations and fleet orders, and the home subsidy with Great Gate reinforcement. After that the Canisec patrols are handled, and the ledger closes the hour |
 | Every 3600 s (1 hour), the conquest update, a separate timer | Recalculates Area Conquered, rebuilds damaged stations and counts down settling. The galaxy map shows it as the "Conquest Update" countdown card |
-| Every 600 s (10 minutes) | The warship queue is refilled and fleet orders are reassigned |
+| Every 600 s (10 minutes) | Expired war fleets are removed and an earned war fleet is sent. The warship queue is refilled and fleet orders are reassigned |
 | After battles | The attacker, the defender, the owner of the target system and the supporters of a battle that just ended are re-planned immediately |
 
 A yard slot that frees up is therefore refilled within about ten minutes, not an hour. Economic outposts and taxes move on the hourly economy tick.
@@ -86,7 +88,7 @@ In the code: [Where a Faction's Wealth Comes From](#code-where-a-factions-wealth
 
 ### Your Embassy Missions Feed the Faction
 
-A mission taken at an embassy of a conquest faction carries a faction-wealth reward of 80,000 to 120,000. The reward is halved for idle missions, which ECHO, your ship's AI companion, completes for you while you are away. On completion the amount is added to that faction's wealth under "Your embassy missions". It is also added to your running embassy wealth with that faction, the "Wealth your missions brought" counter. The game calls three things contribution: this wealth, "Your Contribution" (your conquest standing) and the 10 contribution points of the first sector-control mission. The faction gets the wealth whether or not you later fight it.
+A mission taken at an embassy of a conquest faction carries a faction-wealth reward of 80,000 to 120,000. The reward is halved for idle missions, which ECHO, your ship's AI companion, completes for you while you are away. On completion the amount is added to that faction's wealth under "Your embassy missions". It is also added to your running embassy wealth with that faction, the "Wealth your missions brought" counter. The mission's contribution amount still adds to "Your Contribution" (your conquest standing) and to the 10 points of the first sector-control mission, but it does not add to war footing, which only missions at a war-zone hub feed. The game uses the word contribution for all of these counters and for "Footing Contribution"; the [conquest glossary](glossary.md#missions-and-standing) separates them. The faction gets the wealth whether or not you later fight it.
 
 In the code: [Your Embassy Missions Feed the Faction](#code-your-embassy-missions-feed-the-faction).
 
@@ -97,7 +99,7 @@ In the code: [Your Embassy Missions Feed the Faction](#code-your-embassy-mission
 | Stations | New economic outpost: 50,000. Defense station: 100,000. Upgrade: 15,000 from tier 1, 25,000 from tier 2, 50,000 from tier 3 and 100,000 from tier 4 | Paid when the build or upgrade starts |
 | Warships | Per hull, by size category (table below). Half price while under the fleet cap | Paid when the build is queued, never refunded |
 | Ships for station work bays | The same price per size as warships. A work bay is the mining or salvage bay of a faction station, and these are the ships it sends out to claim a mining site or salvage yard | Paid when the build starts at a free yard. These ships occupy a yard slot |
-| "Great Gate fleets" | Full roster cost of the Great Gate reinforcement | Only when the faction has at least one fleet and holds at least 10% of the war zone; otherwise the reinforcement is free (see [Catch-Up Mechanics](#catch-up-mechanics)) |
+| "Great Gate fleets" | Full roster cost of the Great Gate reinforcement | Only when the faction has at least one fleet that is not a war fleet and holds at least 10% of the war zone; otherwise the reinforcement is free (see [Catch-Up Mechanics](#catch-up-mechanics)) |
 | Lost to raids | Drained by a raid | See [Raids and the Economy](#raids-and-the-economy) |
 
 Raiders and Canisec pay for their fleets through the Warships row, at the full price of every ship in the fleet (the full roster price).
@@ -250,7 +252,7 @@ In the code: [Build Time](#code-build-time).
 
 ### The Under-Cap Discount
 
-While a faction has fewer fleet slots in use than its fleet cap, every ship it queues costs 50% and builds 3 times faster. This applies to every build queued while the faction is below its fleet cap, including garrison ships and top-ups of existing fleets. Each fleet uses one slot per 2000 points of its target size (rounded to the nearest whole number, at least one), so a combined task force occupies several slots.
+While a faction has fewer fleet slots in use than its fleet cap, every ship it queues costs 50% and builds 3 times faster. This applies to every build queued while the faction is below its fleet cap, including garrison ships and top-ups of existing fleets. Each fleet uses one slot per 2000 points of its target size (rounded to the nearest whole number, at least one), so a combined task force occupies several slots. A war fleet uses no slot, so it neither ends the discount nor counts against the cap.
 
 In the code: [The Under-Cap Discount](#code-the-under-cap-discount).
 
@@ -277,7 +279,7 @@ For each yard with a free slot, the planner takes the first of these that applie
 3. Founding. The ship founds a new fleet. The points wanted are the spare fleet slots times 2000 points, minus what is already queued, capped at 2000 points for the ship.
 4. Top-up. The ship goes to the fleet furthest below 100% of its target.
 
-If wealth does not cover the price, nothing is queued. For items 2 to 4, the ship type is a weighted random pick of the faction's warships with a point value at or below the points needed (heavier hulls weigh more). For the garrison, the planner picks the biggest warship that fits the per-ship budget.
+If wealth does not cover the price, nothing is queued. For items 2 to 4, the ship type is a weighted random pick of the faction's warships with a point value at or below the points needed (heavier hulls weigh more). For the garrison, the planner picks the biggest warship that fits the per-ship budget. Items 2 to 4 skip war fleets: they have no target to fall below, so no ship is built to fill one.
 
 ```mermaid
 flowchart TD
@@ -312,7 +314,7 @@ In the code: [What Gets Queued, in Priority Order](#code-what-gets-queued-in-pri
 
 ### New Ship Level
 
-A ship leaves the yard at the NPC fleet level, which is the galaxy level + 6 (at least 1). The galaxy level is your effective level (character level plus Vanguard level) or the highest conquest-system level, whichever is higher. A fleet whose point-weighted average level is 3 or more levels below the NPC fleet level is sent to a yard of its faction within 4 jumps and refitted for 300 s. Each faction can refit up to 3 fleets at once.
+A ship leaves the yard at the NPC fleet level, which is the galaxy level (at least 1). The galaxy level is your effective level (character level plus Vanguard level, which only starts after you choose to commit to it at level 100) or 30, whichever is higher. Version 0.8.3.5 added 6 levels and counted the highest conquest-system level; 0.8.3.7 removed both. When a save loads, the game lowers every NPC ship above that level (fleet ships, garrison ships and deliveries on the way) to it. A fleet whose point-weighted average level is 3 or more levels below the NPC fleet level is sent to a yard of its faction within 4 jumps and refitted for 300 s. Each faction can refit up to 3 fleets at once.
 
 In the code: [New Ship Level](#code-new-ship-level).
 
@@ -356,7 +358,7 @@ In the code: [Delivery](#code-delivery).
 
 Corsair Syndicate (while it holds no war-zone system) builds no ships at yards. Each hourly economy tick it:
 
-- Tops up every idle or retreating fleet that is at one of its own systems. The missing points are composed as a roster and paid at full price from wealth.
+- Tops up every idle or retreating fleet that is at one of its own systems and below its target (a war fleet has no target, so it is never topped up). The missing points are composed as a roster and paid at full price from wealth.
 - If fleet slots are under the cap (2 for Corsairs), raises a new 2000-point fleet at its first owned system, also at full price.
 
 Canisec has no yard either. Each hourly economy tick it pays itself a 200,000 home subsidy, raises an 800-point patrol in each Frontier sector that has none, and tops up idle patrols at home, all at full roster price.
@@ -386,7 +388,7 @@ The war-zone share is the faction's war-zone systems over all war-zone systems. 
 | 20% | 48,000 |
 | 33.3% or more | 0 |
 
-A Great Gate reinforcement is a free Great Gate fleet when the faction has no fleets at all or holds under 10% of the war zone. Otherwise it is paid for at the roster's full price. If wealth cannot cover it, no fleet appears and the cooldown does not start. The fleet appears instantly, with no yard, no delivery and nothing to intercept.
+A Great Gate reinforcement is a free Great Gate fleet when the faction has no fleets other than war fleets or holds under 10% of the war zone. Otherwise it is paid for at the roster's full price. If wealth cannot cover it, no fleet appears and the cooldown does not start. The fleet appears instantly, with no yard, no delivery and nothing to intercept.
 
 Home subsidy does not count toward the amount a raid drains (see below).
 
@@ -519,7 +521,7 @@ In the code: [Ways to Slow a Faction](#code-ways-to-slow-a-faction).
 
 ## In the Game Code
 
-This part holds the code detail behind the player sections above: class and method names, field names, timers as written in the code, raw formulas and the `Source:` lines. The code was read in version 0.8.3.4 and compared with the 0.8.3.5 source. To check a claim, find the named method in a decompiler (the `Source:` line of each section lists them) and read it. Ship point values come from the `SpaceShip.pointValue` field of the ship prefabs, which the runtime dumps of 0.8.3.4 and 0.8.3.5 both list with the same values.
+This part holds the code detail behind the player sections above: class and method names, field names, timers as written in the code, raw formulas and the `Source:` lines. The code was read in version 0.8.3.4 and compared with the 0.8.3.5 and 0.8.3.7 sources. To check a claim, find the named method in a decompiler (the `Source:` line of each section lists them) and read it. Ship point values come from the `SpaceShip.pointValue` field of the ship prefabs, which the runtime dumps of 0.8.3.4 and 0.8.3.5 both list with the same values. There is no 0.8.3.7 dump.
 
 | Term | Code name |
 |---|---|
@@ -531,9 +533,11 @@ This part holds the code detail behind the player sections above: class and meth
 
 Combat Power is `totalPoints` summed over the faction's fleets. The Economic Outposts tile shows `FactionStation.GetAllOwnedBy(faction).Count + economy.constructions.Count` (every `FactionStation`, Defense stations and wrecks included) over `economy.outpostSlots` (`2 x systems held`, "slots used").
 
+For a conquest faction, `FactionOverviewContent.BuildConquestSection` adds the Headquarters, Area Conquered (`currentConqueredPercentage`) and Your Contribution (`playerContribution`) rows. `AddWarRows` adds the war rows only when `ConquestFactionStanding.hasHelpedInWar` is true (`warContribution` or `warFleetProgress` above 0, or `warFleetsGranted` above 0). War Footing shows `warFootingBonus` and `warFootingSeconds`, Footing Contribution `warContribution` out of 2000, War Fleets `WarFleets.CountActive` out of 2, and Next War Fleet `warFleetProgress` out of 250 (the text key `FactionOverviewWarFleetWaiting`, "Waiting", once `isWarFleetReady`). The four totals are `warFleetsGranted`, `warSystemsTaken`, `warRaidsWon` and `warShipsDestroyed`.
+
 The card that lists the income and spending ledger, the Construction Yards count, active ship builds, deliveries and recent builds (`FactionOverviewContent.BuildShipyardSection`) exists in the code but is only enabled when running inside the Unity editor, so it does not appear in the released game. The ledger entries are therefore only visible indirectly, as movement in the Economic Power tile.
 
-Source: `FactionOverviewContent.BuildShipyardSection`, `FactionOverviewContent.SetEconomicPowerTile`, `FactionOverviewContent.SetCombatPowerTile`, `FactionPowerHistory.Record`
+Source: `FactionOverviewContent.BuildShipyardSection`, `FactionOverviewContent.SetEconomicPowerTile`, `FactionOverviewContent.SetCombatPowerTile`, `FactionOverviewContent.BuildConquestSection`, `FactionOverviewContent.AddWarRows`, `FactionOverviewContent.SetWarRows`, `FactionPowerHistory.Record`
 
 ### Code: When Things Happen
 
@@ -542,7 +546,7 @@ Source: `FactionOverviewContent.BuildShipyardSection`, `FactionOverviewContent.S
 | Every story second | `FactionEconomy.ProgressConstructions`: economic outpost builds, warship builds, warship deliveries, work-bay ship orders. The story clock is `GamePlayer.UpdateStorytellers(Time.deltaTime)`, called from `GameplayManager.Update` |
 | Every 3600 s (hourly economy tick, not shown in the game) | `GrowWealth` pays taxes, then each faction's planner runs: `FactionEconomicPlanner.Tick` (economic outposts), `ConquestFleetPlanner.Tick` (warship queue, Defense stations, fleet orders), `GreatGateReinforcement.Tick` (home subsidy and Great Gate reinforcement). Then Canisec patrols, then the ledger hour closes |
 | Every 3600 s (conquest update, a separate timer) | `Conquest.DoConquestTick`: recalculates Area Conquered, rebuilds damaged stations and counts down settling. The galaxy map shows it as the "Conquest Update" countdown card |
-| Every 600 s | `ConquestFleetPlanner.PlanBetweenTicks`: the warship queue is refilled and fleet orders reassigned |
+| Every 600 s | `ConquestFleetPlanner.PlanBetweenTicks`: `ConquestFleetOrders.ExpireWarFleets` removes war fleets whose `lifetimeHoursLeft` has run out (unless held by an intercept, committed to a battle or defending on site), `WarFleets.TryGrant` sends an earned war fleet, the warship queue is refilled and fleet orders reassigned. `TryGrant` also runs when a Conquest mission completes (`ConquestWarContribution.AddToFaction`) |
 | After battles | `LivingUniverse.RequestMilitaryPlanning` queues the attacker, defender, target owner and supporter factions; `PlanRequestedFactions` runs `PlanBetweenTicks` for them on the next update |
 
 `Time.deltaTime` is scaled by `Time.timeScale`, which `GameTimeScale.Apply` sets to 0 while `GameTimeScale.paused` is true. `GameManager.Pause` sets it, and `AlertPopup`, `DialogueManager`, `StationBuilderPopup` and other popups call it. `GamePlayer.Update` is only called from `GameplayManager.Update`, so no story time passes outside a loaded game, including on the main menu.
@@ -574,6 +578,8 @@ On completion the amount is added to that faction's wealth under `PlayerSupport`
 
 Source: `MissionGenerator.RollEmbassyWealth`, `ConquestStrength.OnComplete`, `ConquestJoin.DeliverMissionWealth`
 
+`ConquestStrength.OnComplete` adds `amount` to `playerContribution` (and fires `EarnCombatStrengthForFaction`) for every mission whose `sourceFaction` is set, embassy missions included. It calls `DeliverMissionWealth` when `wealth` is above 0 and `ConquestWarContribution.Apply` otherwise, so an embassy mission never reaches war footing.
+
 ### Code: What Factions Spend Wealth on
 
 | Kind | Meaning |
@@ -581,7 +587,7 @@ Source: `MissionGenerator.RollEmbassyWealth`, `ConquestStrength.OnComplete`, `Co
 | `Stations` | New economic outposts, Defense stations and upgrades |
 | `Warships` | Warship hulls; raiders and Canisec also pay here at full roster price |
 | `BayShips` | Ships for station work bays |
-| `GreatGate` ("Great Gate fleets") | Full roster cost of the Great Gate reinforcement, only when `TryPay` charges it: the faction has at least one fleet and `GetWarZoneShare` is 0.1 or more; otherwise it returns true without charging |
+| `GreatGate` ("Great Gate fleets") | Full roster cost of the Great Gate reinforcement, only when `TryPay` charges it: the faction has at least one fleet that is not a war fleet (`economy.fleets.All(isWarFleet)` is false) and `GetWarZoneShare` is 0.1 or more; otherwise it returns true without charging |
 | `Raided` | Drained by a raid |
 
 Source: `FactionEconomicPlanner.TryBuildNext`, `FactionEconomicPlanner.TryUpgrade`, `FactionEconomicPlanner.GetUpgradeCost`, `GameMath.FactionOutpostUpgradeCost`, `ConquestFleetPlanner.TryBuildDefenseStation`, `ConquestFleetPlanner.TryQueueBuild`, `BayShipSupply.TryStartBuild`, `GreatGateReinforcement.TryPay`, `YardlessFleetSupply.TryPay`
@@ -658,7 +664,7 @@ underCap = fleetSlotsUsed < MaxFleetsFor(faction)
 cost  x 0.5 and speed x 3 while underCap
 ```
 
-`fleetSlotsUsed` is `sum(max(1, round(targetPoints / 2000)))` over its fleets.
+`fleetSlotsUsed` is `sum(fleet.fleetSlots)` over its fleets. `ConquestFleet.fleetSlots` is `max(1, round(targetPoints / 2000))`, 1 for an empire fleet and 0 for a war fleet. `isBelowTarget` is false for a war fleet, so `ChooseNeediestFleet`, `ChooseReinforceTarget` and `YardlessFleetSupply.NeedsTopUp` never pick one.
 
 Source: `ConquestFleetPlanner.TryQueueBuild`, `FactionEconomy.fleetSlotsUsed`, `ConquestFleet.fleetSlots`
 
@@ -691,7 +697,7 @@ Source: `ConquestFleetPlanner.ChooseBuildOrder`, `ConquestFleetPlanner.ChooseGar
 
 #### Code: New Ship Level
 
-A ship leaves the yard at `FleetLevels.GetNewShipLevel(faction)` (`WarshipDeliveries.Dispatch` and `ConquestFleetPlanner.SendBuiltShip` both call it with the faction only), which for a non-player faction is `max(1, galaxyLevel + 6)` (`FleetLevels.GetNpcFleetLevel`). `galaxyLevel` is `max(effectiveLevel, Conquest.GetHighestSystemLevel)`. `ConquestFleetOrders.IsDueRefit` sends a fleet to a yard system within 4 jumps (`ChooseRefitYard`) when its point-weighted level is at or below the NPC fleet level minus 3 (`FleetLevels.IsDueRefit`); in 0.8.3.5 every fleet is compared to the NPC fleet level, no longer to the system level. The refit takes 300 s (`BeginRefit`), and `AssignRefit` allows 3 at once. A garrison refit is due on the same 3-level rule (`FactionGarrison.IsDueRefit`), takes 300 s and is skipped while the system is besieged.
+A ship leaves the yard at `FleetLevels.GetNewShipLevel(faction)` (`WarshipDeliveries.Dispatch` and `ConquestFleetPlanner.SendBuiltShip` both call it with the faction only), which for a non-player faction is `max(1, galaxyLevel)` (`FleetLevels.GetNpcFleetLevel`). `galaxyLevel` is `max(effectiveLevel, 30)` (`FleetLevels.GetGalaxyLevel`). `effectiveLevel` is `commander.level + commander.vanguardLevel`, and Vanguard levels are only gained once `CaptainData.vanguardCommitted` is set (the "Start Vanguard levels" choice at level 100). `LivingUniverse.Start` calls `FleetLevels.LowerNpcShipsToCap`, which caps every fleet ship, garrison ship and warship delivery of a non-player faction at the NPC fleet level. `ConquestFleetOrders.IsDueRefit` sends a fleet to a yard system within 4 jumps (`ChooseRefitYard`) when its point-weighted level is at or below the NPC fleet level minus 3 (`FleetLevels.IsDueRefit`); in 0.8.3.5 every fleet is compared to the NPC fleet level, no longer to the system level. A war fleet is never sent (`IsDueRefit` returns false for it). The refit takes 300 s (`BeginRefit`), and `AssignRefit` allows 3 at once. A garrison refit is due on the same 3-level rule (`FactionGarrison.IsDueRefit`), takes 300 s and is skipped while the system is besieged.
 
 Source: `FleetLevels.GetNewShipLevel`, `FleetLevels.GetNpcFleetLevel`, `ConquestWarTuning.RefitSeconds`, `ConquestWarTuning.MaxConcurrentRefits`
 
@@ -711,7 +717,7 @@ Source: `WarshipDeliveries.Dispatch`, `WarshipDeliveries.DispatchToGarrison`, `W
 
 ### Code: Factions Without Yards
 
-Each hourly economy tick `CorsairRaids.Tick` tops up idle or retreating Corsair fleets and raises a new 2000-point fleet if slots are under the cap. Each hourly economy tick `CanisecPatrols.Tick` pays itself a 200,000 home subsidy, raises an 800-point patrol in each Frontier sector that has none, and tops up idle patrols at home, all at full roster price. Corsairs earn wealth from taxes on systems they hold and from `Raids`.
+Each hourly economy tick `CorsairRaids.Tick` tops up idle or retreating Corsair fleets that are below target (`YardlessFleetSupply.NeedsTopUp`, false for a war fleet) and raises a new 2000-point fleet if slots are under the cap. Each hourly economy tick `CanisecPatrols.Tick` pays itself a 200,000 home subsidy, raises an 800-point patrol in each Frontier sector that has none, and tops up idle patrols at home, all at full roster price. Corsairs earn wealth from taxes on systems they hold and from `Raids`.
 
 Source: `CorsairRaids.Tick`, `CorsairRaids.TryRaiseFleet`, `YardlessFleetSupply.TryTopUp`, `YardlessFleetSupply.TryRaise`, `CanisecPatrols.Tick`, `CanisecPatrols.MaintainPatrol`, `ConquestJoin.IsRaider`, `ConquestWarTuning.CanisecPatrolPoints`
 

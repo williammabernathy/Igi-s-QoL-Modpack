@@ -99,7 +99,7 @@ internal sealed class WarOverview : MonoBehaviour
         self.popout = p;
         self.grow = Mathf.Max(1f, TextScale.TextScale.Factor);
         self.clock = Kit.Muted(body, "");
-        Kit.Tooltip(self.clock, "Timers", "Conquest Update: Area Conquered and the 30% objective refresh, settling counts down, control levels rise, damaged stations are rebuilt.\nFleet orders: every NPC faction re-plans its fleets (also right after a battle it was in).\nEconomy tick: taxes and the home subsidy are paid, builds are queued and Great Gate fleets sent.\nThe game shows only the first.");
+        Kit.Tooltip(self.clock, "Timers", "Conquest Update: Area Conquered and the 30% objective refresh, settling counts down, system levels step toward their targets, damaged stations are rebuilt.\nFleet orders: every NPC faction re-plans its fleets (also right after a battle it was in).\nEconomy tick: taxes and the home subsidy are paid, builds are queued and Great Gate fleets sent; each faction also re-plans its fleets then.\nThe game shows only the first.");
         var scroll = Kit.Scroll(body);
         self.factionTable = Kit.Column(scroll, 2f);
         Kit.Gap(scroll, 4f);
@@ -343,8 +343,8 @@ internal sealed class WarOverview : MonoBehaviour
         Set(leave, leaveCount == 0 ? "" : "Leave alone: " + leaveCount + (leaveCount == 1 ? " system " : " systems ") + name + " will take on its own: "
             + leaveNames + (leaveCount > 3 ? " and " + (leaveCount - 3) + " more." : "."));
         Set(levers, GamePlayer.current != null && !GamePlayer.current.systemClaimUnlocked
-            ? "Until \"Beyond the Front\" you can't claim systems yourself. You help by killing a defending fleet, running war effort missions at a hub next door, or destroying a hub where "
-                + name + "'s fleet would be first to claim the system."
+            ? "Until \"Beyond the Front\" you can't claim systems yourself. You help by killing a defending fleet, destroying a hub where "
+                + name + "'s fleet would be first to claim the system, or running Conquest missions for " + name + " in the war zone: they raise its war footing and send it war fleets."
             : "");
     }
 
@@ -364,9 +364,6 @@ internal sealed class WarOverview : MonoBehaviour
         switch (a.Kind)
         {
             case AdviceKind.KillFleet: return "kill the fleet at " + where + ": " + drop;
-            case AdviceKind.WarEffort:
-                return "run " + a.Missions + " war effort " + (a.Missions == 1 ? "mission" : "missions") + " next to " + where + ": "
-                    + (a.Fleets == 1 ? "one full fleet would then take it." : drop);
             case AdviceKind.KillHub:
                 string name = Translation.Translate(a.Tracked.name);
                 return "destroy the hub at " + where + ": " + (a.Hub.Siege
@@ -407,7 +404,7 @@ internal sealed class WarOverview : MonoBehaviour
             if (cs.faction != null && !territory.ContainsKey(cs.faction)) territory[cs.faction] = ConquestScope.CountWarZoneSystems(cs.faction);
         }
         Set(listTitle, "Systems " + Translation.Translate(faction.name) + " Can Attack, " + (SortMode(popout.State) == PreferenceSort ? "in the Order Its Fleets Prefer" : "Where Your Help Counts First"));
-        Set(empty, systems.Count == 0 ? "None right now." : "Next Battle is what NPC fleets compare: a fleet, or an assault, attacks at 1.15 times it. " + HoverHint());
+        Set(empty, systems.Count == 0 ? "None right now." : "Next Battle is what NPC fleets compare: a fleet, or an assault, attacks at 1.15 times it, counting its points times the faction's war footing. " + HoverHint());
     }
 
     private int Territory(Faction f) => f != null && territory.TryGetValue(f, out int n) ? n : 0;
@@ -502,7 +499,6 @@ internal sealed class WarOverview : MonoBehaviour
             case AdviceKind.Battle: return (WarCards.StageName(a.Stage) + ", " + WarMath.Clock(a.TimeLeft), ColorHelper.reddish);
             case AdviceKind.Own: return ("held by " + (tracked != null ? Translation.Translate(tracked.name) : "its faction"), ColorHelper.poiTooltipMuted);
             case AdviceKind.KillFleet: return ("Help: kill its fleet, " + a.Fleets + " to " + a.FleetsAfter + " fleets", a.Color);
-            case AdviceKind.WarEffort: return ("Help: " + a.Missions + " war effort " + (a.Missions == 1 ? "mission" : "missions") + (a.Fleets == 1 ? ", then 1 fleet finishes" : ", " + a.Fleets + " to " + a.FleetsAfter + " fleets"), a.Color);
             case AdviceKind.KillHub: return (a.Hub.Siege ? "Help: kill the hub now" : "Help: kill the hub", a.Color);
             default: return (a.Text, a.Color);
         }
@@ -599,10 +595,10 @@ internal sealed class MapCornerExtras : MonoBehaviour
         // 10-minute clock, so the player who reads it where it sits gets the right picture.
         var info = card.GetComponentInChildren<TooltipSource>(true);
         if (info != null)
-            info.BodyText += "\n\nQoL: fleets re-plan on their own 10-minute clock (Fleet orders), and the economy pays out hourly on a separate clock (Economy tick).";
+            info.BodyText += "\n\nQoL: fleets re-plan on their own 10-minute clock (Fleet orders), and the economy pays out hourly on a separate clock (Economy tick), which re-plans them too.";
 
         self.Row(rt, OrdersLabel, out self.ordersName, out self.ordersValue,
-            "Fleet orders (QoL)", "NPC factions re-plan their fleets every 10 minutes, and right after a battle they were in. This counts down to the next time.");
+            "Fleet orders (QoL)", "NPC factions re-plan their fleets every 10 minutes, right after a battle they were in, and at each economy tick. This counts down to the next 10-minute pass.");
         self.Row(rt, EconomyLabel, out self.economyName, out self.economyValue,
             "Economy tick (QoL)", "The hourly tick that pays taxes and the home subsidy, queues builds and sends Great Gate fleets. It runs on its own clock, apart from the Conquest Update.");
 

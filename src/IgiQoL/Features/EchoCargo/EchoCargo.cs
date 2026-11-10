@@ -17,7 +17,9 @@ using IgiQoL.Game;
 using IgiQoL.Rules;
 using LightJson;
 using Source.Galaxy.POI;
+using Source.Galaxy.Trade;
 using Source.Item;
+using Source.MissionSystem;
 using Source.Player;
 using Source.SpaceShip;
 using Source.Util;
@@ -33,11 +35,11 @@ public sealed class EchoCargo : Feature
 
     public override string Id => "EchoCargo";
     public override string Title => "ECHO Cargo Rules";
-    public override string Description => "When ECHO unloads at a station, the dock action from the Item Rules tab decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks are never touched, and neither are the ammo a ship fires and the usable items the game keeps aboard while ECHO unloads (the fleet auto-deposit at docking deposits those as the game does).";
+    public override string Description => "When ECHO unloads at a station, the dock action from the Item Rules tab decides what happens to each stack: deposit as usual, keep it aboard, sell it, or deposit up to an amount and sell the rest. Favourite stacks are never touched, and neither are the ammo a ship fires and the usable items the game keeps aboard while ECHO unloads (the fleet auto-deposit at docking deposits those as the game does). Items your missions still have to deliver stay aboard until the delivery station, and your cargo routes leave them where they are.";
     public override string SettingsTab => "Item Rules";
     public override Type[] PatchClasses => new[] { typeof(EchoCargoPatches) };
 
-    public ConfigEntry<bool> ApplyToAutoDeposit, SellFromData, SellFromStorage, SellFromArmory;
+    public ConfigEntry<bool> ApplyToAutoDeposit, SellFromData, SellFromStorage, SellFromArmory, KeepMissionItems;
 
     // The dock action that deposits up to an amount and sells the rest, named as the Item rules tab shows it.
     private static string SellKeep => ItemRules.DockActionNames[(int)DockAction.SellAbove];
@@ -54,6 +56,8 @@ public sealed class EchoCargo : Feature
             "Material storage is kept per station. On: a Sell or " + sk + " rule that names the item or its category also sells what is already stored at the station you're docked at: when ECHO unloads (after the cargo and data inventory sales, before any deposit), when you dock with Station Services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. " + sk + " keeps the amount you set in that station's storage. The default rule and the any-category \"rarity and below\" rules never sell from storage. Favourites and items your missions need stay. Off: stored materials are never sold by rules."));
         SellFromArmory = cfg.Bind(Id, "SellFromArmory", false, SettingInfo.Describe("Sell from the armory",
             "The armory holds the weapons, modules, boosters, ammo and usables you or ECHO stored. On: a Sell or " + sk + " rule that names the item or its category also sells from the armory: when ECHO unloads (last, after cargo, the data inventory and station storage), when you dock with Station Services' \"Sell by item rules when you dock\" on, and with the airlock's Sell by rules button. " + sk + " keeps the amount you set in the armory. The default rule and the any-category \"rarity and below\" rules never sell from the armory. Kept: favourites, items your missions need, the usables the game keeps aboard, warp fuel, every ammo type a ship of your fleet fires, and the exact pieces any saved loadout uses. Off: nothing is sold from the armory."));
+        KeepMissionItems = cfg.Bind(Id, "KeepMissionItems", true, SettingInfo.Describe("Keep items your missions need",
+            "A delivery mission (salvage or ore samples, a black box, a trade order) counts what is in its delivery station's storage, your armory and your fleet's holds. Material stored at any other station doesn't count, and a cargo route can haul it away from the delivery station too, so ECHO keeps going back for more and the mission is never turned in. On: when ECHO unloads and when fleet cargo auto-deposits on dock, ships keep the materials your missions need aboard, except at the station they're delivered to. Your cargo routes leave the amount your missions need in a station's storage instead of hauling or selling it. Selling by item rules never touches these items either way. On by default because the game's handling loops ECHO. Off: the game deposits and routes them like any other material."));
     }
 
     private static InventoryItemType FirstOre()
@@ -67,6 +71,8 @@ public sealed class EchoCargo : Feature
     {
         CheckPlan(ctx);
         CheckMoveCap(ctx);
+        // The live steps need a station with a shop; the Window check has undocked by now.
+        yield return ctx.EnsureDocked(s => s.HasFacility(Source.Galaxy.POI.SpaceStationFacility.GeneralShop));
         CheckLiveKeep(ctx);
         CheckSellFirst(ctx);
         CheckDataPlan(ctx);
@@ -74,7 +80,9 @@ public sealed class EchoCargo : Feature
         CheckStorageEcho(ctx);
         CheckArmoryKeeps(ctx);
         CheckArmoryEcho(ctx);
-        yield break;
+        CheckArmoryFavourite(ctx);
+        CheckMissionKeep(ctx);
+        yield return null;
     }
 
     private static string Show(CargoRules.Step s) => $"{s.action}/d{s.deposit}/s{s.sell}";
@@ -141,30 +149,48 @@ public sealed class EchoCargo : Feature
             ctx.Skip("live-keep", "not docked");
             return;
         }
-        var flagship = GamePlayer.current.currentSpaceShip;
-        Inventory.InventoryItem stack = null;
-        // Not what the game keeps aboard anyway (fired ammo, usables): with those the vanilla unload leaves the stack
-        // alone whether or not the Keep rule is applied, so the check would prove nothing.
-        foreach (var s in flagship.cargo.items)
-            if (!Items.KeepAboard(flagship, s) && (s.item.CanGoInMaterials() || s.item.CanGoInArmory())) { stack = s; break; }
-        if (stack == null)
+        // A stack of the check's own, an ore no cargo ship carries: under a Keep rule ECHO's unload leaves it aboard,
+        // and under its own "Game default" rule the same unload deposits it, so the rule is what kept it. Everything
+        // else aboard stays under a Keep default in both runs, because the game's unload (IdleManager.TryDropCargoOf)
+        // handles only the first stack it can drop per call. (The first version used whatever the hold had first,
+        // and passed on a rolled item the count couldn't see: "@80 count 0->0".)
+        TwoTestOres(out var ore, out _);
+        if (ore == null)
         {
-            ctx.Skip("live-keep", "no droppable cargo");
+            ctx.Skip("live-keep", "no sellable ore type the fleet doesn't carry");
             return;
         }
-        var item = stack.item;
-        int before = flagship.cargo.GetCount(item);
-        bool result;
+        var flagship = GamePlayer.current.currentSpaceShip;
+        var cargo = flagship.cargo;
+        var store = Cargo.DepositTarget(ss, ore);
+        int stored0 = store != null ? store.GetCount(ore) : 0;
         try
         {
+            cargo.Add(ore, 5);
+            if (cargo.GetCount(ore) != 5 || store == null)
+            {
+                ctx.Skip("live-keep", store == null ? "no storage here takes ore" : "the test stack didn't fit in the flagship hold");
+                return;
+            }
+            var im = Singleton<IdleManager>.Instance;
             ItemRules.UseForTest("{\"default\":{\"dockAction\":\"Keep\"}}");
-            result = Singleton<IdleManager>.Instance.TryDropCargoOf(ss, flagship);
+            int keptCalls = 0;
+            while (keptCalls < 100 && im.TryDropCargoOf(ss, flagship)) keptCalls++;
+            int keptAboard = cargo.GetCount(ore), keptStored = store.GetCount(ore) - stored0;
+            ItemRules.UseForTest("{\"default\":{\"dockAction\":\"Keep\"},\"items\":{\"" + Items.RuleKey(ore) + "\":{\"dockAction\":\"Default\"}}}");
+            int plainCalls = 0;
+            while (plainCalls < 100 && im.TryDropCargoOf(ss, flagship)) plainCalls++;
+            int plainAboard = cargo.GetCount(ore), plainStored = store.GetCount(ore) - stored0;
+            string detail = $"{Items.RuleKey(ore)} x5: Keep rule -> {keptCalls} unload steps, aboard {keptAboard} stored +{keptStored}; Game default rule -> {plainCalls} unload steps, aboard {plainAboard} stored +{plainStored}";
+            if (keptCalls == 0 && keptAboard == 5 && keptStored == 0 && plainCalls > 0 && plainAboard == 0 && plainStored == 5) ctx.Pass("live-keep", detail);
+            else ctx.Fail("live-keep", detail);
         }
-        finally { ItemRules.Load(); }
-        int after = flagship.cargo.GetCount(item);
-        string detail = $"{Items.RuleKey(item)} result={result} count {before}->{after}";
-        if (!result && after == before) ctx.Pass("live-keep", detail);
-        else ctx.Fail("live-keep", detail);
+        finally
+        {
+            ItemRules.Load();
+            cargo.Remove(ore, cargo.GetCount(ore));
+            if (store != null) store.Remove(ore, store.GetCount(ore) - stored0);
+        }
     }
 
     // Two sellable ores no cargo ship carries, so the check's stacks are the only ones its rules touch.
@@ -406,8 +432,10 @@ public sealed class EchoCargo : Feature
         else if (d < 0) inv.Add(t, -d);
     }
 
-    // Sellable ammo no ship of the fleet fires or carries, preferring a type the armory doesn't hold.
-    internal static InventoryItemType UnfiredAmmo()
+    // Sellable ammo no ship of the fleet fires or carries, preferring a type the armory doesn't hold. Items added to the
+    // armory join its existing stack, and a favourite stack is never sold, so by default a type with a favourite armory
+    // stack is left out; favourite: true asks for exactly such a type instead (the "favourites stay" checks).
+    internal static InventoryItemType UnfiredAmmo(bool favourite = false)
     {
         var player = GamePlayer.current;
         InventoryItemType any = null;
@@ -416,11 +444,19 @@ public sealed class EchoCargo : Feature
             if (t.itemCategory != ItemCategory.Ammo || t.identifier == null || !t.canSell || t.sellValue <= 0 || player.RequiredItemCountForMissions(t) > 0 || Carried(t)) continue;
             bool fired = false;
             foreach (var s in Fleet.Ships(withMercenaries: false)) fired |= Items.FiredBy(s, t);
-            if (fired) continue;
-            if (player.globalInventory.GetCount(t) == 0) return t;
+            if (fired || FavouriteStack(player.globalInventory, t) != favourite) continue;
+            if (favourite || player.globalInventory.GetCount(t) == 0) return t;
             any ??= t;
         }
         return any;
+    }
+
+    // Whether any stack the inventory counts as this item (Inventory.GetCount's CanStackWith) is a favourite.
+    internal static bool FavouriteStack(Inventory inv, InventoryItemType t)
+    {
+        foreach (var stack in inv.items)
+            if (stack != null && stack.favourite && stack.item != null && stack.item.CanStackWith(t)) return true;
+        return false;
     }
 
     // Sellable ammo the flagship fires that no other ship carries, so a Sell rule on it can only reach the armory.
@@ -552,6 +588,137 @@ public sealed class EchoCargo : Feature
             player.credits = credits0;
         }
     }
+
+    // A favourite armory stack is never sold, even under a Sell rule with SellFromArmory on: what joins that stack stays.
+    private static void CheckArmoryFavourite(SelfCheckContext ctx)
+    {
+        var ss = SpaceStation.current;
+        if (ss == null || SpaceStationInterior.instance == null || !Singleton<IdleManager>.HasInstance)
+        {
+            ctx.Skip("armory-favourite", "not docked");
+            return;
+        }
+        var ammo = UnfiredAmmo(favourite: true);
+        if (ammo == null || !CargoRules.CanSellHere(ss, ammo))
+        {
+            ctx.Skip("armory-favourite", ammo == null ? "no favourite armory stack of sellable ammo the fleet doesn't fire or carry" : "station has no shop");
+            return;
+        }
+        var player = GamePlayer.current;
+        var armory = player.globalInventory;
+        var setting = Instance.SellFromArmory;
+        bool setting0 = setting.Value;
+        int ammo0 = armory.GetCount(ammo), shop0 = ss.shopInventory.GetCount(ammo);
+        long credits0 = player.credits;
+        try
+        {
+            setting.Value = true;
+            armory.Add(ammo, 3);
+            int held = armory.GetCount(ammo);
+            ItemRules.UseForTest("{\"items\":{\"" + Items.RuleKey(ammo) + "\":{\"dockAction\":\"Sell\"}}}");
+            bool result = Singleton<IdleManager>.Instance.TryDropCargo(ss);
+            int after = armory.GetCount(ammo);
+            long earned = player.credits - credits0;
+            string detail = $"{Items.RuleKey(ammo)} favourite stack, Sell rule: result={result} held {held}->{after} credits +{earned}";
+            if (after == held && earned == 0) ctx.Pass("armory-favourite", detail);
+            else ctx.Fail("armory-favourite", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            ItemRules.Load();
+            RestoreCount(armory, ammo, ammo0);
+            int added = ss.shopInventory.GetCount(ammo) - shop0;
+            if (added > 0) ss.shopInventory.Remove(ammo, added);
+            player.credits = credits0;
+        }
+    }
+
+    // ECHO's unload keeps aboard what a delivery to another station still needs and deposits the rest; at the delivery
+    // station it deposits everything. A player cargo route out of that station then leaves the needed amount in storage.
+    private static void CheckMissionKeep(SelfCheckContext ctx)
+    {
+        var ss = SpaceStation.current;
+        if (ss == null || SpaceStationInterior.instance == null || !Singleton<IdleManager>.HasInstance)
+        {
+            ctx.Skip("mission-keep", "not docked");
+            return;
+        }
+        TwoTestOres(out var ore, out _);
+        var storage = ss.materialStorage;
+        if (ore == null || Cargo.DepositTarget(ss, ore) != storage || storage.GetSpaceAvailable() < (storage.GetCount(ore) + 10) * ore.m3)
+        {
+            ctx.Skip("mission-keep", ore == null ? "no ore type the fleet doesn't carry" : "ore doesn't go to material storage, or the storage is nearly full");
+            return;
+        }
+        var player = GamePlayer.current;
+        var ship = player.currentSpaceShip;
+        var setting = Instance.KeepMissionItems;
+        bool setting0 = setting.Value;
+        int stored0 = storage.GetCount(ore);
+        // A fleet ship covers the auto-deposit on dock; its holds take the same test ore.
+        SpaceShipData fleet = null;
+        foreach (var s in PlayerCargo.GetManagedFleetShips())
+            if (!s.cargo.IsFull(5 * ore.m3)) { fleet = s; break; }
+        // No deliverTo: delivered to some other station.
+        var offer = new Source.MissionSystem.Objectives.TradeOffer { itemType = ore, requiredAmount = 3 };
+        var step = new MissionStep();
+        step.objectives.Add(offer);
+        var mission = new Mission();
+        mission.steps.Add(step);
+        try
+        {
+            setting.Value = true;
+            // Everything else in the hold is kept, so the unload touches only the test ore.
+            ItemRules.UseForTest("{\"default\":{\"dockAction\":\"Keep\"},\"items\":{\"" + Items.RuleKey(ore) + "\":{\"dockAction\":\"Default\"}}}");
+            player.missions.Add(mission);
+            ship.cargo.Add(ore, 5);
+            fleet?.cargo.Add(ore, 5);
+            UnloadAll(ss, ship);
+            if (fleet != null) CargoRules.DepositFleetShip(ss, fleet, true);
+            int aboardAway = ship.cargo.GetCount(ore), fleetAway = fleet?.cargo.GetCount(ore) ?? 3, storedAway = storage.GetCount(ore) - stored0;
+            offer.deliverTo = ss;
+            UnloadAll(ss, ship);
+            if (fleet != null) CargoRules.DepositFleetShip(ss, fleet, true);
+            int aboardHere = ship.cargo.GetCount(ore), fleetHere = fleet?.cargo.GetCount(ore) ?? 0, storedHere = storage.GetCount(ore) - stored0;
+            int stock = storage.GetCount(ore);
+            int routeOn = RouteShips(ss, ore);
+            setting.Value = false;
+            int routeOff = RouteShips(ss, ore);
+            int ships = fleet != null ? 2 : 1;
+            string detail = $"{Items.RuleKey(ore)} needs 3 at another station: aboard {aboardAway}, fleet {(fleet != null ? fleetAway.ToString() : "n/a")}, stored +{storedAway}; "
+                + $"delivered here: aboard {aboardHere}, fleet {fleetHere}, stored +{storedHere}; route from stock {stock} ships {routeOn} (setting off {routeOff})";
+            if (aboardAway == 3 && fleetAway == 3 && storedAway == 2 * ships && aboardHere == 0 && fleetHere == 0 && storedHere == 5 * ships
+                && routeOn == stock - 3 && routeOff == stock) ctx.Pass("mission-keep", detail);
+            else ctx.Fail("mission-keep", detail);
+        }
+        finally
+        {
+            setting.Value = setting0;
+            player.missions.Remove(mission);
+            ItemRules.Load();
+            ship.cargo.Remove(ore, ship.cargo.GetCount(ore));
+            fleet?.cargo.Remove(ore, fleet.cargo.GetCount(ore));
+            RestoreCount(storage, ore, stored0);
+        }
+    }
+
+    private static void UnloadAll(SpaceStation ss, SpaceShipData ship)
+    {
+        var im = Singleton<IdleManager>.Instance;
+        for (int i = 0; i < 100 && im.TryDropCargoOf(ss, ship); i++) { }
+    }
+
+    // What a player route from this station to itself would ship of the item now, through the game's BuildManifest.
+    private static int RouteShips(SpaceStation ss, InventoryItemType item)
+    {
+        var route = new CargoRoute(new PlayerRoutes()) { source = ss, destination = ss };
+        route.rules.Add(new CargoRouteRule(CargoKind.Material, new List<string> { item.identifier }, RuleMode.AllAvailable));
+        int n = 0;
+        foreach (var e in route.BuildManifest())
+            if (e.item == item) n += e.amount;
+        return n;
+    }
 }
 
 public static class CargoRules
@@ -677,6 +844,11 @@ public static class CargoRules
         return moved;
     }
 
+    // What a deposit here leaves aboard for your missions: the amount they want delivered to other stations, when the item
+    // would go into this station's material storage. The armory and data inventory count wherever the delivery is.
+    public static int MissionKeep(SpaceStation ss, InventoryItemType item) =>
+        EchoCargo.Instance.KeepMissionItems.Value && Cargo.DepositTarget(ss, item) == ss.materialStorage ? Items.MissionNeedElsewhere(item, ss) : 0;
+
     private static bool shopWarned;
 
     // Mirrors IdleManager.SellItemFromMaterials: open the shop screen (registers it with InventoryInteractionManager), sell, report, count the stat.
@@ -702,8 +874,9 @@ public static class CargoRules
         return true;
     }
 
-    // Dock path for one fleet ship; returns false when a stack the rules wanted deposited did not fit (vanilla's "storage full" condition).
-    public static bool DepositFleetShip(SpaceStation ss, SpaceShipData ship)
+    // Dock path for one fleet ship; returns false when a stack it wanted deposited did not fit (vanilla's "storage full" condition).
+    // rules: apply the item rules' dock actions; otherwise every stack deposits as with "Game default".
+    public static bool DepositFleetShip(SpaceStation ss, SpaceShipData ship, bool rules)
     {
         var materials = ss.materialStorage;
         var armory = GamePlayer.current.globalInventory;
@@ -714,18 +887,21 @@ public static class CargoRules
         {
             if (stack.favourite) continue;
             var item = stack.item;
-            var rule = ItemRules.Resolve(item);
-            if (rule.dockAction == DockAction.Keep || rule.dockAction == DockAction.Sell) continue;   // stays aboard; ECHO's loop sells later
-            if (rule.dockAction == DockAction.SellAbove)
+            var rule = rules ? ItemRules.Resolve(item) : null;
+            var action = rule?.dockAction ?? DockAction.Default;
+            if (action == DockAction.Keep || action == DockAction.Sell) continue;   // stays aboard; ECHO's loop sells later
+            int keep = MissionKeep(ss, item);
+            if (action == DockAction.SellAbove || keep > 0)
             {
+                // Capped by what the missions need aboard and, for "Sell, keep up to", by the room left under N.
                 var dest = Cargo.DepositTarget(ss, item);
                 if (dest != null)
                 {
-                    int room = Math.Max(0, rule.keepAmount - dest.GetCount(item));
-                    if (room > 0)
+                    int want = Math.Min(stack.count, ship.cargo.GetCount(item) - keep);
+                    if (action == DockAction.SellAbove) want = Math.Min(want, rule.keepAmount - dest.GetCount(item));
+                    if (want > 0)
                     {
-                        int want = Math.Min(room, stack.count);
-                        int n = Cargo.Move(ship.cargo, dest, item, room);
+                        int n = Cargo.Move(ship.cargo, dest, item, want);
                         if (n > 0) moved++;
                         if (n < want) clear = false;
                     }
@@ -757,7 +933,8 @@ internal static class EchoCargoPatches
 {
     private static EchoCargo F => EchoCargo.Instance;
 
-    // The rule's step for one cargo stack. Stacks vanilla keeps aboard come back as Keep, "Game default" as Default.
+    // The rule's step for one cargo stack. Stacks vanilla keeps aboard come back as Keep, "Game default" as Default, with a
+    // deposit cap when your missions need some of it aboard.
     private static CargoRules.Step StepFor(IdleManager im, SpaceStation ss, SpaceShipData ship, Inventory.InventoryItem stack)
     {
         // Vanilla protections always win; vanilla keeps only the flagship's ammo, so a fleet ship keeps the ammo its own fit fires too.
@@ -765,7 +942,13 @@ internal static class EchoCargoPatches
             return new CargoRules.Step { action = DockAction.Keep };
         var item = stack.item;
         var rule = ItemRules.Resolve(item);
-        if (rule.dockAction == DockAction.Default) return default;
+        if (rule.dockAction == DockAction.Default)
+        {
+            int keep = CargoRules.MissionKeep(ss, item);
+            if (keep <= 0) return default;
+            int deposit = ship.cargo.GetCount(item) - keep;
+            return deposit > 0 ? new CargoRules.Step { deposit = deposit } : new CargoRules.Step { action = DockAction.Keep };
+        }
         var dest = Cargo.DepositTarget(ss, item);
         return CargoRules.Plan(rule, stack.count, dest != null ? dest.GetCount(item) : 0,
             GamePlayer.current.RequiredItemCountForMissions(item), CargoRules.CanSellHere(ss, item));
@@ -822,7 +1005,7 @@ internal static class EchoCargoPatches
         if (!F.Active) return true;
         try
         {
-            if (!ItemRules.HasDockRules) return true;
+            if (!ItemRules.HasDockRules && !F.KeepMissionItems.Value) return true;
             var player = GamePlayer.current;
             foreach (var stack in cargoShip.cargo.items)
             {
@@ -875,15 +1058,40 @@ internal static class EchoCargoPatches
         if (!F.Active) return true;
         try
         {
-            if (!F.ApplyToAutoDeposit.Value || !ItemRules.HasDockRules) return true;
+            bool rules = F.ApplyToAutoDeposit.Value && ItemRules.HasDockRules;
+            if (!rules && !F.KeepMissionItems.Value) return true;
             var player = GamePlayer.current;
             if (!player.autoDepositFleetCargo) return false;
             if (!(player.currentPointOfInterest is SpaceStation ss)) return false;
             bool clear = true;
-            foreach (var ship in new List<SpaceShipData>(PlayerCargo.GetManagedFleetShips())) clear &= CargoRules.DepositFleetShip(ss, ship);
+            foreach (var ship in new List<SpaceShipData>(PlayerCargo.GetManagedFleetShips())) clear &= CargoRules.DepositFleetShip(ss, ship, rules);
             if (!clear) InventoryInteractionManager.ShowRedNotification("@FleetCargoStorageFull");
             return false;
         }
         catch (Exception e) { F.Fail(e, nameof(EchoCargoPatches)); return true; }
+    }
+
+    // Cargo routes leave what your missions need in the source station's storage, so a route can't haul or sell away
+    // a delivery the mission is counting. Previews and fees build the same manifest, so they show the reduced load.
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(CargoRoute), nameof(CargoRoute.BuildManifest))]
+    private static void BuildManifestPostfix(CargoRoute __instance, List<CargoRunEntry> __result)
+    {
+        if (!F.Active || !F.KeepMissionItems.Value || !__instance.isPlayerRoute || __result.Count == 0 || GamePlayer.current == null) return;
+        try
+        {
+            var stock = __instance.StorageOf(__instance.source);
+            for (int i = __result.Count - 1; i >= 0; i--)
+            {
+                var entry = __result[i];
+                int need = GamePlayer.current.RequiredItemCountForMissions(entry.item);
+                if (need <= 0) continue;
+                int shippable = Math.Max(0, stock.GetCount(entry.item) - need);
+                if (shippable >= entry.amount) continue;
+                if (shippable > 0) __result[i] = new CargoRunEntry(entry.item, shippable);
+                else __result.RemoveAt(i);
+            }
+        }
+        catch (Exception e) { F.Fail(e, nameof(EchoCargoPatches)); }
     }
 }

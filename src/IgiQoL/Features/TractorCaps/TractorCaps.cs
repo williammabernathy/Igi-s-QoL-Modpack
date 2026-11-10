@@ -2,15 +2,19 @@ using System;
 using System.Collections;
 using Behaviour.Equipment.Module;
 using Behaviour.Item;
+using Behaviour.Managers;
 using Behaviour.Tractoring;
 using Behaviour.UI;
 using Behaviour.UI.Tooltip;
 using Behaviour.Unit;
+using Behaviour.Util;
 using BepInEx.Configuration;
 using HarmonyLib;
 using IgiQoL.Core;
 using IgiQoL.Game;
 using IgiQoL.Rules;
+using Source.Data.Persistable;
+using Source.Galaxy;
 using Source.Item;
 using Source.Player;
 using Source.SpaceShip;
@@ -195,8 +199,8 @@ public sealed class TractorCaps : Feature
     }
 
     // A ship that already picked a loot stack drops it once a rule forbids it, instead of hovering at it for good.
-    // The pick is set the way the game's own scan sets it (autoTarget has a private setter), then the scan runs
-    // with a "never pick up" rule in force.
+    // The pick is set the way the game's own scan sets it (autoTarget has a private setter, reachable only through the
+    // declaring type's PropertyInfo), then the scan runs with a "never pick up" rule in force.
     private static void StalePick(SelfCheckContext ctx)
     {
         var flagship = Fleet.Flagship;
@@ -207,28 +211,46 @@ public sealed class TractorCaps : Feature
                 if (candidate != null && !candidate.isTractored && candidate.data != null && candidate.data.itemType != null
                     && GamePlayer.current.RequiredItemCountForMissions(candidate.data.itemType) == 0 && candidate.data.itemType.itemCategory != ItemCategory.Ammo)
                 { item = candidate; break; }
-        if (item == null) { ctx.Skip("stale-pick", module == null ? "the flagship has no tractor beam" : "no loose loot in space"); return; }
-        var autoTarget = Traverse.Create(module).Property("autoTarget");
+        // No loose loot here: drop an ore stack far from the hull, so no beam reaches it while the check runs (it yields
+        // no frame), and take it away afterwards. Not jettisoned, because the game never auto-picks jettisoned loot.
+        TractorableItem spawned = null;
+        if (item == null && module != null && Singleton<LootManager>.HasInstance && Behaviour.Managers.BasePoiManager.current != null)
+        {
+            InventoryItemType ore = null;
+            foreach (var t in InventoryItemType.all)
+                if (t.itemCategory == ItemCategory.Ore && GamePlayer.current.RequiredItemCountForMissions(t) == 0) { ore = t; break; }
+            if (ore != null)
+                item = spawned = Singleton<LootManager>.Instance.SpawnLootItem(new TractorableItemData
+                {
+                    itemType = ore,
+                    itemAmount = 1,
+                    ownerFaction = Faction.player,
+                    position = (Vector2)flagship.transform.position + new Vector2(0f, 400f),
+                }, null);
+        }
+        if (item == null) { ctx.Skip("stale-pick", module == null ? "the flagship has no tractor beam" : "no loose loot in space and none could be spawned"); return; }
+        var autoTarget = AccessTools.Property(typeof(AbstractTargetingModule), nameof(AbstractTargetingModule.autoTarget));
         var before = module.autoTarget;
         try
         {
-            autoTarget.SetValue(item);
+            autoTarget.SetValue(module, item);
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":-1}}");
             bool held = module.autoTarget == item;
             module.UpdateAvailableTargets(new Behaviour.Weapons.TargetableUnit[] { item });
             bool dropped = module.autoTarget == null;
             ItemRules.UseForTest("{\"default\":{\"tractorCap\":0}}");
-            autoTarget.SetValue(item);
+            autoTarget.SetValue(module, item);
             module.UpdateAvailableTargets(new Behaviour.Weapons.TargetableUnit[] { item });
             bool kept = module.autoTarget == item;
-            string d = $"{Items.RuleKey(item.data.itemType)}: pick set {held}, dropped after a never-pick-up rule {dropped}, kept with no rule {kept}";
+            string d = $"{Items.RuleKey(item.data.itemType)}{(spawned != null ? " (spawned)" : "")}: pick set {held}, dropped after a never-pick-up rule {dropped}, kept with no rule {kept}";
             if (held && dropped && kept) ctx.Pass("stale-pick", d);
             else ctx.Fail("stale-pick", d);
         }
         finally
         {
             ItemRules.Load();
-            autoTarget.SetValue(before);
+            autoTarget.SetValue(module, before);
+            if (spawned != null) UnityEngine.Object.DestroyImmediate(spawned.gameObject);
         }
     }
 }

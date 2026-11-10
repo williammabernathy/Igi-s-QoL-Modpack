@@ -23,7 +23,7 @@ internal sealed class DefenseParts
     public bool Estimated;
     // The profile the Defense number uses (settling applied): firepower, and the hull a hub siege has to break.
     public float Firepower, Hull;
-    public float Multiplier, Flat, Structure, WarEffort;
+    public float Multiplier, Flat, Structure;
     public float StationTerm;
     public float Garrison;
     public int GarrisonShips, GarrisonWanted;
@@ -39,8 +39,9 @@ internal sealed class DefenseParts
     public bool Capped => Firepower > WarMath.FirepowerCap * Multiplier;
     public bool AtFloor => Mathf.Min(Firepower, WarMath.FirepowerCap * Multiplier) * Structure < WarMath.FirepowerFloor * Multiplier;
     // What the Defense number drops to once every defender is dead and the hub's structure is broken: the 250 floor
-    // with war effort and the sector's flat bonus. A siege captures when the attackers still have 1.25 times this.
-    public float BrokenDefense => WarMath.FirepowerFloor * Multiplier * WarEffort + Flat;
+    // (ConquestCombat.BoundStationFirepower) with the sector's flat bonus. A siege captures when the attackers still
+    // have 1.25 times this.
+    public float BrokenDefense => WarMath.FirepowerFloor * Multiplier + Flat;
 
     public void Read(ConquestSystem cs)
     {
@@ -56,7 +57,6 @@ internal sealed class DefenseParts
 
         Multiplier = StationDefense.GetSectorDefenseMultiplier(cs.system);
         Flat = StationDefense.GetSectorDefenseFlat(cs.system);
-        WarEffort = cs.warEffortMultiplier;
         Structure = ConquestCombat.GetSiegeStructureFraction(cs);
         foreach (var station in StationDefense.GetDefendingStations(cs))
         {
@@ -131,11 +131,25 @@ internal static class WarMath
     internal static ConquestSystem Of(SystemMapData system) =>
         system != null && system.sector != null && system.sector.isWarZone ? system.storyteller as ConquestSystem : null;
 
-    // Points a group of fleets needs before it starts an attack on its own.
+    // Judged strength an attack needs before it starts: 1.15 times the target's next battle
+    // (ConquestFleetOrders.CanBeat, the gathering test in PlanAssault, TryAttack).
     internal static float ToStart(float nextBattle) => nextBattle * AttackMargin;
 
+    // The attacker's war footing as the game applies it to a fleet's strength (WarFooting.GetMultiplier): 1 + the
+    // faction's footing bonus, which is 0 for no faction, the player and any faction outside the Conquest war.
+    internal static float Footing(Faction attacker) => WarFooting.GetMultiplier(attacker);
+
+    // What one full fleet counts for when the game judges it: points x footing (WarFooting.GetJudgedStrength). The siege
+    // tests sum the same judged strength (BattleManager.GetAttackerStrength); a round's damage uses
+    // FleetMixBonus.GetBattleStrength, which equals it for an NPC fleet (the mix bonus only applies to Empire fleets).
+    internal static float FullFleetStrength(Faction attacker) => FullFleet * Footing(attacker);
+
+    // Raw fleet points a group needs before it starts an attack: the judged threshold divided by the footing.
+    internal static float PointsToStart(float nextBattle, Faction attacker) => ToStart(nextBattle) / Footing(attacker);
+
     // Full 2000-point fleets an attack needs: 1 is a lone attack, 2 or more an assault.
-    internal static int FleetsToStart(float nextBattle) => Mathf.Max(1, Mathf.CeilToInt(ToStart(nextBattle) / FullFleet - 0.0001f));
+    internal static int FleetsToStart(float nextBattle, Faction attacker) =>
+        Mathf.Max(1, Mathf.CeilToInt(ToStart(nextBattle) / FullFleetStrength(attacker) - 0.0001f));
 
     // Only a hub siege with no defenders to kill first is simple enough to play out: no Defense stations (their sieges
     // come first) and no defending fleet or patrol (a fleet clash comes first).
@@ -144,7 +158,8 @@ internal static class WarMath
 
     // BattleSimulation.RunSiegeRound with the average roll: the attackers hit the structure, the station fires back with
     // the Defense it had at the start of the round. From 600 s on, a broken structure captures once the attackers hold
-    // 1.25 times the Defense left (BattleManager.CanCaptureEarly); at 1800 s the cap judge runs (JudgeSiegeAtCap).
+    // 1.25 times the Defense left (BattleManager.CanCaptureEarly, judged with WarFooting); at 1800 s the cap judge runs
+    // (JudgeSiegeAtCap). attackers is the side's strength as the game sums it, so a full fleet is FullFleetStrength.
     internal static SiegeEstimate EstimateHubSiege(DefenseParts d, float attackers)
     {
         float m = d.Multiplier, cap = Mathf.Min(d.Firepower, FirepowerCap * m);
@@ -154,14 +169,14 @@ internal static class WarMath
         float broken = d.BrokenDefense;
         for (int round = 1; round <= maxRounds; round++)
         {
-            float defense = Mathf.Max(FirepowerFloor * m, cap * (hull / d.Hull)) * d.WarEffort + d.Flat;
+            float defense = Mathf.Max(FirepowerFloor * m, cap * (hull / d.Hull)) + d.Flat;
             hull = Mathf.Max(0f, hull - a * AverageDamageShare);
             a -= defense * AverageDamageShare;
             if (a <= 0f) return new SiegeEstimate { Result = SiegeResult.Destroyed, Rounds = round, PointsLeft = 0f };
             if (round >= earliest && hull <= 0f && a >= broken * CaptureMargin)
                 return new SiegeEstimate { Result = SiegeResult.Captured, Rounds = round, PointsLeft = a };
         }
-        float end = Mathf.Max(FirepowerFloor * m, cap * (hull / d.Hull)) * d.WarEffort + d.Flat;
+        float end = Mathf.Max(FirepowerFloor * m, cap * (hull / d.Hull)) + d.Flat;
         var result = hull <= 0f && a >= end * CaptureMargin ? SiegeResult.Captured : a >= end ? SiegeResult.Skirmish : SiegeResult.Repelled;
         return new SiegeEstimate { Result = result, Rounds = maxRounds, PointsLeft = a };
     }
@@ -199,15 +214,18 @@ internal static class WarMath
     }
 
     // The systems a faction's idle fleets pick their attacks from, as the planner builds them: the contested
-    // neighbours of its frontline, or with no frontline any open war-zone system (ConquestFleetOrders.AssignOrders).
-    // Peaceful lists the ones the under-10% rule leaves (ConquestFleetOrders.ApplyPeace).
+    // neighbours of its frontline, or with no frontline any open war-zone system (ConquestFleetOrders.GatherCandidates),
+    // cut to the homeland reach for the factions that raid from home. Peaceful lists the ones the under-10% rule leaves
+    // (ConquestFleetOrders.ApplyPeace).
     internal static List<ConquestSystem> AttackCandidates(Faction faction, HashSet<ConquestSystem> peaceful)
     {
         var snapshot = ConquestFrontline.Build(faction);
         var list = snapshot.systems.Count > 0 ? ConquestFrontline.GetAttackCandidates(snapshot) : ConquestFrontline.GetBeachheadCandidates(faction);
+        var reach = ConquestFleetOrders.GetAttackReach(faction);
         peaceful.Clear();
-        foreach (var cs in ConquestFleetOrders.ApplyPeace(faction, list)) peaceful.Add(cs);
-        return list;
+        foreach (var cs in ConquestFleetOrders.ApplyPeace(faction, list))
+            if (reach == null || reach.Contains(cs)) peaceful.Add(cs);
+        return reach == null ? list : list.FindAll(reach.Contains);
     }
 
     internal static string Pct(float share) => (share * 100f).ToString("0.0") + "%";

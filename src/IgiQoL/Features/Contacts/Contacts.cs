@@ -107,9 +107,21 @@ public sealed class Contacts : Feature
         boardable = 0;
         foreach (var unit in BoardableUnit.all)
             if (unit != null && unit.gameObject.activeInHierarchy) boardable++;
-        wrecks = SalvageContainer.all.Count;
+        // SalvageContainer.all can briefly hold containers being destroyed; count what the list shows.
+        wrecks = 0;
+        foreach (var c in SalvageContainer.all)
+            if (c != null && c.gameObject.activeInHierarchy) wrecks++;
         loot = PruneLoot();
         return boardable + wrecks + loot;
+    }
+
+    // The number in a Contacts heading such as "Wrecks (3)" or "Loot (2 Kinds)"; -1 when there is no heading.
+    private static int HeadingCount(string heading)
+    {
+        if (heading == null) return -1;
+        int open = heading.IndexOf('('), end = open + 1;
+        while (end < heading.Length && char.IsDigit(heading[end])) end++;
+        return open >= 0 && int.TryParse(heading.Substring(open + 1, end - open - 1), out int n) ? n : -1;
     }
 
     public static bool HasContacts() => Fleet.Flagship != null && CountHere(out _, out _, out _) > 0;
@@ -175,23 +187,47 @@ public sealed class Contacts : Feature
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
+        // The HUD counter only shows in space, and EchoCargo before this docks. A location with nothing on it gets one
+        // jettisoned ore stack (never auto-tractored) far from the hull, so the tab and counter have a contact to count.
+        yield return SelfCheckContext.EnsureInSpace();
         CheckLootRegistry(ctx);
+        TractorableItem probe = null;
+        var probeShip = Fleet.Flagship;
+        if (CountHere(out _, out _, out _) == 0 && probeShip != null && Singleton<LootManager>.HasInstance && BasePoiManager.current != null)
+        {
+            InventoryItemType ore = null;
+            foreach (var t in InventoryItemType.all)
+                if (t.itemCategory == ItemCategory.Ore) { ore = t; break; }
+            probe = Singleton<LootManager>.Instance.SpawnLootItem(new TractorableItemData
+            {
+                itemType = ore,
+                itemAmount = 2,
+                jettisoned = true,
+                ownerFaction = Faction.player,
+                position = (Vector2)probeShip.transform.position + new Vector2(300f, 0f),
+            }, null);
+        }
 
         ModWindow.Open("contacts");
         ctx.Cleanup(ModWindow.Close);
-        yield return null;
+        yield return new WaitForSeconds(1.2f);   // the list refreshes every second
         var list = ModWindow.IsOpen ? ModWindow.Content.GetComponentInChildren<ContactsList>() : null;
-        bool boardHeading = false, wreckHeading = false, lootHeading = false;
+        // Each heading's number against the game's own lists: active boardable units and salvage containers here, and
+        // loot kinds no more than loot stacks (and some exactly when there are stacks).
+        string boardHeading = null, wreckHeading = null, lootHeading = null;
         if (list != null)
             foreach (var t in list.GetComponentsInChildren<TMP_Text>())
             {
-                boardHeading |= t.text.StartsWith("Boardable Ships (", StringComparison.Ordinal);
-                wreckHeading |= t.text.StartsWith("Wrecks (", StringComparison.Ordinal);
-                lootHeading |= t.text.StartsWith("Loot (", StringComparison.Ordinal);
+                if (t.text.StartsWith("Boardable Ships (", StringComparison.Ordinal)) boardHeading = t.text;
+                if (t.text.StartsWith("Wrecks (", StringComparison.Ordinal)) wreckHeading = t.text;
+                if (t.text.StartsWith("Loot (", StringComparison.Ordinal)) lootHeading = t.text;
             }
-        string detail = list == null ? "no list" : $"boardable={list.BoardableCount} wrecks={list.WreckCount} lootGroups={list.LootGroupCount}";
-        if (ModWindow.CurrentTab == "contacts" && boardHeading && wreckHeading && lootHeading) ctx.Pass("tab", detail);
-        else ctx.Fail("tab", detail + $" tab={ModWindow.CurrentTab} headings={boardHeading}/{wreckHeading}/{lootHeading}");
+        CountHere(out int gameBoard, out int gameWrecks, out int gameStacks);
+        int shownBoard = HeadingCount(boardHeading), shownWrecks = HeadingCount(wreckHeading), shownKinds = HeadingCount(lootHeading);
+        string detail = list == null ? "no list" : $"headings '{boardHeading}' '{wreckHeading}' '{lootHeading}'; game: {gameBoard} boardable, {gameWrecks} wrecks, {gameStacks} loot stacks";
+        bool countsOk = shownBoard == gameBoard && shownWrecks == gameWrecks && shownKinds >= 0 && shownKinds <= gameStacks && (shownKinds > 0) == (gameStacks > 0);
+        if (ModWindow.CurrentTab == "contacts" && countsOk) ctx.Pass("tab", detail);
+        else ctx.Fail("tab", detail + $" tab={ModWindow.CurrentTab}");
         yield return ctx.Screenshot("window-contacts");
 
         var badge = ContactsBadge.Instance;
@@ -215,6 +251,11 @@ public sealed class Contacts : Feature
             else ctx.Fail("counter", counterDetail);
         }
         ModWindow.Close();
+        if (probe != null)
+        {
+            Object.DestroyImmediate(probe.gameObject);
+            PruneLoot();
+        }
 
         yield return CheckMarkers(ctx);
         yield return CheckLootReason(ctx);

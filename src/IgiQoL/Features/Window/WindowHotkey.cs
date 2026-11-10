@@ -41,7 +41,7 @@ public sealed class WindowHotkey : MonoBehaviour
 
 // The "QoL" buttons that toggle the mod window. In space: a game-style button the size of the HUD dock button, shown
 // while the game shows its HUD, on top of the side menu column or above the Dock button (WindowFeature.Place),
-// draggable from there. Docked: a station tab like the game's Fleet button, floating above the rightmost tab.
+// draggable from there. Docked: an icon button like the game's Fleet button, floating above the rightmost tab.
 // Both live in the game's hierarchy and die with it.
 public static class HudButton
 {
@@ -201,10 +201,12 @@ public static class HudButton
             Plugin.Log.LogInfo("[Window] no station tab to put the QoL button on; hotkey only while docked");
             return;
         }
-        var icon = PoiIconLibrary.Instance.Get(Kit.Icon("Info", PoiIconKeys.Captain("Command")));
-        var spec = new FleetButtonSpec("IgiQoL_StationButton", "QoL", Tooltip(false), ColorHelper.offWhite, null, null);
-        var placed = PersonalFleetButton.Create(interior.tabButtonPrefab, (RectTransform)below.transform, interior.transform, icon, null, spec);
-        placed.GetComponent<SpaceStationButton>().clickOverride = ModWindow.Toggle;
+        var spec = new FleetButtonSpec("IgiQoL_StationButton", Kit.Icon("Info", PoiIconKeys.Captain("Command")), Tooltip(false), ColorHelper.offWhite, null, null);
+        var placed = PersonalFleetButton.Create((RectTransform)below.transform, (RectTransform)interior.transform, 0, null, spec);
+        // Create wires the click to the game's fleet window; the QoL button toggles the mod window instead.
+        var button = placed.GetComponent<Button>();
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(ModWindow.Toggle);
         StationInstance = placed.gameObject;
     }
 }

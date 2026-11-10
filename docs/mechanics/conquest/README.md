@@ -1,6 +1,6 @@
 # Conquest
 
-This stage covers the faction war in the Conquest sector (Ara Martis): the embassies, aligning with a faction, the war itself and the 30% sector-control mission. It opens at captain level 28. Values were read from the game code of version 0.8.3.4 (the decompiled source), not from testing in the game. The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. The last section, "In the Game Code", lists the mission ids and conditions behind the plain-language steps.
+This stage covers the faction war in the Conquest sector (Ara Martis): the embassies, aligning with a faction, the war itself and the 30% sector-control mission. It opens at captain level 28. Values were read from the game code of version 0.8.3.4 (the decompiled source), not from testing in the game. The code was then compared with the 0.8.3.5 and 0.8.3.7 sources, and every statement that changed in either was rewritten. The last section, "In the Game Code", lists the mission ids and conditions behind the plain-language steps.
 
 ## Spoiler: How You Get Here
 
@@ -27,7 +27,7 @@ In the code: [Level Cap](#code-level-cap).
 
 - [Common Questions](faq.md) gives short answers to questions players ask about the war and the 30% mission. Each answer links to the section with the full numbers.
 - [Glossary: Conquest](glossary.md) explains the terms and abbreviations used in the conquest pages. Earlier terms are in the [basics glossary](../basics/glossary.md).
-- [War Zone and Battles](war.md) covers the war zone, the Defense number on a system tooltip, war effort, battles and sieges, capture, how NPC factions pick fights, and fleet labels on the map.
+- [War Zone and Battles](war.md) covers the war zone, the Defense number on a system tooltip, war footing and war fleets, battles and sieges, capture, how NPC factions pick fights, and fleet labels on the map.
 - [Sector Control](sector-control.md) covers the 30% sector-control mission and what you can do in the war before you hold a system.
 - [War Stations](war-stations.md) covers hubs, Defense stations, garrisons and conquest station layouts.
 - [Faction Economy and Ship Production](faction-economy.md) covers faction income, shipyards, warship delivery, the Great Gate and the economics of raids.
@@ -36,7 +36,7 @@ The next stage opens with the "Beyond the Front" mission. It is described on the
 
 ## In the Game Code
 
-This part is the decompiled code behind the sections above: mission ids, conditions and method names. The names and conditions are the same in versions 0.8.3.4 and 0.8.3.5. To check a claim, search the decompiled source for the name.
+This part is the decompiled code behind the sections above: mission ids, conditions and method names. The names and conditions are the same in versions 0.8.3.4, 0.8.3.5 and 0.8.3.7. To check a claim, search the decompiled source for the name.
 
 ### Code: How You Get Here
 

@@ -1,6 +1,6 @@
 # Common Questions
 
-These are short answers to questions players ask about the story lines behind the war. Every answer here is a spoiler. Each answer ends with a link to the section with the full numbers and how they were read from the code. Values are for game version 0.8.3.4, and the code behind each answer was compared with the 0.8.3.5 source.
+These are short answers to questions players ask about the story lines behind the war. Every answer here is a spoiler. Each answer ends with a link to the section with the full numbers and how they were read from the code. Values are for game version 0.8.3.4, and the code behind each answer was compared with the 0.8.3.5 and 0.8.3.7 sources.
 
 Terms are in the [late-game glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -20,7 +20,7 @@ Details: [Gates](README.md#spoiler-gates).
 
 ### Spoiler: How Do I Wake the Dormant Raider Faction or Open the Closed Sector?
 
-You can't, in a normal game. In versions 0.8.3.4 and 0.8.3.5 the only thing that wakes Malcyte or opens Meridia is the debug console, and it works only once the expansion is unlocked. No story mission, dialogue, save load or game asset does either, so Malcyte stays dormant and Meridia stays closed.
+You can't, in a normal game. In versions 0.8.3.4, 0.8.3.5 and 0.8.3.7 the only thing that wakes Malcyte or opens Meridia is the debug console, and it works only once the expansion is unlocked. No story mission, dialogue, save load or game asset does either, so Malcyte stays dormant and Meridia stays closed.
 
 Details: [Gates](README.md#spoiler-gates).
 
@@ -28,7 +28,7 @@ Details: [Gates](README.md#spoiler-gates).
 
 ### Spoiler: What Is the Control Row on the System Tooltip?
 
-The "Umbral Reach control" row shows how far the Umbral Reach has spread into that system, as a percentage. It only appears above 0. It is the third kind of conquest row on a war-zone system tooltip, next to Defense and "Your war effort". An unowned system whose hub is an abandoned hulk can also show it.
+The "Umbral Reach control" row shows how far the Umbral Reach has spread into that system, as a percentage. It only appears above 0. It is the second kind of conquest row on a war-zone system tooltip, next to Defense. An unowned system whose hub is an abandoned hulk can also show it.
 
 Details: [On the system tooltip and in system data](control-story.md#on-the-system-tooltip-and-in-system-data).
 

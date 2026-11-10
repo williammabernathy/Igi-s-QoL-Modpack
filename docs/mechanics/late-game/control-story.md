@@ -1,6 +1,6 @@
 # The Control Story Line
 
-This page covers the Umbral Reach: its control row and how it spreads, the Umbral Hacking Tool, the puppeteers' station, and every exception the Umbral transponder makes to the early rules. It is a spoiler for the Umbral story line, which opens as part of the reward for your faction's first Conquest mission (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed.
+This page covers the Umbral Reach: its control row and how it spreads, the Umbral Hacking Tool, the puppeteers' station, and every exception the Umbral transponder makes to the early rules. It is a spoiler for the Umbral story line, which opens as part of the reward for your faction's first Conquest mission (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed. The war-related statements were checked again against the 0.8.3.7 source, which removed the "Your war effort" row and added system level changes to the hourly update.
 
 Terms are in the [late-game glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -33,13 +33,13 @@ In the code: [The Control Row and Its Spread](#code-the-control-row-and-its-spre
 
 ### On the System Tooltip and in System Data
 
-The conquest section of a war-zone system tooltip has a third kind of row, "Umbral Reach control". The other two are the Defense row and "Your war effort" (see [What the system tooltip shows](../conquest/war.md#what-the-system-tooltip-shows)). An unowned system whose hub is abandoned (a hub left without an owner after it was destroyed) can also show an Umbral Reach row. On such a system the Defense row shows 0. No war effort row shows, because war effort is cleared when a system is abandoned.
+The conquest section of a war-zone system tooltip has a second kind of row, "Umbral Reach control", next to the Defense row (see [What the system tooltip shows](../conquest/war.md#what-the-system-tooltip-shows)). Until 0.8.3.5 a "Your war effort" row sat between them; 0.8.3.7 removed it. An unowned system whose hub is abandoned (a hub left without an owner after it was destroyed) can also show an Umbral Reach row. On such a system the Defense row shows 0.
 
 In the code: [On the System Tooltip and in System Data](#code-on-the-system-tooltip-and-in-system-data).
 
 ### The Conquest Update
 
-The hourly conquest update also spreads the Umbral Reach. The [faction economy](../conquest/faction-economy.md#when-things-happen) page lists what else it does: it recalculates Area Conquered, rebuilds damaged stations and counts down settling.
+The hourly conquest update also spreads the Umbral Reach. The [faction economy](../conquest/faction-economy.md#when-things-happen) page lists what else it does: it recalculates Area Conquered, rebuilds damaged stations and counts down settling. Since 0.8.3.7 it also moves every war-zone system's level toward its target ([How System Levels Rise](../conquest/war.md#how-system-levels-rise)).
 
 In the code: [The Conquest Update](#code-the-conquest-update).
 
@@ -108,7 +108,7 @@ Changes [Ways to slow a faction](../conquest/faction-economy.md#ways-to-slow-a-f
 
 ## In the Game Code
 
-This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, search the decompiled source for the method or field named here.
+This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources. To check a claim, search the decompiled source for the method or field named here.
 
 ### Code: The Control Row and Its Spread
 
@@ -120,11 +120,11 @@ Source: `Conquest.TickUmbralSpread`, `UmbralHackingTool.OnUse`, `UmbralHackingBo
 
 #### Code: On the System Tooltip and in System Data
 
-Every war-zone system's `ConquestSystem` also stores umbral control, next to who owns it, war effort timers and settling state.
+Every war-zone system's `ConquestSystem` also stores umbral control, next to who owns it and its settling state.
 
 #### Code: The Conquest Update
 
-`Conquest.DoConquestTick`, the hourly conquest update, also spreads the Umbral Reach.
+`Conquest.DoConquestTick`, the hourly conquest update, also spreads the Umbral Reach (`TickUmbralSpread`). In 0.8.3.7 `GenerateConquestEvents`, which `DoConquestTick` calls unless it runs in setup, also calls `UpdateSystemLevels` (`SystemLevelDrift.Creep`).
 
 Source: `Conquest.DoConquestTick`
 

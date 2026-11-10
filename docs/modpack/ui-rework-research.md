@@ -141,7 +141,7 @@ Game code a mod can reuse:
 | `HudFade` | `decompiled/Behaviour.UI.HUD/HudFade.cs` | Fades relative to an existing `CanvasGroup` alpha and restores it afterwards, so a mod opacity setting survives docking fades |
 | `UiStyle.palette` + `NotifyPaletteChanged` | `decompiled/Behaviour.UI.Shared/` | Live recolour of the five palette roles |
 | `CardPopupFrame`, `UiCards`, `UiScrollView`, `UiSearchField`, `WindowBorder`, `FleetBarParts` | `decompiled/Behaviour.UI.Shared/`, `Behaviour.UI/`, `Behavior.UI.GalaxyMap/` | Building edit-mode panels and settings rows that look like the game |
-| `PersonalFleetButton.Create` | `decompiled/Behaviour.UI.Spacestation/` | Station tabs that float above another tab |
+| `PersonalFleetButton.Create` | `decompiled/Behaviour.UI.Spacestation/` | Icon buttons that float above a station tab |
 
 Modpack code:
 

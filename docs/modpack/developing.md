@@ -9,7 +9,7 @@ This page explains how `src/IgiQoL` is put together and the rules every feature 
 | `Plugin.cs` | The BepInEx plugin (`igi.qol`). Logs the game version against `TestedGameVersion`, then starts the registry |
 | `Core/` | The feature registry, the `Feature` base class, game events, save data, per-ship settings, the startup report, the `[Dev]` harness and its dumps and profiler |
 | `Features/<Name>/` | One folder per feature: the `Feature` subclass, its Harmony patch classes, its tab, its self-check |
-| `Game/` | Small helpers over game objects that several features share: `Fleet` (the flagship, the fleet's ship list, and the live unit for a ship's data), `Cargo` (counting, moving and finding the deposit target), `Items` (rule keys and the ammo a ship's fit fires), `Resists` (the share of a hit a unit takes by damage type, through shields and hull first and then armor), `Effects` (the buffs and debuffs on a unit) and `Aggro` (a unit's target, the threat list of its faction fleet at the location, and who is targeting a unit) |
+| `Game/` | Small helpers over game objects that several features share: `Fleet` (the flagship, the fleet's ship list, and the live unit for a ship's data), `Cargo` (counting, moving and finding the deposit target), `Items` (rule keys, the ammo a ship's fit fires, what a mover leaves aboard, and what your missions still want delivered to other stations), `Resists` (the share of a hit a unit takes by damage type, through shields and hull first and then armor), `Effects` (the buffs and debuffs on a unit) and `Aggro` (a unit's target, the threat list of its faction fleet at the location, and who is targeting a unit) |
 | `Rules/` | `ItemRules`, the per-save item rule table that loot pickup limits, ECHO Cargo Rules and station services read |
 | `UI/` | The mod window and its widgets (`Kit`), pop-out windows (`Popout`), settings rows, the ship settings popup, drag handles, the fleet row layout, link clicks (`LinkClicks`), tests for whether a key is held, used by settings that name a key to hold (`HeldKey`), and shared UI templates (`Templates`) |
 
@@ -45,6 +45,7 @@ sequenceDiagram
 | `SettingsTab` | The tab that shows this feature's settings (e.g. `"ECHO"`); the Settings tab then shows only the on/off switch |
 | `BindConfig` | Call `base.BindConfig(cfg)` (binds `Enabled`), then bind settings with `SettingInfo.Describe(label, help, ...)` |
 | `OnActivated` | Subscribe to `GameEvents`, add a tab with `ModWindow.AddTab(owner, id, title, order, build)` |
+| `AddSettingRows` | The feature's rows on the Settings tab. The default lists every entry; override it to lay rows out in groups (`Features/ShipCollisions/` puts options that replace each other in a `Kit.Box`) |
 | `SelfCheck` | The in-game test, see [dev-harness.md](dev-harness.md) |
 
 ## Game Events
@@ -75,7 +76,7 @@ sequenceDiagram
 
 ## Mod Window and Settings
 
-`ModWindow.AddTab(owner, id, title, order, build)` registers a tab. A tab whose owner feature is off is hidden; pass `null` as the owner for a tab that several features share. `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. The rest of the API is `ModWindow.Open(id)`, `Show(id)` (which rebuilds the tab) and `Close()`. Widgets come from `Kit`: `Row`, `Column`, `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Search` (a search field with a lens that a right-click clears), `Dropdown`, `Tile` and `Tooltip`.
+`ModWindow.AddTab(owner, id, title, order, build)` registers a tab. A tab whose owner feature is off is hidden; pass `null` as the owner for a tab that several features share. `build(RectTransform content)` runs each time the tab is shown, so build rows from the current state and don't keep references to old rows. The rest of the API is `ModWindow.Open(id)`, `Show(id)` (which rebuilds the tab) and `Close()`. Widgets come from `Kit`: `Row`, `Column`, `Box` (a bordered group with a small heading), `Label`, `Muted`, `TextButton`, `Toggle`, `Input`, `Search` (a search field with a lens that a right-click clears), `Dropdown`, `Tile` and `Tooltip`.
 
 A view that floats outside the window registers a `PopoutKind` with `Popouts.Register` from `OnActivated`. The kind gives:
 
@@ -133,10 +134,10 @@ private static void SomeMethodPostfix(SomeGameType __instance)
 ## Adding a Feature
 
 1. Create `Features/<Name>/<Name>.cs` with a `Feature` subclass (`public static <Name> Instance;` set in the constructor) and its patch classes.
-2. Add it to `FeatureRegistry.All`. Order matters for features that depend on another's state at activation, and for the self-checks, which run in that order: a check that undocks or spawns enemies (`MissileRetarget`) sits after the checks that need a docked ship or a quiet location.
+2. Add it to `FeatureRegistry.All`. Order matters for features that depend on another's state at activation, and for the self-checks, which run in that order and see what earlier checks left behind: `MissileRetarget` fires missiles and spawns enemies, so it sits after the checks that need a quiet location. A check that needs a station docks itself with `ctx.EnsureDocked`, and one that needs space calls `SelfCheckContext.EnsureInSpace`, so neither depends on where the check before it ended.
 3. Bind its settings in `BindConfig` with `SettingInfo.Describe`, and decide whether they belong on an existing tab (`SettingsTab`) or on Settings.
-4. Write a `SelfCheck` that exercises the change in the game, with `ctx.Cleanup` undoing whatever it touched.
-5. Build, run the harness with `OnlyChecks = <Id>`, then the full harness (`tools/Harness` does the run on a save copy; see [dev-harness.md](dev-harness.md)).
+4. Write a `SelfCheck` that exercises the change in the game, with `ctx.Cleanup` undoing whatever it touched. Cleanups run only after every feature's check, so a check that swaps global state (item rules, a faction's war footing, input focus) puts it back in a `finally` right after its test.
+5. Build, run the harness on that feature alone (`--only <Id>`), then the full harness (`tools/Harness` does the run on a save copy; see [dev-harness.md](dev-harness.md)).
 6. Document it in the matching page under `docs/modpack/features/`, add its settings to [settings.md](settings.md), and bump the feature and startup counts in [README.md](README.md).
 
 `LESSONS_LEARNED.md`, local and gitignored at the repo root, collects the findings and traps from earlier sessions: where the game keeps the logic a change needs, harness gotchas, standing decisions, and dead ends already explored. Read it before starting on an area, and add to it when a session finds something the next one would otherwise rediscover. Task status and per-run results go in commit messages, not in a tracking file.

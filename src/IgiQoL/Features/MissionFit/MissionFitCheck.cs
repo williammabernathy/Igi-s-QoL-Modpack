@@ -21,7 +21,9 @@ internal static class MissionFitCheck
 {
     // The board as the save has it. Then a turret for the first greyed offer's work goes into a fleet ship's first
     // hardpoint (in data only), and then into the flagship's instead: either must clear that offer's mark, since your
-    // fleet ships count as much as the flagship. Hardpoints go back in a finally before anything else runs.
+    // fleet ships count as much as the flagship. When the fleet fits every offer, the turrets for one offer's work are
+    // first taken off every ship (in data only) so that offer greys. Hardpoints go back in a finally before anything
+    // else runs.
     public static IEnumerator Run(SelfCheckContext ctx)
     {
         Board board = null;
@@ -38,19 +40,33 @@ internal static class MissionFitCheck
         InventoryItemType gear = null;
         foreach (var m in Offers())
             if (MissionFit.Needs(m, out var t, out var l) && !MissionFit.Fits(t, l) && (gear = GearFor(t, l)) != null) { target = m; break; }
-        if (target == null)
-        {
-            ctx.Skip("fit", before == 0 ? "no greyed offer" : "no turret in the game for the greyed offers' work");
-            yield break;
-        }
         var ships = Fleet.Ships(withMercenaries: false);
         var saved = ships.Select(s => s.hardpoints).ToList();
         try
         {
-            if (ships.Count < 2) ctx.Skip("fit-fleet-ship", "no fleet ship besides the flagship");
-            else yield return Fit(ctx, "fit-fleet-ship", board, ships[1], gear, target, before);
-            if (ships.Count > 1) ships[1].hardpoints = saved[1];
-            yield return Fit(ctx, "fit-flagship", board, ships[0], gear, target, before);
+            // The hardpoints and greyed count each fit step starts from: the save's, or the stripped ones.
+            var baseline = saved;
+            int greyed = before;
+            if (target == null && before == 0 && (target = StripOne(ships, out gear, out string stripped)) != null)
+            {
+                baseline = ships.Select(s => s.hardpoints).ToList();
+                board.ShowMissionBoard();
+                yield return null;
+                greyed = CheckRows(ctx, "rows-stripped", board, stripped + ": ");
+            }
+            if (target == null)
+            {
+                string why = before == 0 ? "no greyed offer, and no offer whose work only turrets do" : "no turret in the game for the greyed offers' work";
+                foreach (var n in new[] { "fit-fleet-ship-rows", "fit-fleet-ship", "fit-flagship-rows", "fit-flagship" }) ctx.Skip(n, why);
+            }
+            else
+            {
+                if (ships.Count < 2)
+                    foreach (var n in new[] { "fit-fleet-ship-rows", "fit-fleet-ship" }) ctx.Skip(n, "no fleet ship besides the flagship");
+                else yield return Fit(ctx, "fit-fleet-ship", board, ships[1], gear, target, greyed);
+                if (ships.Count > 1) ships[1].hardpoints = baseline[1];
+                yield return Fit(ctx, "fit-flagship", board, ships[0], gear, target, greyed);
+            }
         }
         finally
         {
@@ -91,6 +107,35 @@ internal static class MissionFitCheck
     {
         foreach (var item in InventoryItemType.all)
             if (item != null && item.TryGetComponent<AbstractTurret>(out var turret) && turret.gameplayType == type && turret.CanTargetLayer(layer)) return item;
+        return null;
+    }
+
+    // The first offer whose work only turrets give the fleet: those turrets come off every ship's hardpoints (in data),
+    // and if a drone, torpedo or hangar bay still covers the work, the next offer is tried. Leaves the stripped
+    // hardpoints in place for the caller to put back.
+    private static Mission StripOne(List<SpaceShipData> ships, out InventoryItemType gear, out string stripped)
+    {
+        var saved = ships.Select(s => s.hardpoints).ToList();
+        foreach (var m in Offers())
+        {
+            if (!MissionFit.Needs(m, out var t, out var l) || (gear = GearFor(t, l)) == null) continue;
+            int removed = 0;
+            foreach (var ship in ships)
+            {
+                var left = (InventoryItemType[])ship.hardpoints.Clone();
+                for (int i = 0; i < left.Length; i++)
+                    if (left[i] != null && left[i].TryGetComponent<AbstractTurret>(out var turret) && turret.gameplayType == t && turret.CanTargetLayer(l)) { left[i] = null; removed++; }
+                ship.hardpoints = left;
+            }
+            if (removed > 0 && !MissionFit.Fits(t, l))
+            {
+                stripped = $"took {removed} {MissionFit.WorkName(t, l)} turret(s) off the fleet for '{Translation.Translate(m.name)}'";
+                return m;
+            }
+            for (int i = 0; i < ships.Count; i++) ships[i].hardpoints = saved[i];
+        }
+        gear = null;
+        stripped = null;
         return null;
     }
 

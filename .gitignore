@@ -13,3 +13,5 @@ LESSONS_LEARNED.md
 docs/modpack/sandbox-harness.md
 # Documentation site build output (zensical.toml).
 /site/
+# Local hand-off note between sessions; not for the repository.
+HANDOFF.md

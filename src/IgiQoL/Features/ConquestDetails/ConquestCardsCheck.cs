@@ -34,9 +34,9 @@ internal static partial class ConquestDetailsCheck
 
     // ---- the verdicts ----
 
-    // Every verdict, rederived from the game's own numbers by plain arithmetic: the fleets an attack needs, what killing
-    // the defending fleets leaves, and what the full war effort penalty leaves with the game's own Defense function run
-    // on a system whose penalty is set by hand (and put back in a finally).
+    // Every verdict, rederived from the game's own numbers by plain arithmetic: the fleets an attack needs (the next
+    // battle times 1.15, over 2,000 points times the tracked faction's war footing from WarFooting.GetMultiplier) and
+    // what killing the defending fleets leaves.
     private static void CheckAdvice(SelfCheckContext ctx, Conquest conquest)
     {
         var tracked = WarMath.AutoTracked();
@@ -45,27 +45,25 @@ internal static partial class ConquestDetailsCheck
         reach.Build(tracked);
         var d = new DefenseParts();
         var counts = new Dictionary<AdviceKind, int>();
-        int bad = 0, restored = 0, formula = 0;
+        int bad = 0, checkedSystems = 0;
         string first = null;
         foreach (var cs in conquest.systems)
         {
             d.Read(cs);
-            float penalty = cs.warEffortPenalty;
             var a = WarAdvice.Compute(d, tracked, reach);
             counts[a.Kind] = counts.TryGetValue(a.Kind, out int n) ? n + 1 : 1;
-            if (cs.warEffortPenalty != penalty) { bad++; first ??= cs.system.name + ": war effort penalty not put back"; continue; }
-            restored++;
-            string why = ExpectAdvice(cs, d, a, tracked, reach, ref formula);
+            checkedSystems++;
+            string why = ExpectAdvice(cs, d, a, tracked, reach);
             if (why != null) { bad++; first ??= cs.system.name + ": " + why; }
         }
         var parts = new List<string>();
         foreach (var pair in counts) parts.Add(pair.Key + " " + pair.Value);
-        string detail = $"{restored} systems for {tracked.identifier}: {string.Join(", ", parts)}; {formula} war effort what-ifs matched the closed formula" + (first != null ? "; first mismatch " + first : "");
+        string detail = $"{checkedSystems} systems for {tracked.identifier} at war footing x{WarFooting.GetMultiplier(tracked):0.000}: {string.Join(", ", parts)}" + (first != null ? "; first mismatch " + first : "");
         if (bad == 0) ctx.Pass("advice", detail);
         else ctx.Fail("advice", detail);
     }
 
-    private static string ExpectAdvice(ConquestSystem cs, DefenseParts d, Advice a, Faction tracked, Reach reach, ref int formula)
+    private static string ExpectAdvice(ConquestSystem cs, DefenseParts d, Advice a, Faction tracked, Reach reach)
     {
         AdviceKind expected;
         if (cs.cannotBeTaken) expected = AdviceKind.CannotTake;
@@ -78,31 +76,20 @@ internal static partial class ConquestDetailsCheck
         else
         {
             double next = ConquestCombat.GetNextBattleStrength(cs);
-            int fleets = Math.Max(1, (int)Math.Ceiling(next * 1.15 / 2000.0 - 0.0001));
+            double judgedFleet = 2000.0 * WarFooting.GetMultiplier(tracked);
+            int fleets = Math.Max(1, (int)Math.Ceiling(next * 1.15 / judgedFleet - 0.0001));
             if (a.Fleets != fleets) return $"needs {a.Fleets} fleets, arithmetic says {fleets} (next battle {next:0})";
             if (fleets == 1)
             {
                 if (!WarMath.CanEstimate(d)) expected = AdviceKind.LeaveStart;
-                else if (WarMath.EstimateHubSiege(d, 2000f).Result == SiegeResult.Captured) expected = AdviceKind.LeaveIt;
-                else
-                {
-                    var cut = EstimateWithPenalty(cs, 0.5f);
-                    expected = cs.warEffortPenalty < 0.499f && cut.Result == SiegeResult.Captured ? AdviceKind.WarEffort : AdviceKind.FallsShort;
-                }
+                else if (WarMath.EstimateHubSiege(d, (float)judgedFleet).Result == SiegeResult.Captured) expected = AdviceKind.LeaveIt;
+                else expected = AdviceKind.FallsShort;
             }
             else
             {
-                int kill = d.FleetCount > 0 ? Math.Max(1, (int)Math.Ceiling((next - d.Fleets) * 1.15 / 2000.0 - 0.0001)) : fleets;
-                int effort = fleets;
-                if (cs.warEffortPenalty < 0.499f) effort = Math.Max(1, (int)Math.Ceiling(NextWithPenalty(cs, 0.5f) * 1.15 / 2000.0 - 0.0001));
-                expected = kill < fleets && kill <= effort ? AdviceKind.KillFleet : effort < fleets ? AdviceKind.WarEffort : AdviceKind.Skip;
-                if (expected == AdviceKind.KillFleet && a.FleetsAfter != kill) return $"killing the fleets leaves {kill}, advice says {a.FleetsAfter}";
-                if (expected == AdviceKind.WarEffort)
-                {
-                    if (a.FleetsAfter != effort) return $"full penalty leaves {effort} fleets, advice says {a.FleetsAfter}";
-                    string err = CheckMissions(cs, d, a, ref formula);
-                    if (err != null) return err;
-                }
+                int kill = d.FleetCount > 0 ? Math.Max(1, (int)Math.Ceiling((next - d.Fleets) * 1.15 / judgedFleet - 0.0001)) : fleets;
+                expected = kill < fleets ? AdviceKind.KillFleet : AdviceKind.Skip;
+                if (a.FleetsAfter != kill) return $"killing the fleets leaves {kill}, advice says {a.FleetsAfter}";
             }
         }
         // A hub kill replaces a verdict with no lever, or a running hub siege, only when it hands the system to the faction
@@ -117,31 +104,6 @@ internal static partial class ConquestDetailsCheck
         return a.Kind == expected ? null : $"expected {expected}, got {a.Kind}";
     }
 
-    // The mission count is the fewest that reach the fleet count, and the next battle after them equals both the game's
-    // own function and the closed formula for a system with no Defense station: the station term is swapped for the one
-    // with the new war effort multiplier.
-    private static string CheckMissions(ConquestSystem cs, DefenseParts d, Advice a, ref int formula)
-    {
-        if (a.Missions < 1 || a.Missions > 5) return "missions " + a.Missions;
-        float applied = Mathf.Min(0.5f, cs.warEffortPenalty + 0.1f * a.Missions);
-        float game = NextWithPenalty(cs, applied);
-        if (Mathf.Abs(game - a.NextAfter) > 0.5f) return $"next battle after {a.Missions} missions {a.NextAfter:0}, game says {game:0}";
-        if (a.Missions > 1)
-        {
-            float fewer = NextWithPenalty(cs, Mathf.Min(0.5f, cs.warEffortPenalty + 0.1f * (a.Missions - 1)));
-            if (Mathf.Max(1, Mathf.CeilToInt(fewer * 1.15f / 2000f - 0.0001f)) <= a.FleetsAfter) return $"{a.Missions - 1} missions already reach {a.FleetsAfter} fleets";
-        }
-        if (d.DefenseStations == 0)
-        {
-            float mult = Mathf.Max(0f, 1f + cs.warEffortBonus - applied);
-            float term = Mathf.Max(250f * d.Multiplier, Mathf.Min(d.Firepower, 700f * d.Multiplier) * d.Structure) * mult + d.Flat;
-            float closed = d.NextBattle - d.StationTerm + term;
-            if (Mathf.Abs(closed - a.NextAfter) > 0.5f) return $"closed formula {closed:0}, advice {a.NextAfter:0}";
-            formula++;
-        }
-        return null;
-    }
-
     private static bool BattleAt(ConquestSystem cs)
     {
         foreach (var battle in WarMath.Universe.battleManager.activeBattles)
@@ -149,30 +111,92 @@ internal static partial class ConquestDetailsCheck
         return false;
     }
 
-    // The game's next battle number with the system's penalty set by hand; the field is put back.
-    private static float NextWithPenalty(ConquestSystem cs, float penalty)
+    // The mod's judged-strength arithmetic against the game's own decision. For every fleet and every owned war-zone
+    // system, ConquestFleetOrders.CanBeat (a fleet starts an attack only when WarFooting.GetJudgedStrength reaches 1.15
+    // times the system's next battle) must agree with points x footing >= WarMath.ToStart(next battle). A faction with
+    // no footing proves little, so each faction's footing is set by hand for the test and put back in a finally.
+    private static void CheckJudged(SelfCheckContext ctx, Conquest conquest)
     {
-        float saved = cs.warEffortPenalty;
-        try
+        var universe = WarMath.Universe;
+        int pairs = 0, bad = 0, flipped = 0, factions = 0;
+        string first = null;
+        var targets = new List<ConquestSystem>();
+        foreach (var cs in conquest.systems)
+            if (!cs.isUnowned) targets.Add(cs);
+        foreach (var economy in universe.factionEconomies.Values)
         {
-            cs.warEffortPenalty = penalty;
-            return ConquestCombat.GetNextBattleStrength(cs);
+            var f = economy.faction;
+            if (f == null || economy.fleets.Count == 0 || !Conquest.conquestFactions.Contains(f)) continue;
+            var standing = conquest.GetFactionStanding(f);
+            float savedContribution = standing.warContribution, savedSeconds = standing.warFootingSeconds;
+            factions++;
+            try
+            {
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    standing.warContribution = pass == 0 ? 0f : ConquestWarTuning.WarFootingFullContribution / 2f;
+                    standing.warFootingSeconds = ConquestWarTuning.WarFootingSeconds;
+                    float footing = WarMath.Footing(f);
+                    if (Mathf.Abs(footing - (1f + ConquestWarTuning.WarFootingMax * pass * 0.5f)) > 0.0001f)
+                    {
+                        bad++;
+                        first ??= $"{f.identifier}: footing x{footing:0.0000} for contribution {standing.warContribution:0}";
+                        continue;
+                    }
+                    foreach (var fleet in economy.fleets)
+                    {
+                        if (fleet.totalPoints <= 0) continue;
+                        foreach (var cs in targets)
+                        {
+                            float next = ConquestCombat.GetNextBattleStrength(cs);
+                            bool game = ConquestFleetOrders.CanBeat(fleet, cs);
+                            bool mine = fleet.totalPoints * footing >= WarMath.ToStart(next);
+                            pairs++;
+                            if (pass == 1 && !(fleet.totalPoints >= WarMath.ToStart(next)) && game) flipped++;
+                            if (game != mine)
+                            {
+                                bad++;
+                                first ??= $"{f.identifier} fleet {fleet.totalPoints} vs {cs.system.name} next {next:0} at x{footing:0.000}: game {game}, mine {mine}";
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                standing.warContribution = savedContribution;
+                standing.warFootingSeconds = savedSeconds;
+            }
         }
-        finally { cs.warEffortPenalty = saved; }
+        string detail = $"{pairs} fleet/system pairs for {factions} factions, {flipped} only beatable with footing" + (first != null ? "; first mismatch " + first : "");
+        if (factions == 0) ctx.Skip("judged-strength", "no faction with fleets");
+        else if (bad == 0) ctx.Pass("judged-strength", detail);
+        else ctx.Fail("judged-strength", detail);
     }
 
-    // A hub siege estimate with every figure read again by the game's own functions under the hand-set penalty.
-    private static SiegeEstimate EstimateWithPenalty(ConquestSystem cs, float penalty)
+    // A fleet's strength in a siege round is the game's FleetMixBonus.GetBattleStrength (what the Defense number sums for
+    // defending fleets too); it carries the faction's war footing next to the Empire-only fleet mix bonus. The judged
+    // strength the capture tests use is points times the same footing.
+    private static void CheckSiegeStrength(SelfCheckContext ctx, Conquest conquest)
     {
-        float saved = cs.warEffortPenalty;
-        try
+        int checkedFleets = 0, bad = 0;
+        string first = null;
+        foreach (var fleet in WarMath.Universe.AllFleets())
         {
-            cs.warEffortPenalty = penalty;
-            var d = new DefenseParts();
-            d.Read(cs);
-            return WarMath.EstimateHubSiege(d, 2000f);
+            if (fleet.totalPoints <= 0 || !Conquest.conquestFactions.Contains(fleet.faction)) continue;
+            float want = fleet.totalPoints * (1f + FleetMixBonus.Get(fleet) + conquest.GetFactionStanding(fleet.faction).warFootingBonus);
+            float got = FleetMixBonus.GetBattleStrength(fleet);
+            checkedFleets++;
+            if (Mathf.Abs(want - got) > 0.5f)
+            {
+                bad++;
+                first ??= $"{fleet.displayName}: {want:0} expected, game {got:0}";
+            }
         }
-        finally { cs.warEffortPenalty = saved; }
+        string detail = $"{checkedFleets} fleets" + (first != null ? "; first mismatch " + first : "");
+        if (checkedFleets == 0) ctx.Skip("siege-strength", "no fleets");
+        else if (bad == 0) ctx.Pass("siege-strength", detail);
+        else ctx.Fail("siege-strength", detail);
     }
 
     // The War overview's block and table follow the verdicts: help first in the default order, the next step names a
@@ -308,7 +332,8 @@ internal static partial class ConquestDetailsCheck
     }
 
     // No row the mod adds is wider than the slot the game gives its text, on the system card (short and full), the fleet,
-    // delivery and station cards; and a short system card is at most half the screen tall.
+    // delivery and station cards. A short card's War block has at most seven rows and the whole card fits on the
+    // screen; the line also says how many cards pass half the screen and how much of the tallest one is the mod's.
     private static IEnumerator CheckCardLayout(SelfCheckContext ctx, Conquest conquest, ConquestSystem pick)
     {
         if (HudManager.Instance == null || !UITooltip.TooltipEnabled || UITooltip.tooltipParent == null || UITooltip._rootCanvas == null)
@@ -318,9 +343,10 @@ internal static partial class ConquestDetailsCheck
         }
         var titles = new HashSet<string> { WarCards.SummaryTitle, WarCards.DefenseTitle, WarCards.TakingTitle, WarCards.BattleTitle, WarCards.FleetTitle, WarCards.StationTitle };
         var offenders = new List<string>();
-        int cards = 0, rows = 0, systems = 0, tooTall = 0;
+        int cards = 0, rows = 0, systems = 0, overHalf = 0, overScreen = 0, maxWarRows = 0;
         float tallest = 0f;
-        string tallestName = null;
+        string tallestName = null, tallestMakeup = null, mostRowsName = null;
+        ConquestSystem tallestSystem = null;
         float limit = Screen.height * 0.5f, scale = TooltipScale;
 
         void Measure(string name, UITooltip shown, TooltipCard card)
@@ -354,8 +380,11 @@ internal static partial class ConquestDetailsCheck
             {
                 Measure(name + " (short)", shown, card);
                 float height = shown.SizeY * scale;
-                if (height > tallest) { tallest = height; tallestName = name; }
-                if (height > limit) tooTall++;
+                if (height > tallest) { tallest = height; tallestName = name; tallestMakeup = Makeup(card); tallestSystem = cs; }
+                if (height > limit) overHalf++;
+                if (height > Screen.height) overScreen++;
+                var war = card.sections.Find(s => s.title == WarCards.SummaryTitle);
+                if (war != null && war.rows.Count > maxWarRows) { maxWarRows = war.rows.Count; mostRowsName = name; }
             });
             Draw(() => Full(cs), (shown, card) => Measure(name + " (full)", shown, card));
         }
@@ -376,35 +405,86 @@ internal static partial class ConquestDetailsCheck
             var shownIcon = icon;
             Draw(() => (TooltipCard)FleetCard.Invoke(shownIcon, null), (shown, card) => Measure("fleet " + shownIcon.fleet.displayName, shown, card));
         }
+        // Same as the fleet card: the map draws only the deliveries of the system it shows, so with none in view it's
+        // taken to the system a delivery is in and put back after the cards are drawn.
         string deliveryDetail = "no delivery icon on the map";
+        string deliverySkip = null;
         bool deliveryOk = true;
         int deliveries = 0;
-        foreach (var icon in Object.FindObjectsByType<WarshipDeliveryMapIcon>(FindObjectsInactive.Exclude))
+        var move = new MapMove();
+        try
         {
-            deliveries++;
-            var shownIcon = icon;
-            Draw(() => (TooltipCard)DeliveryCard.Invoke(shownIcon, null), (shown, card) =>
+            if (Object.FindObjectsByType<WarshipDeliveryMapIcon>(FindObjectsInactive.Exclude).Length == 0)
             {
-                Measure("delivery", shown, card);
-                bool note = card.notes.Exists(n => n.text == WarCards.DeliveryNote);
-                bool noRow = !card.rows.Exists(r => r.label == "What it is");
-                if (!note || !noRow) deliveryOk = false;
-                deliveryDetail = $"delivery card note {note}, old row gone {noRow}";
-            });
+                SystemMapData deliverySystem = null;
+                foreach (var economy in WarMath.Universe.AllEconomies())
+                {
+                    foreach (var delivery in economy.warshipDeliveries)
+                    {
+                        deliverySystem = delivery.GetCurrentSystem();
+                        if (deliverySystem != null) break;
+                    }
+                    if (deliverySystem != null) break;
+                }
+                if (deliverySystem == null) deliverySkip = "no warship delivery is under way anywhere in the universe";
+                else
+                {
+                    yield return move.Arrive<WarshipDeliveryMapIcon>(deliverySystem);
+                    if (!move.Arrived) deliverySkip = $"the map didn't show a delivery icon for {deliverySystem.name} within {MapMove.WaitSeconds:0} s";
+                }
+            }
+            if (deliverySkip == null)
+                foreach (var icon in Object.FindObjectsByType<WarshipDeliveryMapIcon>(FindObjectsInactive.Exclude))
+                {
+                    deliveries++;
+                    var shownIcon = icon;
+                    Draw(() => (TooltipCard)DeliveryCard.Invoke(shownIcon, null), (shown, card) =>
+                    {
+                        Measure("delivery", shown, card);
+                        bool note = card.notes.Exists(n => n.text == WarCards.DeliveryNote);
+                        bool noRow = !card.rows.Exists(r => r.label == "What it is");
+                        if (!note || !noRow) deliveryOk = false;
+                        deliveryDetail = $"delivery card note {note}, old row gone {noRow}" + (move.Moved ? $", map moved to {move.Target.name}" : "");
+                    });
+                }
         }
+        finally { move.Restore(); }
+        yield return move.Settle();
 
         string detail = $"{cards} cards, {rows} mod rows measured" + (offenders.Count > 0 ? "; too wide: " + string.Join("; ", offenders.GetRange(0, Math.Min(6, offenders.Count))) + (offenders.Count > 6 ? $" (+{offenders.Count - 6} more)" : "") : "");
         if (offenders.Count == 0 && rows > 0) ctx.Pass("card-fit", detail);
         else ctx.Fail("card-fit", detail);
-        if (deliveries == 0) ctx.Skip("delivery-card", deliveryDetail);
+        if (deliverySkip != null) ctx.Skip("delivery-card", deliverySkip);
+        else if (deliveries == 0) ctx.Skip("delivery-card", deliveryDetail);
         else if (deliveryOk) ctx.Pass("delivery-card", deliveryDetail);
         else ctx.Fail("delivery-card", deliveryDetail);
 
-        string heightDetail = $"tallest short card {tallest:0} px of {Screen.height} ({tallestName}); {tooTall} of {Mathf.Min(systems, 60)} over half the screen at scale {scale:0.##}";
+        // The tallest short card again without what the mod adds (its War block and its "Hold ... for the full
+        // breakdown" hint): the rest is the game's own card, which the short form doesn't change.
+        float gameOnly = 0f;
+        if (tallestSystem != null)
+            Draw(() =>
+            {
+                var c = Summary(tallestSystem);
+                c.sections.RemoveAll(s => s.title == WarCards.SummaryTitle);
+                c.hints.RemoveAll(h => h.action == "for the full breakdown");
+                return c;
+            }, (shown, _) => gameOnly = shown.SizeY * scale);
+        string heightDetail = $"most War rows {maxWarRows} ({mostRowsName}); tallest short card {tallest:0} px of {Screen.height} ({tallestName}: {tallestMakeup}), of it the game's own card {gameOnly:0} px and the mod's {tallest - gameOnly:0} px; "
+            + $"{overHalf} of {Mathf.Min(systems, 60)} over half the screen, {overScreen} taller than the screen, at scale {scale:0.##}";
         if (tallestName == null) ctx.Skip("summary-height", "no system card was drawn");
-        else if (tooTall == 0) ctx.Pass("summary-height", heightDetail);
+        else if (maxWarRows <= 7 && overScreen == 0 && gameOnly > 0f) ctx.Pass("summary-height", heightDetail);
         else ctx.Fail("summary-height", heightDetail);
         yield return null;
+    }
+
+    // What a card is made of, for a height failure: the count of each block, and each section with its row count.
+    private static string Makeup(TooltipCard card)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"banners {card.banners.Count}, owner rows {card.ownerRows.Count}, rows {card.rows.Count}, scroll rows {card.scrollRows.Count} (shows {card.scrollVisibleRows}), chips {card.chips.Count}, facilities {card.facilities.Count}, missions {card.missions.Count}, notes {card.notes.Count}, hints {card.hints.Count}, description {!string.IsNullOrEmpty(card.description)}");
+        foreach (var s in card.sections) sb.Append($", section '{s.title}' {s.rows.Count} rows");
+        return sb.ToString();
     }
 
     // ---- the key ----

@@ -558,10 +558,12 @@ internal static class ScannerPopoutCheck
             if (clicked && object.Equals(list.Selected, item.data.itemType) && rowLit && map.IsSelected(item)) ctx.Pass("scanner-select-from-dot", dotDetail);
             else ctx.Fail("scanner-select-from-dot", dotDetail);
 
-            // Row to dot: the dot's highlight follows the list.
+            // Row to dot: the dot's highlight follows the list. The list rebuilds when contacts come or go (often in a
+            // fight), which destroys the row found above, so the row is looked up again after each wait.
             list.Select(null, false);
             yield return new WaitForSeconds(0.5f);
             bool cleared = !map.IsSelected(item);
+            row = list.RowOf(item.data.itemType);
             var rowButton = row != null ? row.GetComponent<Button>() : null;
             if (rowButton != null) rowButton.onClick.Invoke();
             yield return new WaitForSeconds(0.5f);
@@ -571,14 +573,19 @@ internal static class ScannerPopoutCheck
             yield return ctx.Screenshot("scanner-popout");
 
             // A row action leaves the pop-out open.
+            row = list.RowOf(item.data.itemType);
             Button tractor = null;
+            var labels = new List<string>();
             if (row != null)
                 foreach (var b in row.GetComponentsInChildren<Button>())
                 {
                     var text = b.GetComponentInChildren<TMP_Text>();
+                    if (text != null) labels.Add(text.text);
                     if (text != null && text.text == "Tractor") tractor = b;
                 }
-            if (tractor == null) ctx.Skip("scanner-row-action", "no tractor beam on the flagship");
+            var flagship = Fleet.Flagship;
+            if (tractor == null)
+                ctx.Skip("scanner-row-action", $"no Tractor button on the row (row {(row != null)}, buttons [{string.Join(", ", labels)}]; flagship {(flagship != null ? flagship.name : "none")} tractor beam {(flagship != null && flagship.GetModule<Behaviour.Equipment.Module.TractorModule>() != null)})");
             else
             {
                 tractor.onClick.Invoke();

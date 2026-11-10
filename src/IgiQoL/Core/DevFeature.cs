@@ -520,12 +520,13 @@ internal static class DevAutosavePatches
         Plugin.Log.LogInfo("[Dev] autosave suppressed");
     }
 
+    // Callers since 0.8.3.7 go on (quit, main menu, reset) only when the save reports success, so a skipped save says true.
     [HarmonyPrefix]
     [HarmonyPatch(typeof(SaveGame), nameof(SaveGame.StoreAutosaveState))]
-    private static bool StoreAutosaveStatePrefix()
+    private static bool StoreAutosaveStatePrefix(ref bool __result)
     {
         if (!DevFeature.Instance.Active) return true;
-        try { Note(); return false; }
+        try { Note(); __result = true; return false; }
         catch (Exception e) { DevFeature.Instance.Fail(e, nameof(DevAutosavePatches)); return true; }
     }
 
