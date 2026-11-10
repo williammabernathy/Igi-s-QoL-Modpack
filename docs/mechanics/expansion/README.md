@@ -1,6 +1,6 @@
 # Beyond the Front
 
-This stage covers what opens once you accept the "Beyond the Front" mission: the expansion sectors, claiming and buying systems, your empire, and your own Empire Fleets. It needs captain level 60 and one finished 30% sector-control mission. Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten.
+This stage covers what opens once you accept the "Beyond the Front" mission: the expansion sectors, claiming and buying systems, your empire, and your own Empire Fleets. It needs captain level 60 and one finished 30% sector-control mission. Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. The war, fleet and level statements were checked again against the 0.8.3.7 source.
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -42,7 +42,7 @@ Level 60 also shows up in these places. None of them gate conquest actions.
 
 - Empire upkeep divides its cost multiplier by the multiplier at level 60.
 - Legendary loot can drop only at level 60 or higher. Its weight is (your level - 60) / 2000, so it is 0 at exactly 60.
-- The expansion's minimum system level is 60.
+- Every expansion system is created at level 60. Its level then follows the war-zone level targets (your effective level plus an offset, see [How System Levels Rise](../conquest/war.md#how-system-levels-rise)), so 60 is only where it starts. The 60 to 100 ramp across the expansion sets the ore level and the tier of seeded outposts.
 - The Empire Fleet budget steps every 5 levels (2500 points and 12 ships at level 60, see [slots and size](empire-fleets.md#slots-and-size)). Level 60 is not special in that table.
 
 In the code: [What Level 60 and "Beyond the Front" Gate](#code-what-level-60-and-beyond-the-front-gate).
@@ -58,7 +58,7 @@ The previous stage is [Conquest](../conquest/README.md). The mission that opens 
 
 ## In the Game Code
 
-This part holds the code names behind the gate table above. It comes from the decompiled game code of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, look up the class and method named in the `Source:` line.
+This part holds the code names behind the gate table above. It comes from the decompiled game code of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources. To check a claim, look up the class and method named in the `Source:` line.
 
 ### Code: What Level 60 and "Beyond the Front" Gate
 
@@ -80,7 +80,7 @@ Other level 60 references in code do not gate conquest actions:
 
 - `EmpireUpkeep.ReferenceLevel` is the level whose cost multiplier upkeep is divided by.
 - `LootRarity` adds Legendary loot only at level 60 or higher, with weight `(level - 60) / 2000`, so it is 0 at exactly 60.
-- `ExpansionLevels.SeamLevel` is the expansion's minimum system level, 60.
+- `ConquestWorld.CreateExpansionSystem` creates each expansion system at level 60 and gives it an `oreLevel` from the `ExpansionLevels.FloorAt` ramp (60 to 100, plus up to 4 levels of jitter). `ExpansionLevels.SeamLevel` (60) has no other caller in 0.8.3.7. `SystemLevelDrift` then moves the system level (see [What You Face](empire-fleets.md#code-what-you-face)).
 - The Empire Fleet budget steps every 5 levels (2500 points and 12 ships at level 60). Level 60 is not special in that table.
 
 Source: `ExpansionMissions.IsGoToExpansionAvailable`, `ExpansionMissions.BuildBeyondTheFront`, `ExpansionDialogues.GetTooEarlyLine`, `Conquest.maxPlayerLevel`, `Conquest.UnlockExpansion`, `Conquest.maxLootBoxSkillPoints`, `Conquest.maxReputation`, `SystemClaimUnlock`, `GamePlayer.UnlockSystemClaim`, `ConquestMissions.CreateFactionConquestProgressMission` (`SystemsConquered` at 0.3), `Conquest.UpdateConquestArea`, `LootRarity.GetRarityChances`, `EmpireUpkeep`, `ExpansionLevels`, `ConquestFleetPlanner.MaxFleetsFor`, `CommandTabUnlocks`

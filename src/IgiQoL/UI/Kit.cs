@@ -72,6 +72,20 @@ public static class Kit
         return UiScrollView.Build(scroll, 4f, new RectOffset(8, 8, 8, 8));
     }
 
+    public const string BoxName = "Box";
+
+    // A bordered, tinted column with a small heading, for settings that belong together. Add rows to the result.
+    public static RectTransform Box(RectTransform parent, string title)
+    {
+        var box = Column(parent, 4f);
+        box.name = BoxName;
+        box.GetComponent<VerticalLayoutGroup>().padding = new RectOffset(8, 8, 6, 6);
+        UiCards.AddBackground(box.gameObject, ColorHelper.panelHeaderBlue);
+        WindowBorder.Add(box, ColorHelper.stationRowBorder);
+        FleetBarParts.AddLine(box, title, 12f, ColorHelper.stationCardTitle, TextAlignmentOptions.MidlineLeft);
+        return box;
+    }
+
     // Empty vertical space in a column, e.g. above a heading so it doesn't run into the rows before it.
     public static void Gap(RectTransform parent, float height) =>
         UiCards.NewChild("Gap", parent).gameObject.AddComponent<LayoutElement>().preferredHeight = height;

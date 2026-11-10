@@ -98,20 +98,22 @@ internal sealed class FactionOverviewRows : MonoBehaviour
         var economy = WarMath.Universe?.PeekFactionEconomy(faction);
         if (economy == null) return;
         Row(content, "Fleet slots", economy.fleetSlotsUsed + " of " + ConquestFleetPlanner.MaxFleetsFor(faction),
-            "Fleets fielded out of the faction's cap; a merged assault fleet takes several slots. While it is below the cap, every warship it builds costs half and builds three times faster.");
+            "Fleets fielded out of the faction's cap; a merged assault fleet takes several slots, a war fleet takes none. While it is below the cap, every warship it builds costs half and builds three times faster.");
         float share = ConquestScope.GetWarZoneShare(faction);
         if (ConquestWarTuning.SubsidyFactions.Contains(faction))
             Row(content, "Home subsidy", GameMath.FormatNumber(GreatGateReinforcement.GetSubsidy(faction)) + " an hour",
                 "Wealth paid every economy tick. It shrinks as the faction's share of the war zone grows and stops at a third.");
         if (ConquestWarTuning.GreatGateFactions.Contains(faction))
         {
-            bool wanted = GreatGateReinforcement.NeedsReinforcement(economy);
-            string when = !wanted ? "not needed"
-                : economy.greatGateCooldown > 0f ? "in " + Mathf.CeilToInt(economy.greatGateCooldown) + " economy ticks"
+            bool sitting = conquest.IsSittingOut(faction);
+            bool wanted = GreatGateReinforcement.NeedsReinforcement(economy) && !sitting;
+            // The cooldown drops by one each economy tick and the fleet is sent on the first tick that finds it at 0.
+            string when = sitting ? "sitting out" : !wanted ? "not needed"
+                : economy.greatGateCooldown > 0f ? "in " + (Mathf.CeilToInt(economy.greatGateCooldown) + 1) + " economy ticks"
                 : "next economy tick";
-            bool free = economy.fleets.Count == 0 || share < ConquestWarTuning.GreatGateFreeFleetShare;
+            bool free = economy.fleets.TrueForAll(fleet => fleet.isWarFleet) || share < ConquestWarTuning.GreatGateFreeFleetShare;
             Row(content, "Great Gate fleet", wanted ? when + (free ? ", free" : ", paid") : when,
-                "A 1,500-point fleet from the Great Gate, sent while fewer than half the fleet slots are filled, at most once every 13 economy ticks. Free under 10% of the war zone or with no fleets left, otherwise paid from wealth.");
+                "A 1,500-point fleet from the Great Gate, sent while fewer than half the fleet slots are filled, at most once every 13 economy ticks. Free under 10% of the war zone or with no fleets left besides war fleets, otherwise paid from wealth.");
         }
         if (share < ConquestWarTuning.PeaceShareThreshold)
             Row(content, "Under 10% of the war zone", "ignores factions under 10%",

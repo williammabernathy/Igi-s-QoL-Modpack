@@ -72,18 +72,11 @@ internal static class MissionDistanceCheck
 
     private static IEnumerator CheckBoard(SelfCheckContext ctx)
     {
-        if (SpaceStationInterior.instance == null && Behaviour.Managers.BasePoiManager.current is SpacestationExteriorManager exterior)
-        {
-            exterior.EnterSpacestation();
-            float wait = Time.realtimeSinceStartup + 30f;
-            while (SpaceStationInterior.instance == null && Time.realtimeSinceStartup < wait) yield return null;
-            yield return new WaitForSeconds(3f);
-            if (SpaceStationInterior.instance != null) ctx.Cleanup(() => { if (SpaceStationInterior.instance != null) SpaceStationInterior.instance.ExitSpacestation(); });
-        }
+        yield return ctx.EnsureDocked(s => s.HasFacility(SpaceStationFacility.MissionBoard));
         var interior = SpaceStationInterior.instance;
         if (interior == null || !interior.HasMissionBoard())
         {
-            ctx.Skip("board", "not docked at a station with a mission board: " + MapPointOfInterest.current?.name);
+            ctx.Skip("board", ctx.DockNote ?? "not docked at a station with a mission board: " + MapPointOfInterest.current?.name);
             yield break;
         }
         interior.GoToLocation(SpaceStationFacility.MissionBoard);

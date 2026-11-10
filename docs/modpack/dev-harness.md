@@ -20,7 +20,7 @@ flowchart LR
 `tools/Harness` does steps 1 to 5 below for you. It copies the save, sets the `[Dev]` keys, starts the game through Steam and waits for it to quit. It then prints the counts and every FAIL, keeps the log in `artifacts/harness/`, puts the `[Dev]` keys back and deletes the copy. Close the game first.
 
 ```bash
-dotnet run --project tools/Harness -- --save autosave-0 --name igiqol-dev
+dotnet run --project tools/Harness -- --save vgmod-war --name igiqol-dev
 dotnet run --project tools/Harness -- --save vgmod-dev --name igiqol-combat --only DroneModes --runs 3
 ```
 
@@ -70,23 +70,24 @@ By hand:
    In PowerShell: `Select-String -Path "$G\BepInEx\LogOutput.log" -Pattern "startup:|switched off|Self-check complete|CHECK .* (FAIL|SKIP)"`.
 
    No single save reaches every check, so run on two saves:
-   - a copy of your newest autosave, which has your current game (the Conquest war, your stations and missions);
+   - a copy of a recent autosave, which has the current game (the Conquest war, your stations and missions);
    - a save whose fleet has a second ship with weapons, for the fleet checks of Target Priority and Keep distance (`TargetPriority/live-fleet`, `flagship-assist`, `Separation/live` and `other-ships`). Those checks skip on a save without such a ship.
+
+   Since 2026-11-10 the two test saves are edited to close the gaps that skipped on both: `vgmod-war` (from that day's autosave) flies its drone-bay ship as the flagship, and both saves have a recruitment center at their home station, an offer on a mission board one jump away, and (`vgmod-dev`) a salvage ship in the fleet. Copy a save before you edit it, and edit a named save rather than an autosave slot, which the game overwrites while you play.
 
    Two saves were used for the 2026-11-04 review: a copy of that day's autosave, and an older save with an armed fleet ship. Full runs on them ended with `343 pass, 0 fail, 28 skip` and `351 pass, 0 fail, 21 skip`. After the game's 0.8.3.5 update (2026-11-05), the same two saves ended with `344 pass, 2 fail, 25 skip` and `351 pass, 0 fail, 21 skip`. The two fails are `CraftRollup/run` and `parts-to-storage` on the 2026-11-05 autosave; they come and go between runs of that save and failed the same way on 0.8.3.4 that morning. The skip count moves by a few between runs of the same save. Some checks skip when the fleet kills an enemy mid-check, or when another ship sits where the check would place one.
 
+   After the game's 0.8.3.7 update (2026-11-10), a full run on a copy of that day's autosave first ended with `265 pass, 0 fail, 62 skip`: that save is in space with two boardings of its own running, so the docked checks skipped. Checks that need a station now dock themselves (`ctx.EnsureDocked`, below). Later that day, with the edited test saves and the checks made independent of what earlier checks leave behind, two runs of `vgmod-war` ended with `382 pass, 0 fail, 4 skip` and `383 pass, 0 fail, 3 skip`, and `vgmod-dev` with `392 pass, 0 fail, 1 skip`. The standing skips are `CraftRollup/parts-to-storage`, `refine-to-storage` and `RefineryFilter/filter` on `vgmod-war` (no forge or refinery in its system) and `ConquestDetails/unowned-card` on `vgmod-dev` (every war-zone system owned); each passes on the other save. `DroneModes/idle-stops` skipped once when an enemy reached the drone mid-measure.
+
    Skips name what the save lacks, for example:
 
-   - a dungeon at the location;
+   - a flagship drone bay (the `DroneModes`, `DronesOnArrival` and `OrePreference/picks` checks);
    - a combat flagship (`EchoMissions/kinds`);
    - a board offer ECHO would take;
-   - the game's Autopilot tab;
-   - a hired mercenary;
-   - a refinery;
-   - a mission board within 3 jumps with a mission in another system;
-   - fleet or delivery icons in the galaxy map's view.
+   - a station in the system with a recruitment center (`Loadouts/no-mercenary` hires a mercenary there when none is hired), a refinery, or a forge and a refinery;
+   - a mission board within 3 jumps with a mission in another system. The game empties a board when it saves, once you've been away from that station for 5 minutes (`GamePlayer.CleanupSaveData`), so only a board you just visited, or one seeded into the save, has one.
 
-   The five `EchoCargo` docked checks skip in a full run, because the flagship is in space by then. They run in a run limited to `OnlyChecks = EchoCargo`, which starts docked. `Separation/push`, `apart` and `own-target` skip when another ship sits where the check would place one, and the reason names that ship. A check that needs a fight and finds that the fleet has killed everything spawns enemies (`SelfCheckContext.SpawnEnemies`). It skips with the counts when none arrive.
+   `ConquestDetails/fleet-card` and `delivery-card` take the galaxy map to a system with a fleet or a warship delivery when the view it opens on has none (the map draws those icons only for the system it shows), and put the view back. `Separation/push`, `apart` and `own-target` move the pair 300 u to a quiet spot when other ships crowd the first one, skip only when every spot is crowded, and put both ships back. A check that needs a fight and finds that the fleet has killed everything spawns enemies (`SelfCheckContext.SpawnEnemies`). It skips with the counts when none arrive.
 
    The last line before `Self-check complete` is `CHECK Dev/unity-errors`. The harness listens to Unity's own log while it runs, and this check fails on any error or exception with the mod in its message or stack, naming the check that was running. Those errors are mostly exceptions in a `MonoBehaviour` update or a UI callback. No check's own try/catch sees them, and Unity writes them to `Player.log`, not to `LogOutput.log`.
 
@@ -148,6 +149,7 @@ public override IEnumerator SelfCheck(SelfCheckContext ctx)
 | `Cleanup(action)` | Undo what the check changed. All cleanups run once every check, dump and screenshot is done, in the order they were added, also for a check that threw. A later check sees the earlier checks' changes, so snapshot what you touch before changing it |
 | `Screenshot(name)` | Writes `igiqol-<name>.png` when `[Dev] Screenshot` is on |
 | `SelfCheckContext.EnsureInSpace()` | Undock and wait for the HUD |
+| `ctx.EnsureDocked(suits)` | Dock for a check that needs a station: stay at or enter the station you're at when it suits, otherwise fly to a friendly station in this system (one that suits if there is one, the home station first) and enter it. The trip abandons running operations, as any trip does (`TravelManager.SetRouteToPOI`). It undocks again in a cleanup. `ctx.DockNote` says why it isn't docked, or that no station in the system suits |
 | `SelfCheckContext.SpawnEnemies(count)` | Hostile small combat ships at the current location, as the console's SpawnEnemy does |
 | `SelfCheckContext.SpawnAsteroid(position, ore)`, `RemoveAsteroid(data)` | A test asteroid with one surface ore |
 

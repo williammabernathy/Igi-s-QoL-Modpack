@@ -26,17 +26,10 @@ internal static class StationServicesCheck
 {
     public static IEnumerator Run(SelfCheckContext ctx)
     {
-        if (SpaceStationInterior.instance == null && Behaviour.Managers.BasePoiManager.current is SpacestationExteriorManager exterior)
-        {
-            exterior.EnterSpacestation();
-            float wait = Time.realtimeSinceStartup + 30f;
-            while (SpaceStationInterior.instance == null && Time.realtimeSinceStartup < wait) yield return null;
-            yield return new WaitForSeconds(3f);
-            if (SpaceStationInterior.instance != null) ctx.Cleanup(() => { if (SpaceStationInterior.instance != null) SpaceStationInterior.instance.ExitSpacestation(); });
-        }
+        yield return ctx.EnsureDocked(s => s.HasFacility(SpaceStationFacility.PersonalHangar));
         if (Services.Docked() == null)
         {
-            ctx.Skip("docked", "could not dock at " + MapPointOfInterest.current?.name);
+            ctx.Skip("docked", ctx.DockNote ?? "not docked at " + MapPointOfInterest.current?.name);
             yield break;
         }
         var player = GamePlayer.current;
@@ -589,6 +582,8 @@ internal static class StationServicesCheck
     }
 
     // Losses come back from the reserve first, then willing prisoners, then hired at the personnel center for its price.
+    // Crew of other ships can die in the run's fights (CrewLosses counts every hull hit), and the service would replace
+    // those too, so their pending losses are set aside for the check and put back after.
     private static void CheckCrew(SelfCheckContext ctx)
     {
         var ss = Services.Docked();
@@ -598,6 +593,26 @@ internal static class StationServicesCheck
             ctx.Skip("crew-reserve", "no ship of yours has 5 crew of one type");
             return;
         }
+        var player = GamePlayer.current;
+        var others = new System.Collections.Generic.List<(SpaceShipData ship, System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, int>> losses)>();
+        foreach (var s in player.spaceShips)
+        {
+            if (s == ship) continue;
+            var losses = CrewLosses.PendingOf(s);
+            if (losses.Count == 0) continue;
+            others.Add((s, losses));
+            CrewLosses.Clear(s);
+        }
+        try { CheckCrewOn(ctx, ss, ship, type); }
+        finally
+        {
+            foreach (var (s, losses) in others)
+                foreach (var kv in losses) CrewLosses.Record(s, kv.Key, kv.Value);
+        }
+    }
+
+    private static void CheckCrewOn(SelfCheckContext ctx, SpaceStation ss, SpaceShipData ship, string type)
+    {
         var player = GamePlayer.current;
         CrewLosses.Clear(ship);
         int had = ship.crewData.GetCrewCount(type);

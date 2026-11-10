@@ -38,6 +38,8 @@ internal static partial class ConquestDetailsCheck
         CheckParts(ctx, conquest);
         CheckSystemCard(ctx, conquest);
         CheckAdvice(ctx, conquest);
+        CheckJudged(ctx, conquest);
+        CheckSiegeStrength(ctx, conquest);
 
         bool mapWasOpen = AbstractGalaxyMapManager.IsShowing();
         if (!mapWasOpen)
@@ -54,7 +56,7 @@ internal static partial class ConquestDetailsCheck
             yield break;
         }
         yield return CheckCorner(ctx);
-        CheckFleetCard(ctx);
+        yield return CheckFleetCard(ctx);
         CheckReinforcing(ctx);
         yield return CheckPopout(ctx);
         yield return CheckFactionOverview(ctx);
@@ -80,16 +82,18 @@ internal static partial class ConquestDetailsCheck
 
     // A medium hub (940 structure, 480 firepower) against a full fleet breaks in 10 rounds, which is also the earliest
     // a capture can happen (600 s). The station's fire falls with its structure, 480 to 276 over the first five rounds
-    // and the 250 floor after that, so the fleet loses 157 and keeps 1,843. A 300-point fleet against the same hub at
-    // the full war effort bonus (960 firepower term) is destroyed before it breaks it.
+    // and the 250 floor after that, so the fleet loses 157 and keeps 1,843. A 300-point fleet against the same hub is
+    // destroyed before it breaks it. A full fleet at the top war footing (WarFooting max bonus 0.25, judged as 2,500)
+    // breaks the hub in the same 10 rounds and keeps more.
     private static void CheckEstimate(SelfCheckContext ctx)
     {
-        var d = new DefenseParts { Firepower = 480f, Hull = 940f, Multiplier = 1f, WarEffort = 1f, Flat = 0f, Structure = 1f };
+        var d = new DefenseParts { Firepower = 480f, Hull = 940f, Multiplier = 1f, Flat = 0f, Structure = 1f };
         var full = WarMath.EstimateHubSiege(d, 2000f);
-        d.WarEffort = 2f;
         var weak = WarMath.EstimateHubSiege(d, 300f);
-        string detail = $"full: {full.Result} round {full.Rounds} left {full.PointsLeft:0} | weak: {weak.Result} round {weak.Rounds}";
-        if (full.Result == SiegeResult.Captured && full.Rounds == 10 && Mathf.Abs(full.PointsLeft - 1843f) < 1f && weak.Result == SiegeResult.Destroyed)
+        var footed = WarMath.EstimateHubSiege(d, 2000f * (1f + ConquestWarTuning.WarFootingMax));
+        string detail = $"full: {full.Result} round {full.Rounds} left {full.PointsLeft:0} | weak: {weak.Result} round {weak.Rounds} | full footing: {footed.Result} round {footed.Rounds} left {footed.PointsLeft:0}";
+        if (full.Result == SiegeResult.Captured && full.Rounds == 10 && Mathf.Abs(full.PointsLeft - 1843f) < 1f && weak.Result == SiegeResult.Destroyed
+            && footed.Result == SiegeResult.Captured && footed.Rounds == 10 && footed.PointsLeft > full.PointsLeft + 400f)
             ctx.Pass("estimate", detail);
         else ctx.Fail("estimate", detail);
     }
@@ -109,7 +113,7 @@ internal static partial class ConquestDetailsCheck
             if (d.DefenseStations > 0) withStations++;
             if (d.FleetCount > 0) withFleets++;
             float sum = d.StationTerm + d.Garrison + d.Fleets + d.Patrols;
-            float term = Mathf.Max(WarMath.FirepowerFloor * d.Multiplier, Mathf.Min(d.Firepower, WarMath.FirepowerCap * d.Multiplier) * d.Structure) * d.WarEffort + d.Flat;
+            float term = Mathf.Max(WarMath.FirepowerFloor * d.Multiplier, Mathf.Min(d.Firepower, WarMath.FirepowerCap * d.Multiplier) * d.Structure) + d.Flat;
             float raw = (d.HubFirepower + d.StationsFirepower) * (cs.isSettling ? 0.5f : 1f);
             if (Mathf.Abs(sum - d.Total) > 0.5f || Mathf.Abs(term - d.StationTerm) > 0.5f || Mathf.Abs(raw - d.Firepower) > 0.5f)
             {
@@ -140,7 +144,7 @@ internal static partial class ConquestDetailsCheck
         var summary = Summary(owned);
         var war = Find(summary, WarCards.SummaryTitle);
         bool hint = summary.hints.Exists(h => h.action == "for the full breakdown");
-        bool short_ = war != null && war.rows.Count >= 3 && war.rows.Count <= 6 && war.description == null
+        bool short_ = war != null && war.rows.Count >= 3 && war.rows.Count <= 7 && war.description == null
             && Find(summary, WarCards.DefenseTitle) == null && Find(summary, WarCards.TakingTitle) == null && Find(summary, WarCards.BattleTitle) == null;
         bool verdict = !tracked || war != null && war.rows.Count > 0 && war.rows[0].label == WarCards.VerdictLabel;
         string detail = $"{owned.system.name}: summary rows {war?.rows.Count ?? -1}, description {war?.description != null}, hint {hint}, verdict row {verdict}";
@@ -190,8 +194,47 @@ internal static partial class ConquestDetailsCheck
     }
 
     // A fleet icon's card has the strength row with the fleet's own points, and an NPC fleet below 35% or retreating
-    // says so instead of the bare "Reinforcing".
-    private static void CheckFleetCard(SelfCheckContext ctx)
+    // says so instead of the bare "Reinforcing". The map only draws the fleets of the system it shows, and the view it
+    // opens on often has none, so with no fleet icon in view the map is taken to a system with a live fleet (the
+    // game's own ShowSystemMap, as a click on that system does) and put back afterwards: later checks read the sector
+    // and the view the map was on.
+    private static IEnumerator CheckFleetCard(SelfCheckContext ctx)
+    {
+        var move = new MapMove();
+        try
+        {
+            if (Object.FindObjectsByType<ConquestFleetMapIcon>(FindObjectsInactive.Exclude).Length == 0)
+            {
+                var system = FleetMapSystem();
+                if (system == null) ctx.Skip("fleet-card", "no conquest fleet exists anywhere in the universe");
+                else
+                {
+                    yield return move.Arrive<ConquestFleetMapIcon>(system);
+                    if (!move.Arrived) ctx.Skip("fleet-card", $"the map didn't show a fleet icon for {system.name} within {MapMove.WaitSeconds:0} s");
+                }
+            }
+            if (move.Arrived || !move.Moved && Object.FindObjectsByType<ConquestFleetMapIcon>(FindObjectsInactive.Exclude).Length > 0) JudgeFleetCards(ctx, move);
+        }
+        finally { move.Restore(); }
+        yield return move.Settle();
+    }
+
+    // A system a live fleet is drawn in, one of an NPC faction's by preference: only those have the strength bar and
+    // the order text this check looks for.
+    private static SystemMapData FleetMapSystem()
+    {
+        SystemMapData any = null;
+        foreach (var fleet in WarMath.Universe.AllFleets())
+        {
+            var system = ConquestFleetPlanner.GetMapSystem(fleet);
+            if (system == null) continue;
+            if (!fleet.isWarFleet) return system;
+            any ??= system;
+        }
+        return any;
+    }
+
+    private static void JudgeFleetCards(SelfCheckContext ctx, MapMove move)
     {
         int checkedCards = 0, bad = 0, explained = 0;
         string sample = null;
@@ -202,17 +245,95 @@ internal static partial class ConquestDetailsCheck
             var card = (TooltipCard)FleetCard.Invoke(icon, null);
             var s = card != null ? Find(card, WarCards.FleetTitle) : null;
             checkedCards++;
-            if (s == null || s.rows.Count == 0 || !s.rows[0].value.StartsWith(WarMath.Points(fleet.totalPoints) + " of ")) { bad++; continue; }
+            if (s == null) { bad++; continue; }
+            // A war fleet never retreats, so it has no strength bar: its section starts with its target rows or none.
+            if (fleet.isWarFleet)
+            {
+                foreach (var row in s.rows)
+                    if (row.label == "Of full strength" || row.label == "Retreats below") bad++;
+            }
+            else if (s.rows.Count == 0 || !s.rows[0].value.StartsWith(WarMath.Points(fleet.totalPoints) + " of ")) { bad++; continue; }
             if (s.description != null)
             {
                 explained++;
                 sample ??= fleet.displayName + ": " + s.description;
             }
         }
-        string detail = $"{checkedCards} fleet icon cards, {explained} with an order explained" + (sample != null ? ", e.g. " + sample : "");
+        string detail = $"{checkedCards} fleet icon cards, {explained} with an order explained" + (move.Moved ? $", map moved to {move.Target.name}" : "") + (sample != null ? ", e.g. " + sample : "");
         if (checkedCards == 0) ctx.Skip("fleet-card", "no fleet icons in the map's current view");
         else if (bad == 0) ctx.Pass("fleet-card", detail);
         else ctx.Fail("fleet-card", bad + " cards without the strength row; " + detail);
+    }
+
+    // Takes the galaxy map to a system's view and back. The view is read when the move is made: zoom level (0 is a
+    // system, 1 the sector and galaxy layer), the system, the sector the map counts as viewed, the galaxy quadrant and
+    // the camera. Restore() is plain code so it can run in a finally; Settle() then waits out the game's own camera
+    // tween (a sector view is reached by one) and sets the camera again, since the tween ends on the sector's framing.
+    internal sealed class MapMove
+    {
+        internal const float WaitSeconds = 5f;
+        private readonly AbstractGalaxyMapManager map = AbstractGalaxyMapManager.current;
+        private readonly int zoom, quadrant;
+        private readonly SystemMapData system;
+        private readonly SectorMapData sector;
+        private readonly Vector3 cameraPosition;
+        private readonly float cameraSize;
+
+        internal SystemMapData Target { get; private set; }
+        internal bool Moved { get; private set; }
+        internal bool Arrived { get; private set; }
+
+        internal MapMove()
+        {
+            zoom = map.zoomLevel;
+            quadrant = map.currentQuadrant;
+            system = map.currentSystem;
+            sector = map.viewedSector;
+            cameraPosition = map.mapCamera.transform.position;
+            cameraSize = map.mapCamera.orthographicSize;
+        }
+
+        // The system view of `target`, locks bypassed (the game's lock only notifies), then up to WaitSeconds for the map
+        // to draw a T: its wide movers (fleets, deliveries) refresh a quarter second apart.
+        internal IEnumerator Arrive<T>(SystemMapData target) where T : Object
+        {
+            Target = target;
+            Moved = true;
+            map.ShowSystemMap(target, true);
+            float until = Time.realtimeSinceStartup + WaitSeconds;
+            while (Object.FindObjectsByType<T>(FindObjectsInactive.Exclude).Length == 0 && Time.realtimeSinceStartup < until) yield return null;
+            Arrived = map.zoomLevel == 0 && map.currentSystem == target && Object.FindObjectsByType<T>(FindObjectsInactive.Exclude).Length > 0;
+        }
+
+        internal void Restore()
+        {
+            if (!Moved || map == null) return;
+            Moved = false;
+            if (zoom == 0)
+            {
+                if (system != null) map.ShowSystemMap(system, true);
+            }
+            else
+            {
+                if (sector != null) map.ShowSectorMap(sector);
+                // The galaxy view of the quadrant the map was on; sector view and galaxy view share zoom level 1.
+                if (map.currentQuadrant != quadrant) map.ShowGalaxyMap(quadrant);
+            }
+            ApplyCamera();
+        }
+
+        internal IEnumerator Settle()
+        {
+            if (zoom == 0 || sector == null) yield break;
+            yield return new WaitForSecondsRealtime(1f);
+            if (map != null) ApplyCamera();
+        }
+
+        private void ApplyCamera()
+        {
+            map.mapCamera.transform.position = cameraPosition;
+            map.mapCamera.orthographicSize = cameraSize;
+        }
     }
 
     // Every fleet of every faction: a fleet that the map labels "Reinforcing" gets the order it really has, and one
@@ -228,7 +349,7 @@ internal static partial class ConquestDetailsCheck
             if (!label) continue;
             reinforcing++;
             string order = WarCards.FleetSection(fleet).description;
-            bool weak = fleet.totalPoints < fleet.targetPoints * ConquestWarTuning.RetreatThreshold;
+            bool weak = !fleet.isWarFleet && fleet.totalPoints < fleet.targetPoints * ConquestWarTuning.RetreatThreshold;
             if (order == null) bad++;
             else if (order.StartsWith("Resting")) resting++;
             else if (order.StartsWith("Retreating")) { retreating++; if (!weak) bad++; }
@@ -415,6 +536,16 @@ internal static partial class ConquestDetailsCheck
             foreach (var row in content.conquestRows)
                 labels.Add(row.label.text + "=" + row.value.text);
         bool rows = labels.Exists(l => l.StartsWith("Systems held now=")) && labels.Exists(l => l.StartsWith("Area Conquered refreshes in="));
+        // The game adds its own War Footing rows once the player has helped the faction (FactionOverviewContent.AddWarRows);
+        // the feature's rows must come after every one of them.
+        var standing = WarMath.Conquest?.GetFactionStanding(faction);
+        string footingLabel = Source.Util.Translation.Translate("@FactionOverviewWarFooting") + "=";
+        bool gameWarRows = labels.Exists(l => l.StartsWith(footingLabel));
+        int mine = labels.FindIndex(l => l.StartsWith("Systems held now="));
+        int lastGame = labels.FindLastIndex(l => l.StartsWith(Source.Util.Translation.Translate("@FactionOverviewContribution") + "=")
+            || l.StartsWith(Source.Util.Translation.Translate("@FactionOverviewWarShipsDestroyed") + "="));
+        bool placed = lastGame >= 0 && mine > lastGame && standing != null && gameWarRows == standing.hasHelpedInWar;
+        rows &= placed;
         bool ledger = content != null && content.shipyardCard.activeSelf && content.shipyardRows.Count > 0;
         string detail = $"{faction.identifier}: {string.Join("; ", labels)} | ledger card {(ledger ? content.shipyardRows.Count + " rows" : "hidden")}";
         if (rows && ledger) ctx.Pass("faction-overview", detail);
@@ -462,7 +593,7 @@ internal static partial class ConquestDetailsCheck
                 foreach (var st in ConquestCombat.GetDefenseStations(cs)) { defense = st; break; }
             if (cs.cannotBeTaken) continue;
             d.Read(cs);
-            int score = d.DefenseStations * 2 + d.FleetCount + (cs.hasWarEffort ? 1 : 0);
+            int score = d.DefenseStations * 2 + d.FleetCount;
             if (score > most) { most = score; pick = cs; }
         }
         if (defense != null)

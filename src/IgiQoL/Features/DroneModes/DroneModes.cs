@@ -172,9 +172,9 @@ public sealed class DroneModes : Feature
     {
         var slots = ship.spaceShipData.droneSlots;
         var poi = GamePlayer.current.currentPointOfInterest;
-        if (slots.Count == 0 || poi == null)
+        if (slots.Count == 0 || bay.droneAmount == 0 || poi == null)
         {
-            SkipGatherer(ctx, slots.Count == 0 ? "flagship has no drone slots" : "no current location");
+            SkipGatherer(ctx, slots.Count == 0 || bay.droneAmount == 0 ? "flagship has no drone slots" : "no current location");
             yield break;
         }
         bool mining = UnityEngine.Object.FindAnyObjectByType<Asteroid>() != null;
@@ -182,7 +182,9 @@ public sealed class DroneModes : Feature
         SalvageData spawned = null;
         GameObject spawnedObject = null;
         Source.Data.Persistable.AsteroidData spawnedRock = null;
-        int idx = slots.Count - 1;
+        // The bay builds drones only for its first droneAmount slots (DroneBayModule.AddNewDrone); the saved slot list
+        // can be longer, so the swap goes into the last slot the bay really uses.
+        int idx = Mathf.Min(slots.Count, bay.droneAmount) - 1;
         var old = slots[idx];
         var g = ship.spaceShipData.guid;
         var s = ShipSettings.Get(g);
@@ -226,7 +228,9 @@ public sealed class DroneModes : Feature
             bay.ForceResetDrones();
             bay.DeployDrones();
             Drone gatherer = null;
-            float until = Time.realtimeSinceStartup + 12f;
+            // The bay launches its drones one after another (DroneBayModule.CoroutineDeployDrones) and the swapped slot is
+            // the last, so a six-drone bay needs longer than a three-drone one.
+            float until = Time.realtimeSinceStartup + 12f + 3f * slots.Count;
             while (gatherer == null && Time.realtimeSinceStartup < until)
             {
                 foreach (var d in bay.drones)
@@ -235,7 +239,9 @@ public sealed class DroneModes : Feature
             }
             if (gatherer == null)
             {
-                SkipGatherer(ctx, kind + " didn't deploy");
+                int deployed = 0;
+                foreach (var d in bay.drones) if (d != null && d.isDeployed) deployed++;
+                SkipGatherer(ctx, $"{kind} didn't deploy in {12f + 3f * slots.Count:0} s ({deployed} of {bay.drones.Count} drones out, bay deploying {bay.deploying})");
                 yield break;
             }
             var gm = gatherer.targetProvider;
@@ -414,10 +420,25 @@ public sealed class DroneModes : Feature
             float edge = Edge(home, t);
             if (edge < nearEdge) { near = t; nearEdge = edge; }
         }
+        // The earlier checks leave enemies wherever the fight took them; when the nearest is out of the drone's scanner
+        // reach or more than 40u from the ship, it's moved 5u from the drone, on the ship's side.
+        string movedNear = "";
+        if (near is AbstractUnit unit && scanner != null
+            && (nearEdge + 1f > 40f || Vector2.Distance(fighter.transform.position, near.transform.position) > scanner.range))
+        {
+            Vector2 drone = fighter.transform.position;
+            Vector2 toShip = home - drone;
+            Vector2 to = drone + (toShip.sqrMagnitude > 0.01f ? toShip.normalized : Vector2.right) * Mathf.Min(5f, toShip.magnitude * 0.5f);
+            unit.transform.position = to;
+            if (unit.rigidbody != null) unit.rigidbody.position = to;
+            Physics2D.SyncTransforms();
+            nearEdge = Edge(home, near);
+            movedNear = $" ({near.targetName} moved beside the drone)";
+        }
         string skip = open == null ? "no location in this system that isn't a station to route to"
             : scanner == null ? "the drone has no scanner"
-            : near == null || nearEdge + 1f > 40f ? "no enemy within 40u of the ship"
-            : Vector2.Distance(fighter.transform.position, near.transform.position) > scanner.range ? $"nearest enemy is {Vector2.Distance(fighter.transform.position, near.transform.position):0}u from the drone, its scanner reaches {scanner.range:0}u"
+            : near == null || nearEdge + 1f > 40f ? "no enemy within 40u of the ship" + movedNear
+            : Vector2.Distance(fighter.transform.position, near.transform.position) > scanner.range ? $"nearest enemy is {Vector2.Distance(fighter.transform.position, near.transform.position):0}u from the drone, its scanner reaches {scanner.range:0}u{movedNear}"
             : null;
         if (skip != null) { SkipAfter(ctx, skip, "route-guard", "route-game"); yield break; }
 
@@ -437,7 +458,7 @@ public sealed class DroneModes : Feature
             float until = Time.realtimeSinceStartup + 4f;
             while (module.autoTarget == null && Time.realtimeSinceStartup < until) yield return new WaitForSeconds(0.25f);
             var got = module.autoTarget;
-            string guardDetail = $"route set, Guard radius {radius:0.0}, nearest enemy edge {nearEdge:0.0}u: drone target -> {(got == null ? "none" : got.targetName + " at " + Edge(home, got).ToString("0.0") + "u")}";
+            string guardDetail = $"route set, Guard radius {radius:0.0}, nearest enemy edge {nearEdge:0.0}u{movedNear}: drone target -> {(got == null ? "none" : got.targetName + " at " + Edge(home, got).ToString("0.0") + "u")}";
             if (got != null && Edge(home, got) <= radius * 1.25f) ctx.Pass("route-guard", guardDetail);
             else ctx.Fail("route-guard", guardDetail);
 

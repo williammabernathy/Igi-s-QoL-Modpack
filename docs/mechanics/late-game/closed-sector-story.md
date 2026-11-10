@@ -1,6 +1,6 @@
 # The Closed Sector Story Line
 
-This page covers the Meridia sector and the quadrant around it, Malcyte as a dormant raider with no yards, its fleet cap, how boarding it differs, and its alliance with Meridia's Chosen. It is a spoiler for the Malcyte story. In versions 0.8.3.4 and 0.8.3.5 only the debug console wakes Malcyte or opens Meridia, so in a normal game Malcyte stays dormant and Meridia stays closed (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed.
+This page covers the Meridia sector and the quadrant around it, Malcyte as a dormant raider with no yards, its fleet cap, how boarding it differs, and its alliance with Meridia's Chosen. It is a spoiler for the Malcyte story. In versions 0.8.3.4, 0.8.3.5 and 0.8.3.7 only the debug console wakes Malcyte or opens Meridia, so in a normal game Malcyte stays dormant and Meridia stays closed (see the [late-game gates](README.md#spoiler-gates)). Values are read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and none of the rules on this page changed. The war-related statements were checked again against the 0.8.3.7 source, where they still hold.
 
 Terms are in the [late-game glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -116,7 +116,7 @@ In the code: [Scuttle Rate](#code-scuttle-rate).
 
 ## In the Game Code
 
-This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, search the decompiled source for the method or field named here.
+This part holds the code names behind the sections above. It comes from the decompiled source of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources. To check a claim, search the decompiled source for the method or field named here.
 
 ### Code: The Closed Sector in the Kinds of System
 

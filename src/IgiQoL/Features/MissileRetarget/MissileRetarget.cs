@@ -127,39 +127,60 @@ public sealed class MissileRetarget : Feature
         var (a, b) = Pair(gun, enemies);
         try
         {
+            // The fleet keeps fighting, so an enemy or the missile can die inside the second each attempt takes. That
+            // says nothing about the mode: the two test enemies get their hull topped up while an attempt runs, an
+            // attempt that still loses one is repeated with a fresh pair, and fresh enemies are called in when fewer
+            // than two are left.
             SetMode(g, RetargetMode.Nearest);
-            if ((!Alive(a) || !Alive(b)) && Enemies(module, enemies) >= 2) (a, b) = Pair(gun, enemies);
-            yield return Aim(module, gun, a);
-            var m = Fire(prefab, gun, fired);
-            yield return new WaitForSeconds(m.ignitionDelay + 0.3f);
-            var state = m.GetComponent<MissileState>();
-            yield return Aim(module, gun, b);
-            for (int i = 0; i < 5; i++) yield return new WaitForFixedUpdate();
-            string sd = $"origin {Name(state != null ? state.origin : null)} (fired at {Name(a)}), then {Name(b)}: missile target {(m != null && m.target != null ? m.target.name : "none")}";
-            if (!Flying(m) || !Alive(a) || !Alive(b)) ctx.Skip("switch", "the missile or an enemy died during the check: " + sd);
-            else
+            string sd = null;
+            bool judged = false;
+            for (int attempt = 1; attempt <= 4 && !judged; attempt++)
             {
+                yield return EnsurePair(module, gun, enemies, a, b, p => (a, b) = p);
+                if (!Alive(a) || !Alive(b)) break;
+                yield return Aim(module, gun, a);
+                var m = Fire(prefab, gun, fired);
+                yield return HoldAlive(a, b, m.ignitionDelay + 0.3f);
+                var state = m.GetComponent<MissileState>();
+                yield return Aim(module, gun, b);
+                yield return HoldAlive(a, b, 5 * Time.fixedDeltaTime);
+                sd = $"attempt {attempt}: origin {Name(state != null ? state.origin : null)} (fired at {Name(a)}), then {Name(b)}: missile target {(m != null && m.target != null ? m.target.name : "none")}";
+                if (!Flying(m) || !Alive(a) || !Alive(b)) continue;
                 // The missile follows what the launcher aims at now: B, or since 0.8.3.5 another enemy when B moved out of
-                // the launcher's reach (AbstractTurret.UpdateFallbackTarget). Either way it must have left A.
+                // the launcher's reach (AbstractTurret.UpdateFallbackTarget). Either way it must have left A. When B is
+                // out of reach and A is the closest enemy it can work, the game itself keeps the launcher on A, and the
+                // missile staying on A is right; that attempt tests nothing and is repeated.
                 var now = gun.currentTarget as AbstractUnit;
                 sd += $", aims {Vector2.Distance(m.targetPosition, Lead(m, b)):0.0} u from B's lead point, {Vector2.Distance(m.targetPosition, Lead(m, a)):0.0} u from A's (A and B {Vector2.Distance(a.transform.position, b.transform.position):0.0} u apart), launcher aims at {Name(now)}"
                     + (Alive(now) && now != b ? $" ({Vector2.Distance(m.targetPosition, Lead(m, now)):0.0} u from its lead point)" : "");
+                if (now == a && !gun.CanWork(b)) { sd += " (B out of the launcher's reach, so the game kept it on A)"; continue; }
+                judged = true;
                 if (state != null && state.origin == a && m.target != null && Alive(now) && now != a && Closer(m, now, a)) ctx.Pass("switch", sd);
                 else ctx.Fail("switch", sd);
             }
+            if (!judged) ctx.Skip("switch", "no attempt got the launcher off A with both enemies and the missile alive: " + (sd ?? "fewer than two enemies left"));
 
             SetMode(g, RetargetMode.Off);
-            if ((!Alive(a) || !Alive(b)) && Enemies(module, enemies) >= 2) (a, b) = Pair(gun, enemies);
-            yield return Aim(module, gun, a);
-            var off = Fire(prefab, gun, fired);
-            yield return new WaitForSeconds(off.ignitionDelay + 0.3f);
-            yield return Aim(module, gun, b);
-            for (int i = 0; i < 5; i++) yield return new WaitForFixedUpdate();
-            string od = $"Fly on, switched from A to B: missile target {(off != null && off.target != null ? off.target.name : "none")}";
-            if (!Flying(off)) ctx.Skip("off-switch", "the missile hit something first");
-            else if (!Alive(a) || !Alive(b)) ctx.Skip("off-switch", "an enemy died during the check: " + od);
-            else if (off.target == null) ctx.Pass("off-switch", od);
-            else ctx.Fail("off-switch", od);
+            string od = null;
+            judged = false;
+            for (int attempt = 1; attempt <= 4 && !judged; attempt++)
+            {
+                yield return EnsurePair(module, gun, enemies, a, b, p => (a, b) = p);
+                if (!Alive(a) || !Alive(b)) break;
+                yield return Aim(module, gun, a);
+                var off = Fire(prefab, gun, fired);
+                yield return HoldAlive(a, b, off.ignitionDelay + 0.3f);
+                yield return Aim(module, gun, b);
+                yield return HoldAlive(a, b, 5 * Time.fixedDeltaTime);
+                od = $"attempt {attempt}: Fly on, switched from A to B: missile target {(off != null && off.target != null ? off.target.name : "none")}";
+                if (!Flying(off) || !Alive(a) || !Alive(b)) continue;
+                // As above: a launcher the game keeps on A (B out of its reach) never drops the missile's target.
+                if (gun.currentTarget as AbstractUnit == a && !gun.CanWork(b)) { od += " (B out of the launcher's reach, so the game kept it on A)"; continue; }
+                judged = true;
+                if (off.target == null) ctx.Pass("off-switch", od);
+                else ctx.Fail("off-switch", od);
+            }
+            if (!judged) ctx.Skip("off-switch", "no attempt got the launcher off A with both enemies and the missile alive: " + (od ?? "fewer than two enemies left"));
 
             // The fleet keeps fighting; take enemies that are alive now, and bring a few more first.
             int before = Enemies(module, enemies);
@@ -187,7 +208,14 @@ public sealed class MissileRetarget : Feature
             while (Alive(a) && Time.realtimeSinceStartup < deadline) yield return null;
             // Your target died; nothing of yours is picked until you pick again.
             module.ResetCurrentTargets();
-            for (int i = 0; i < 5; i++) yield return new WaitForFixedUpdate();
+            // The pick is made once, at the first fixed step without a target; judge from that step's positions, since
+            // the missile flies on and every later step moves the distances.
+            int steps = 0;
+            while (steps < 50 && Flying(near) && ns != null && ns.picked == null)
+            {
+                yield return new WaitForFixedUpdate();
+                steps++;
+            }
             if (!Flying(near) || ns == null || Alive(a) || Enemies(module, enemies) < 1)
             {
                 string why = $"missile {(Flying(near) ? "flying" : "gone")}, A alive {Alive(a)}, {enemies.Count} other enemies";
@@ -195,7 +223,6 @@ public sealed class MissileRetarget : Feature
                 ctx.Skip("nearest-click", why);
                 yield break;
             }
-            // The pick comes from the last scan, so an enemy that moved since may be up to a little nearer.
             Vector2 at = near.transform.position;
             AbstractUnit nearest = null;
             foreach (var e in enemies)
@@ -203,24 +230,43 @@ public sealed class MissileRetarget : Feature
             var picked = ns.picked as AbstractUnit;
             float pickedDist = Alive(picked) ? Vector2.Distance(at, picked.transform.position) : -1f;
             float nearestDist = nearest != null ? Vector2.Distance(at, nearest.transform.position) : -1f;
-            string kd = $"A destroyed: picked {Name(picked)} at {pickedDist:0.0} u from the missile, nearest enemy {Name(nearest)} at {nearestDist:0.0} u, missile target {(near.target != null ? near.target.name : "none")}";
+            var scanner = ship.GetModule<ScannerModule>();
+            string kd = $"A destroyed: picked {Name(picked)} at {pickedDist:0.0} u from the missile after {steps} steps, nearest enemy {Name(nearest)} at {nearestDist:0.0} u, missile target {(near.target != null ? near.target.name : "none")}";
+            if (nearest != null && nearest != picked)
+                kd += $"; nearest is {Vector2.Distance(ship.transform.position, nearest.transform.position):0.0} u from the ship (scanner {(scanner != null ? scanner.range : -1f):0.0}), fleet pick {module.TakesFleetPick()}, a candidate {MissilePatches.Candidate(module, nearest)}";
+            // The pick comes from the last scan, so an enemy that moved since may be up to a little nearer.
             bool pickOk = Alive(picked) && module.IsValidTarget(picked) && near.target == picked.transform && pickedDist <= nearestDist + 2f;
             if (pickOk) ctx.Pass("nearest-kill", kd);
             else ctx.Fail("nearest-kill", kd);
 
             // An enemy inside the launcher's range: since 0.8.3.5 a launcher that can't reach the ship's target fires at
-            // a nearer enemy instead (AbstractTurret.UpdateFallbackTarget), and its missiles follow that one.
+            // a nearer enemy instead (AbstractTurret.UpdateFallbackTarget), and its missiles follow that one. Fresh
+            // enemies often wait outside that range, so when none is inside, the nearest other one is moved in.
             AbstractUnit other = null;
             foreach (var e in enemies)
                 if (Alive(e) && e != picked && gun.CanWork(e)) { other = e; break; }
-            if (!pickOk || other == null) { ctx.Skip("nearest-click", "no pick, or no second enemy in the launcher's range to pick: " + kd); yield break; }
+            string movedIn = "";
+            if (pickOk && other == null)
+                foreach (var e in enemies)
+                {
+                    if (!Alive(e) || e == picked || !gun.CanTarget(e)) continue;
+                    Vector2 from = gun.transform.position;
+                    Vector2 dir = ((Vector2)e.transform.position - from).normalized;
+                    Vector2 to = from + (dir == Vector2.zero ? Vector2.right : dir) * gun.range * 0.6f;
+                    e.transform.position = to;
+                    if (e.rigidbody != null) e.rigidbody.position = to;
+                    Physics2D.SyncTransforms();
+                    if (gun.CanWork(e)) { other = e; movedIn = $" ({Name(e)} moved to {gun.range * 0.6f:0} u from the launcher)"; }
+                    break;
+                }
+            if (!pickOk || other == null) { ctx.Skip("nearest-click", "no pick, or no second enemy the launcher can reach: " + kd); yield break; }
             module.SetManualTarget(other);
             // The launcher takes the new target at its own next aim step; the missile is judged once it has.
             float aimBy = Time.realtimeSinceStartup + 2f;
             while (gun.currentTarget != other && Time.realtimeSinceStartup < aimBy && Flying(near) && Alive(other)) yield return new WaitForFixedUpdate();
             for (int i = 0; i < 5; i++) yield return new WaitForFixedUpdate();
             if (!Flying(near) || !Alive(other) || !Alive(picked)) { ctx.Skip("nearest-click", "the missile or an enemy died during the check"); yield break; }
-            string cd = $"pick {Name(ns.picked)} after you picked {Name(other)} (launcher aims at {Name(gun.currentTarget)}): aims {Vector2.Distance(near.targetPosition, Lead(near, other)):0.0} u from your target's lead point, {Vector2.Distance(near.targetPosition, Lead(near, picked)):0.0} u from the old pick's";
+            string cd = $"pick {Name(ns.picked)} after you picked {Name(other)}{movedIn} (launcher aims at {Name(gun.currentTarget)}): aims {Vector2.Distance(near.targetPosition, Lead(near, other)):0.0} u from your target's lead point, {Vector2.Distance(near.targetPosition, Lead(near, picked)):0.0} u from the old pick's";
             if (ns.picked == null && Closer(near, other, picked)) ctx.Pass("nearest-click", cd);
             else ctx.Fail("nearest-click", cd);
         }
@@ -283,6 +329,30 @@ public sealed class MissileRetarget : Feature
         Vector2.Distance(m.targetPosition, Lead(m, to)) < Vector2.Distance(m.targetPosition, Lead(m, than));
 
     private static bool Alive(AbstractUnit u) => u != null && !u.isDestroyed;
+
+    // Keeps the two test enemies' hull full for this long (fixed steps), so the fleet's fire can't end an attempt.
+    private static IEnumerator HoldAlive(AbstractUnit a, AbstractUnit b, float seconds)
+    {
+        float until = Time.time + seconds;
+        do
+        {
+            if (Alive(a)) a.currentHullHP = a.maxHullHP;
+            if (Alive(b)) b.currentHullHP = b.maxHullHP;
+            yield return new WaitForFixedUpdate();
+        } while (Time.time < until);
+    }
+
+    // The current pair when both live; else a fresh pair from the enemies here, calling in more when fewer than two are left.
+    private static IEnumerator EnsurePair(CombatModule module, AbstractTurret gun, List<AbstractUnit> enemies, AbstractUnit a, AbstractUnit b, Action<(AbstractUnit, AbstractUnit)> set)
+    {
+        if (Alive(a) && Alive(b)) yield break;
+        if (Enemies(module, enemies) < 2 && SelfCheckContext.SpawnEnemies(4))
+        {
+            float until = Time.realtimeSinceStartup + 30f;
+            while (Enemies(module, enemies) < 2 && Time.realtimeSinceStartup < until) yield return new WaitForSecondsRealtime(0.25f);
+        }
+        if (Enemies(module, enemies) >= 2) set(Pair(gun, enemies));
+    }
 
     // The first two enemies inside the launcher's range, else the first two. Since 0.8.3.5 a launcher fires at an enemy
     // it can reach instead of a target out of its range (AbstractTurret.UpdateFallbackTarget), so aiming it at one that
@@ -477,6 +547,20 @@ internal static class MissilePatches
         if (!lastScan.TryGetValue(module, out var list)) return null;
         for (int i = 0; i < list.Count; i++) Closest(module, turret, pos, list[i], ref best, ref bestSqr);
         return best;
+    }
+
+    // Whether the unit is among the enemies NearestEnemy looks at for this module (for the self-check's report).
+    internal static bool Candidate(CombatModule module, TargetableUnit unit)
+    {
+        if (module.TakesFleetPick())
+        {
+            roster.Clear();
+            PoiFleets.For(module.parent)?.GetEnemiesOf(module.parent, roster);
+            bool found = roster.Contains(unit as AbstractUnit);
+            roster.Clear();
+            return found;
+        }
+        return lastScan.TryGetValue(module, out var list) && list.Contains(unit);
     }
 
     private static void Closest(CombatModule module, Behaviour.Equipment.Turret.AbstractTurret turret, Vector3 pos, TargetableUnit t, ref TargetableUnit best, ref float bestSqr)

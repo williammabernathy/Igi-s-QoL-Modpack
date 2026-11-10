@@ -40,6 +40,10 @@ public sealed class CraftRollup : Feature
 
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
+        // The "parts to storage" checks need the fleet docked at the forge's station, and the panel checks need the
+        // forge screen, which the game loads with the station screens. Dock at a station with a forge and a refinery
+        // in this system if there is one, so the checks below use the station you're at.
+        yield return ctx.EnsureDocked(s => s.HasFacility(SpaceStationFacility.Forge) && s.HasFacility(SpaceStationFacility.Refinery));
         var station = FindForgeStation();
         if (station == null)
         {
@@ -435,24 +439,38 @@ public sealed class CraftRollup : Feature
             }
             var net = Rollups.Committed(station, null);
 
-            // Shared canister: the first canister A's waiting target step needs that another recipe also uses.
+            // Shared canister: the first canister one of A's waiting (unstarted) steps still needs that another recipe
+            // also uses. The target itself (a turret or module) has item inputs only; its canisters sit in the part
+            // recipes that wait behind the queued part.
             CraftingRecipe other = null;
             RefinedMaterial shared = default;
             float sharedPer = 0f;
-            foreach (var (material, _) in target.GetIngredientMaterials())
+            var searched = new List<string>();
+            foreach (var step in a.steps)
             {
-                var ci = material.GetCanisterItem();
-                if (ci == null || !net.TryGetValue(ci, out int held) || held <= 0) continue;
-                foreach (var r in forge.recipes)
+                if (step.started) continue;
+                foreach (var (material, _) in step.recipe.GetIngredientMaterials())
                 {
-                    if (r == null || r == target || !r.craftingEnabled) continue;
-                    foreach (var (m2, per2) in r.GetIngredientMaterials())
-                        if (m2 == material && per2 > 0f) { other = r; shared = material; sharedPer = per2; break; }
+                    var ci = material.GetCanisterItem();
+                    if (ci == null || !net.TryGetValue(ci, out int held) || held <= 0) continue;
+                    if (!searched.Contains(ci.identifier)) searched.Add(ci.identifier);
+                    foreach (var r in forge.recipes)
+                    {
+                        if (r == null || r == target || !r.craftingEnabled) continue;
+                        foreach (var (m2, per2) in r.GetIngredientMaterials())
+                            if (m2 == material && per2 > 0f) { other = r; shared = material; sharedPer = per2; break; }
+                        if (other != null) break;
+                    }
                     if (other != null) break;
                 }
                 if (other != null) break;
             }
-            if (other == null) ctx.Skip("reserve-shared", $"{target.identifier} has no canister input that another recipe at {station.name} also uses");
+            if (other == null)
+            {
+                int waiting = 0;
+                foreach (var s in a.steps) if (!s.started) waiting++;
+                ctx.Skip("reserve-shared", $"none of A's {waiting} waiting steps for {target.identifier} commits a canister ({(searched.Count == 0 ? "none held" : string.Join(", ", searched))}) that another enabled recipe at {station.name} also uses");
+            }
             else
             {
                 var canister = shared.GetCanisterItem();
@@ -479,7 +497,7 @@ public sealed class CraftRollup : Feature
                 bool ok = refined
                     ? withA.refines.Count > without.refines.Count || Cover(withA) > Cover(without)
                     : Cover(withA) == expectWith && Cover(without) == expectWithout && expectWith > expectWithout;
-                Verdict(ctx, ok, "reserve-shared", $"{other.identifier} x{n} needs {need} {canister.identifier}; station holds {stock}, A's waiting {target.identifier} still takes {held}; still missing {Cover(withA)} with A running (expect {(refined ? "more than without" : expectWith.ToString())}), {Cover(without)} without (expect {(refined ? "-" : expectWithout.ToString())}); refines {withA.refines.Count} vs {without.refines.Count}");
+                Verdict(ctx, ok, "reserve-shared", $"{other.identifier} x{n} needs {need} {canister.identifier}; station holds {stock}, A's waiting steps for {target.identifier} still take {held}; still missing {Cover(withA)} with A running (expect {(refined ? "more than without" : expectWith.ToString())}), {Cover(without)} without (expect {(refined ? "-" : expectWithout.ToString())}); refines {withA.refines.Count} vs {without.refines.Count}");
             }
 
             // Part in flight: a plan for a recipe that uses A's queued part sees the leftover from A's batch, not the whole need.
@@ -535,6 +553,14 @@ public sealed class CraftRollup : Feature
         return any;
     }
 
+    // The refine checks in their order; an early exit skips every one after it, since the harness counts lines.
+    private static readonly string[] RefineChecks = { "refine-plan", "panel-refine", "refine-save", "panel-refine-running", "refine-run", "refine-to-storage" };
+
+    private static void SkipRefine(SelfCheckContext ctx, string from, string reason)
+    {
+        for (int i = Array.IndexOf(RefineChecks, from); i < RefineChecks.Length; i++) ctx.Skip(RefineChecks[i], reason);
+    }
+
     // With no ore and no canisters at the station, the plan lists canisters as missing; one ore type that yields
     // the first of them is then planned for exactly that shortfall, refined, and the recipe queued at the end.
     private static IEnumerator CheckRefine(SelfCheckContext ctx)
@@ -542,7 +568,7 @@ public sealed class CraftRollup : Feature
         var station = FindRefineStation();
         if (station == null)
         {
-            ctx.Skip("refine-plan", "no station with a forge and a refinery in this save");
+            SkipRefine(ctx, "refine-plan", "no station with a forge and a refinery in this save");
             yield break;
         }
         var forge = station.forge;
@@ -550,12 +576,12 @@ public sealed class CraftRollup : Feature
         var target = PickTarget(forge, Rollups.Index(forge));
         if (target == null)
         {
-            ctx.Skip("refine-plan", $"no uncraftable turret/module recipe at {station.name} whose item ingredients the forge can make");
+            SkipRefine(ctx, "refine-plan", $"no uncraftable turret/module recipe at {station.name} whose item ingredients the forge can make");
             yield break;
         }
         if (Rollups.Find(forge, target) != null)
         {
-            ctx.Skip("refine-plan", $"a roll-up for {target.identifier} is already running at {station.name}");
+            SkipRefine(ctx, "refine-plan", $"a roll-up for {target.identifier} is already running at {station.name}");
             yield break;
         }
         var storage = station.materialStorage;
@@ -564,15 +590,23 @@ public sealed class CraftRollup : Feature
         foreach (var s in basePlan.steps)
             if (s.product != null) products.Add(s.product);
         var snap = new Snapshot(station, products);
+        // The refinery also takes ore from the flagship's hold while you're docked (Refinery.GetAvailableItems), and a
+        // fleet ship's cargo can be passed on to it; that ore is held aside for the check and put back after.
+        var hold = GamePlayer.current.currentSpaceShip.cargo;
+        var heldOre = new List<(InventoryItemType item, int count)>();
         try
         {
             refinery.autoRefine = false;
 
             foreach (var t in new List<InventoryItemType>(snap.Tracked))
                 if (t.itemCategory == ItemCategory.Ore || RefinedMaterialExtensions.IsCanister(t)) storage.Remove(t, storage.GetCount(t));
+            foreach (var it in new List<Inventory.InventoryItem>(hold.items))
+                if (!it.favourite && it.count > 0 && it.item.GetComponent<OreItemData>() != null && !RefinedMaterialExtensions.IsCanister(it.item))
+                    heldOre.Add((it.item, it.count));
+            foreach (var (item, count) in heldOre) hold.Remove(item, count);
             if (Rollups.RefinableOre(refinery).Count > 0)
             {
-                ctx.Skip("refine-plan", "ore left in docked cargo");
+                SkipRefine(ctx, "refine-plan", "ore left in station storage or the flagship's hold after clearing both");
                 yield break;
             }
             basePlan = Rollups.Build(forge, target, 1);
@@ -592,7 +626,7 @@ public sealed class CraftRollup : Feature
             }
             if (ore == null)
             {
-                ctx.Skip("refine-plan", canister == null ? "the recipe needs no canisters" : $"no ore yields {canister.identifier}");
+                SkipRefine(ctx, "refine-plan", canister == null ? "the recipe needs no canisters" : $"no ore yields {canister.identifier}");
                 yield break;
             }
 
@@ -618,7 +652,7 @@ public sealed class CraftRollup : Feature
 
             if (refinery.jobs.Count >= refinery.maxJobs || forge.jobs.Count >= forge.maxJobs)
             {
-                ctx.Skip("refine-run", $"queue full (refinery {refinery.jobs.Count}/{refinery.maxJobs}, forge {forge.jobs.Count}/{forge.maxJobs})");
+                SkipRefine(ctx, "refine-save", $"queue full (refinery {refinery.jobs.Count}/{refinery.maxJobs}, forge {forge.jobs.Count}/{forge.maxJobs})");
                 yield break;
             }
             foreach (var kv in plan.missing) storage.Add(kv.Key, kv.Value);
@@ -675,7 +709,11 @@ public sealed class CraftRollup : Feature
             else if (leaked == 0) ctx.Pass("refine-to-storage", $"deposit in cargo on, docked here: no canister reached the flagship hold");
             else ctx.Fail("refine-to-storage", $"{leaked} canister(s) went to the flagship hold instead of the station storage");
         }
-        finally { snap.Restore(); }
+        finally
+        {
+            snap.Restore();
+            foreach (var (item, count) in heldOre) hold.Add(item, count);
+        }
     }
 
     // Flagship cargo counts of the given items, to prove output went to the station and not the hold.

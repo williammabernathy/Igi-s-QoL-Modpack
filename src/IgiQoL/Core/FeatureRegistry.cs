@@ -31,9 +31,11 @@ public static class FeatureRegistry
         new Features.TargetPriority.TargetPriority(),
         new Features.DroneModes.DroneModes(),
         new Features.Separation.Separation(),
-        // Its self-check fires real missiles: it undocks and spawns enemies, so it runs after the checks that need to
-        // be docked or need a quiet location.
+        new Features.ShipCollisions.ShipCollisions(),
+        // Its self-check fires real missiles and spawns enemies, so it runs after the checks that need a quiet location.
         new Features.MissileRetarget.MissileRetarget(),
+        // Its self-check undocks to zoom the flight camera, so it runs where the fleet is already in space.
+        new Features.CameraZoom.CameraZoom(),
         new Features.CraftRollup.CraftRollup(),
         new Features.CombatLog.CombatLog(),
         new Features.ShipStats.ShipStats(),

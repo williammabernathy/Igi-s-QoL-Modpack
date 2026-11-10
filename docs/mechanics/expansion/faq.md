@@ -1,6 +1,6 @@
 # Common Questions
 
-These are short answers to questions players ask about Beyond the Front: the level 60 gate, buying and claiming systems, upkeep, and your own Empire Fleets. Each answer ends with a link to the section that has the full numbers and how they were read from the code. Values were read from game version 0.8.3.4, and the code behind each answer was compared with the 0.8.3.5 source. Terms are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md).
+These are short answers to questions players ask about Beyond the Front: the level 60 gate, buying and claiming systems, upkeep, and your own Empire Fleets. Each answer ends with a link to the section that has the full numbers and how they were read from the code. Values were read from game version 0.8.3.4, and the code behind each answer was compared with the 0.8.3.5 and 0.8.3.7 sources. Terms are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md).
 
 ## Getting Past Level 60
 
@@ -41,9 +41,9 @@ Details: [What You Can and Cannot Do](empire-fleets.md#what-you-can-and-cannot-d
 
 ### How Tough Is the War Above Level 60?
 
-NPC ships are at least level 66 from the moment the expansion unlocks. Once you are above level 60, they are about your level plus 10.
+NPC ships are at your level, or at level 30 if you are lower (version 0.8.3.7). Version 0.8.3.5 put them at level 66 or more once the expansion unlocked and at about your level plus 10 above level 60.
 
-Expansion systems start at level 60 and rise toward your level, so they sit near your level plus up to 4. Every generated station there gets the M2 or L1 turret layouts. NPC fleets are 2000 points each.
+Expansion systems are created at level 60 and then drift toward their own level targets, your level plus an offset of -6 to +6, like the other war-zone systems (worked out from the code). A system above its target is lowered to it when you load a save. Every generated station there gets the M2 or L1 turret layouts. NPC fleets are 2000 points each.
 
 Taking a system sets your reputation with its former owner to -5000, and that faction attacks you afterwards.
 
@@ -255,7 +255,7 @@ Details: [Taking a System With Empire Fleets](empire-fleets.md#taking-a-system-w
 - Attack right after a system changes hands. For the first 5 to 6 hours its station firepower is halved, and for the first 1 to 2 hours it pays no taxes.
 - Station structure takes damage only after every defender ship is dead, so clear the fleets first. A siege gets at most 29 rounds. You can also intercept reinforcements while they are still traveling.
 - You have to win against a Defense station first. Each stage is its own battle with a 600 s minimum.
-- Missions against the owner, done next to the target, lower its station firepower by up to half.
+- Version 0.8.3.7 removed the mission reward that lowered a station's firepower, so no mission changes one system's defense. Missions for an NPC faction raise that faction's war footing instead, which makes its fleets and garrisons count up to 25% more. Do not run them for the owner of the system you want to take.
 - Destroying a system's hub in a live battle abandons the system. Outside your player sector, with claiming unlocked and your flagship or an idle Empire Fleet there, you are offered the claim. Taking it drops your reputation to Hostile and destroys the old owner's Defense stations. In your player sector, the system goes back on sale instead.
 - If a flagship or fleet of yours is in the system, the battle turns live, and the fight then depends on the ships alone.
 
@@ -278,10 +278,10 @@ Details: [Your Fleets and Patrols in the Defense Number](empire-fleets.md#your-f
 
 - Keep a fleet in the system with a defense stance.
 - Build Defense stations and assign patrol fleets. A siege then goes straight to the hub instead of through station stages.
-- Keep the Defense number above about 1740. NPC fleets attack at 1.15 times the strength of the weakest station, and a lone NPC fleet is 2000 points. Assaults combine 2 or more fleets and can exceed that.
+- Keep the Defense number above about 1740. NPC fleets attack when their points, times 1 plus their faction's war footing bonus, reach 1.15 times the strength of the weakest station. A lone NPC fleet is 2000 points, so single-fleet attacks stop at about 1740, or about 2170 against a faction at the full +25% footing. Assaults combine 2 or more fleets and can exceed that.
 - A defending fleet or patrol stops a raid from running unopposed.
 - If a flagship or fleet of yours is in the system, the battle turns live, and the fight then depends on the ships alone.
-- War effort missions do not help here. They never apply to systems you hold.
+- War footing missions do not help here. They never apply to systems you hold.
 
 Details: [Defending a System You Hold](empire-fleets.md#defending-a-system-you-hold).
 
@@ -309,8 +309,8 @@ A raid also slows the faction. It cuts 1.5 average hours of the faction's income
 
 Details: [Raids Against Your Stations and by Your Empire Fleets](your-empire.md#raids-against-your-stations-and-by-your-empire-fleets) and [Ways to Slow a Faction: Empire Fleet Raids](your-empire.md#ways-to-slow-a-faction-empire-fleet-raids).
 
-### Is War Effort or My Own Fleet the Better Lever Above Level 60?
+### Is War Footing or My Own Fleet the Better Lever Above Level 60?
 
-Your fleets are. Before the unlock, interception, live hub kills and war effort bursts are most of what you can do. Once claiming is unlocked, attacking and defending with your own fleets is the main lever. War effort becomes a small add-on worth at most 250 to 700 Defense at the cap.
+Your fleets are. Before the unlock, interception, live hub kills and killing the fleets a faction attacks with are most of what you can do. Once claiming is unlocked, attacking and defending with your own fleets is the main lever. War footing is slow and faction-wide, and it never applies to systems you hold.
 
 Details: [Where the Efficient Choice Differs](empire-fleets.md#where-the-efficient-choice-differs).

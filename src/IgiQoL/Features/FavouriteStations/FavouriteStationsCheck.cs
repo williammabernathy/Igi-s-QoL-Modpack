@@ -186,10 +186,11 @@ internal static class FavouriteStationsCheck
     // Docked: the airlock button toggles the station and its label follows.
     private static IEnumerator CheckAirlock(SelfCheckContext ctx)
     {
+        yield return ctx.EnsureDocked();
         var interior = SpaceStationInterior.instance;
         if (interior == null || SpaceStation.current == null)
         {
-            ctx.Skip("airlock", "not docked");
+            ctx.Skip("airlock", ctx.DockNote ?? "not docked");
             yield break;
         }
         // Earlier checks can leave another facility open; the airlock (and its button) only exists while it's shown.

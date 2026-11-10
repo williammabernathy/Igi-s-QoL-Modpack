@@ -49,7 +49,7 @@ internal static class WarCards
         if (full && !cs.isUnowned && !cs.cannotBeTaken)
         {
             card.sections.Insert(at++, DefenseSection(d));
-            var taking = TakingSection(d);
+            var taking = TakingSection(d, tracked);
             if (taking != null) card.sections.Insert(at++, taking);
             var battle = BattleSection(cs, d);
             if (battle != null) card.sections.Insert(at, battle);
@@ -83,9 +83,12 @@ internal static class WarCards
         }
 
         s.rows.Add(new TooltipRow("Next battle", WarMath.Points(d.NextBattle), Color.white));
-        int fleets = WarMath.FleetsToStart(d.NextBattle);
-        s.rows.Add(new TooltipRow("Attack starts at", WarMath.Points(WarMath.ToStart(d.NextBattle)) + " (" + fleets + (fleets == 1 ? " fleet)" : " fleets)"),
+        var attacker = has ? advice.Tracked : null;
+        int fleets = WarMath.FleetsToStart(d.NextBattle, attacker);
+        s.rows.Add(new TooltipRow("Attack starts at", WarMath.Points(WarMath.PointsToStart(d.NextBattle, attacker)) + " (" + fleets + (fleets == 1 ? " fleet)" : " fleets)"),
             fleets == 1 ? ColorHelper.greenish : ColorHelper.orange75));
+        float footing = WarMath.Footing(attacker);
+        if (footing > 1f) s.rows.Add(Sub("War footing", "fleets x" + footing.ToString("0.00"), ColorHelper.greenish));
         s.rows.Add(new TooltipRow("Points left to capture", WarMath.Points(d.BrokenDefense * WarMath.CaptureMargin), Color.white));
         var conquest = WarMath.Conquest;
         if (cs.isSettling && conquest != null)
@@ -122,8 +125,6 @@ internal static class WarCards
         if (d.Capped) s.rows.Add(Sub("Station cap " + WarMath.Points(WarMath.FirepowerCap * d.Multiplier), "has " + WarMath.Points(d.Firepower), Muted));
         if (d.Structure < 1f) s.rows.Add(Sub("Structure left", Mathf.RoundToInt(d.Structure * 100f) + "%", ColorHelper.reddish));
         if (d.AtFloor) s.rows.Add(Sub("Station minimum", WarMath.Points(WarMath.FirepowerFloor * d.Multiplier), Muted));
-        if (!Mathf.Approximately(d.WarEffort, 1f))
-            s.rows.Add(Sub("War effort", "x" + d.WarEffort.ToString("0.00"), d.WarEffort > 1f ? ColorHelper.greenish : ColorHelper.reddish));
         if (!Mathf.Approximately(d.Multiplier, 1f) || d.Flat != 0f)
             s.rows.Add(Sub("Sector bonus", "x" + d.Multiplier.ToString("0.00") + (d.Flat != 0f ? " +" + WarMath.Points(d.Flat) : ""), ColorHelper.greenishLight));
         if (d.DefenseStations > 0)
@@ -137,18 +138,18 @@ internal static class WarCards
     }
 
     // What a siege needs, beyond the summary: fleets on the way, the one-fleet estimate, and the rules as sentences.
-    private static TooltipSection TakingSection(DefenseParts d)
+    private static TooltipSection TakingSection(DefenseParts d, Faction attacker)
     {
         var cs = d.System;
         var s = new TooltipSection(TakingTitle);
         if (d.Relief > 0f) s.rows.Add(new TooltipRow("Fleets on the way", WarMath.Points(d.Relief), Color.white));
-        if (WarMath.CanEstimate(d)) AddEstimate(s, WarMath.EstimateHubSiege(d, WarMath.FullFleet));
+        if (WarMath.CanEstimate(d)) AddEstimate(s, WarMath.EstimateHubSiege(d, WarMath.FullFleetStrength(attacker)));
         var conquest = WarMath.Conquest;
         if (cs.isInUnrest && conquest != null)
             s.rows.Add(new TooltipRow("No taxes for", WarMath.Timer(conquest.conquestTickTime + (cs.settlingTicks - 5) * 3600f), ColorHelper.reddish));
         s.description = "Fights in order: " + Stages(d) + ". A siege captures after at least 10 minutes, once every defender is dead and the hub is broken, "
-            + "with the attackers still holding " + WarMath.Points(d.BrokenDefense * WarMath.CaptureMargin) + " points. "
-            + "A fleet, or an assault, attacks at 1.15 times the next battle; a full fleet is " + WarMath.Points(WarMath.FullFleet) + " points.";
+            + "with the attackers still holding " + WarMath.Points(d.BrokenDefense * WarMath.CaptureMargin) + " strength. "
+            + "A fleet, or an assault, attacks at 1.15 times the next battle, counting each fleet's points times the faction's war footing; a full fleet is " + WarMath.Points(WarMath.FullFleet) + " points.";
         return s;
     }
 
@@ -197,13 +198,13 @@ internal static class WarCards
             s.rows.Add(new TooltipRow(StageName(battle.stage), WarMath.Clock(battle.timeRemaining) + " left", ColorHelper.reddish)
                 { dotColor = attacker != null ? attacker.color : (Color?)null });
             s.rows.Add(Sub("Attacker", who));
-            int points = BattleManager.GetAttackerPoints(battle);
+            float points = battle.stage == BattleStage.Raid ? BattleManager.GetAttackerPoints(battle) : BattleManager.GetAttackerStrength(battle);
             switch (battle.stage)
             {
                 case BattleStage.FleetClash:
                     s.rows.Add(Sub("Attackers", WarMath.Points(points)));
                     s.rows.Add(Sub("Defenders", WarMath.Points(DefenderFleetPoints(battle))));
-                    s.description ??= "More points wins the fleet clash when it ends at 10 minutes.";
+                    s.description ??= "The higher strength wins the fleet clash when it ends at 10 minutes. A side's strength is its points times its war footing.";
                     break;
                 case BattleStage.StationSiege:
                     s.rows.Add(Sub("Structure", Mathf.RoundToInt(battle.stationHullFraction * 100f) + "%"));
@@ -223,13 +224,14 @@ internal static class WarCards
         return s;
     }
 
-    private static int DefenderFleetPoints(BattleInstance battle)
+    // The defending fleet as the game judges it in a clash (WarFooting.GetJudgedStrength).
+    private static float DefenderFleetPoints(BattleInstance battle)
     {
         var faction = Faction.Get(battle.defenderFactionId);
         var economy = faction != null ? WarMath.Universe?.PeekFactionEconomy(faction) : null;
         if (economy == null) return 0;
         foreach (var fleet in economy.fleets)
-            if (fleet.guid == battle.defenderFleetGuid) return fleet.totalPoints;
+            if (fleet.guid == battle.defenderFleetGuid) return WarFooting.GetJudgedStrength(fleet);
         return 0;
     }
 
@@ -248,7 +250,7 @@ internal static class WarCards
         var s = new TooltipSection(FleetTitle);
         float target = fleet.targetPoints;
         int points = fleet.totalPoints;
-        if (target > 0f)
+        if (target > 0f && !fleet.isWarFleet)
         {
             s.rows.Add(new TooltipRow("Of full strength", WarMath.Points(points) + " of " + WarMath.Points(target), Color.white)
                 .WithFill(points / target, points < target * ConquestWarTuning.RetreatThreshold ? ColorHelper.reddish : ColorHelper.greenish));
@@ -272,10 +274,9 @@ internal static class WarCards
             s.rows.Add(new TooltipRow("Unrepaired damage", WarMath.Points(fleet.carriedDamage), Muted));
             s.rows.Add(Sub("repairs at home", "100 an hour", Muted));
         }
-        if (!fleet.isEmpireFleet)
+        if (!fleet.isEmpireFleet && !fleet.isWarFleet)
         {
-            int level = FleetLevels.GetFleetLevel(fleet), npc = FleetLevels.GetNpcFleetLevel();
-            if (FleetLevels.IsDueRefit(level, npc)) s.rows.Add(new TooltipRow("Due for a refit", "to level " + npc, ColorHelper.orange75));
+            if (ConquestFleetOrders.IsDueRefit(fleet)) s.rows.Add(new TooltipRow("Due for a refit", "to level " + FleetLevels.GetNpcFleetLevel(), ColorHelper.orange75));
         }
         return s;
     }
@@ -287,11 +288,11 @@ internal static class WarCards
         if (fleet.state == ConquestFleetState.Retreating)
             return "Resting after a retreat; back on duty at 75% of full strength.";
         if (fleet.state == ConquestFleetState.Traveling && fleet.orderReason == ConquestFleetOrderReason.Reinforcing)
-            return fleet.totalPoints < fleet.targetPoints * ConquestWarTuning.RetreatThreshold
+            return !fleet.isWarFleet && fleet.totalPoints < fleet.targetPoints * ConquestWarTuning.RetreatThreshold
                 ? "Retreating to " + dest + " to recover, under 35% of full strength."
                 : "Moving up to the frontline at " + dest + ".";
         if (fleet.state == ConquestFleetState.Idle && fleet.orderReason == ConquestFleetOrderReason.Loitering)
-            return "Idle; it gets a new order at the next Fleet orders countdown (every 10 minutes, or after a battle).";
+            return "Idle; it gets a new order at the next Fleet orders countdown (every 10 minutes), at the hourly economy tick, or after a battle.";
         return null;
     }
 
@@ -310,7 +311,7 @@ internal static class WarCards
         Targets.Build(tracked);
         if (!Targets.Allowed.Contains(cs)) return null;
         float next = ConquestCombat.GetNextBattleStrength(cs);
-        int before = WarMath.FleetsToStart(next), after = WarMath.FleetsToStart(next - FleetMixBonus.GetBattleStrength(fleet));
+        int before = WarMath.FleetsToStart(next, tracked), after = WarMath.FleetsToStart(next - FleetMixBonus.GetBattleStrength(fleet), tracked);
         if (after >= before) return null;
         return "Destroying it takes " + Translation.Translate(tracked.name) + "'s attack on " + cs.system.name + " from " + before + " full fleets to " + after + ".";
     }
@@ -318,7 +319,7 @@ internal static class WarCards
     private static void AddTargetRows(TooltipSection s, ConquestFleet fleet)
     {
         ConquestSystem target = null;
-        float points = fleet.totalPoints;
+        float points = WarFooting.GetJudgedStrength(fleet);
         string label = null;
         if (fleet.isInAssault)
         {
@@ -336,18 +337,20 @@ internal static class WarCards
         if (target == null || target.isUnowned) return;
         Parts.Read(target);
         float need = WarMath.ToStart(Parts.NextBattle);
+        float footing = WarMath.Footing(fleet.faction);
         s.rows.Add(new TooltipRow("Target", target.system.name, Color.white));
         s.rows.Add(Sub("Next battle", WarMath.Points(Parts.NextBattle)));
+        if (footing > 1f) s.rows.Add(Sub("War footing", "x" + footing.ToString("0.00"), ColorHelper.greenish));
         s.rows.Add(Sub(label, WarMath.Points(points) + " of " + WarMath.Points(need), points >= need ? ColorHelper.greenish : ColorHelper.reddish));
     }
 
     private static float AssaultPoints(ConquestFleet fleet)
     {
         var economy = WarMath.Universe?.PeekFactionEconomy(fleet.faction);
-        if (economy == null) return fleet.totalPoints;
+        if (economy == null) return WarFooting.GetJudgedStrength(fleet);
         float sum = 0f;
         foreach (var f in economy.fleets)
-            if (f.assaultTargetGuid == fleet.assaultTargetGuid) sum += f.totalPoints;
+            if (f.assaultTargetGuid == fleet.assaultTargetGuid) sum += WarFooting.GetJudgedStrength(f);
         return sum;
     }
 
@@ -373,14 +376,22 @@ internal static class WarCards
         if (defense)
         {
             s.rows.Add(new TooltipRow("Garrison", fs.garrisonShips.Count + " of " + FactionGarrison.GetWantedCount(fs) + " ships", Color.white));
-            s.rows.Add(Sub("Points", WarMath.Points(FactionGarrison.GetStrength(fs)), Muted));
+            s.rows.Add(Sub("Points", WarMath.Points(RawGarrisonPoints(fs)), Muted));
+            float counts = FactionGarrison.GetStrength(fs);
+            if (!Mathf.Approximately(counts, RawGarrisonPoints(fs))) s.rows.Add(Sub("With war footing", WarMath.Points(counts), ColorHelper.greenish));
             if (fs.garrisonShips.Count > 0)
             {
-                int level = FleetLevels.GetGarrisonLevel(fs), npc = FleetLevels.GetNpcFleetLevel();
-                s.rows.Add(Sub("Ship level", level + (FleetLevels.IsDueRefit(level, npc) ? ", refit due" : ""), Muted));
+                int level = FleetLevels.GetGarrisonLevel(fs);
+                s.rows.Add(Sub("Ship level", level + (FactionGarrison.IsDueRefit(fs) ? ", refit due" : ""), Muted));
             }
-            s.rows.Add(new TooltipRow("Destroying it", "-5,000 reputation", ColorHelper.reddish));
-            s.rows.Add(Sub("if already Hostile", "-1,000", Muted));
+            // FactionStationDestruction.ApplyDestroyReputation charges nothing to a player with the Umbral transponder.
+            if (Source.Player.GamePlayer.current != null && Source.Player.GamePlayer.current.hasUmbralTransponder)
+                s.rows.Add(new TooltipRow("Destroying it", "no penalty", ColorHelper.orange75));
+            else
+            {
+                s.rows.Add(new TooltipRow("Destroying it", "-" + WarMath.Points(FactionStationDestruction.GetDestroyReputationLoss(fs.faction)) + " reputation", ColorHelper.reddish));
+                s.rows.Add(Sub("if Hostile or worse", "-1,000", Muted));
+            }
             s.description = "Killing the hub abandons the system. When another faction then claims it, its Defense stations are razed, so you can leave this one.";
         }
         else if (hub)
@@ -429,6 +440,13 @@ internal static class WarCards
     }
 
     private static string ShortJumps(int n) => n < 0 ? "on the way" : n == 0 ? "in the system" : n == 1 ? "1 jump" : n + " jumps";
+
+    private static float RawGarrisonPoints(FactionStation station)
+    {
+        float points = 0f;
+        foreach (var ship in station.garrisonShips) points += ship.pointValue;
+        return points;
+    }
 
     private static TooltipRow Sub(string label, string value, Color? color = null) => new("  " + label, value, color ?? Color.white);
 }

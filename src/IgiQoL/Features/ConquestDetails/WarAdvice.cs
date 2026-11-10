@@ -10,13 +10,14 @@ namespace IgiQoL.Features.ConquestDetails;
 internal enum AdviceKind
 {
     Own, Free, Battle, CannotTake, NotOnFront, Skipped, OnTheWay,
-    LeaveIt, LeaveStart, FallsShort, KillFleet, WarEffort, Skip, KillHub,
+    LeaveIt, LeaveStart, FallsShort, KillFleet, Skip, KillHub,
 }
 
 // What the player's time is worth at one target system of a faction, from the numbers the game's own functions give.
-// Every figure is exact for what it names: the fleets an attack needs come from the next-battle strength, the fleet
-// lever removes the defending fleets' points, the war effort lever runs the game's own Defense formula again with the
-// penalty a mission adds.
+// Every figure is exact for what it names: the fleets an attack needs come from the next-battle strength judged against
+// the attacker's war footing (WarFooting.GetJudgedStrength), and the fleet lever removes the defending fleets' strength.
+// The game has no per-system lever beyond those: war footing and war fleets belong to the whole faction. A war fleet
+// also attacks the weakest target it can reach when it can't beat any; Skip says so while the faction has one out.
 internal struct Advice
 {
     public AdviceKind Kind;
@@ -26,8 +27,6 @@ internal struct Advice
     // Full fleets the attack needs now, and after the lever the advice names.
     public int Fleets, FleetsAfter;
     public float NextAfter;
-    // War effort missions the lever takes, counting what the system already has.
-    public int Missions;
     public SiegeEstimate Siege;
     public BattleStage Stage;
     public float TimeLeft;
@@ -35,7 +34,7 @@ internal struct Advice
     public HubKill Hub;
 
     // Orange: the player's help changes the outcome.
-    public bool Helps => Kind is AdviceKind.KillFleet or AdviceKind.WarEffort or AdviceKind.FallsShort or AdviceKind.KillHub;
+    public bool Helps => Kind is AdviceKind.KillFleet or AdviceKind.FallsShort or AdviceKind.KillHub;
     // Help first, then what the faction handles alone, then what isn't worth a visit.
     public int Rank => Helps ? 0 : Kind is AdviceKind.Skip or AdviceKind.Skipped or AdviceKind.NotOnFront or AdviceKind.CannotTake ? 2 : 1;
     // Among the help: a lever that leaves one fleet first, then a hub kill, then the levers that leave more fleets, a
@@ -75,10 +74,6 @@ internal sealed class Reach
 
 internal static class WarAdvice
 {
-    // The most one system's war effort penalty can reach, and what one mission adds.
-    private const float PenaltyMax = ConquestWarTuning.WarEffortPenaltyMax;
-    private const float PenaltyStep = ConquestWarTuning.WarEffortStep;
-
     internal static Advice Compute(DefenseParts d, Faction tracked, Reach reach)
     {
         var cs = d.System;
@@ -137,12 +132,12 @@ internal static class WarAdvice
             return a;
         }
 
-        a.Fleets = WarMath.FleetsToStart(d.NextBattle);
+        a.Fleets = WarMath.FleetsToStart(d.NextBattle, tracked);
         if (a.Fleets == 1)
         {
             if (WarMath.CanEstimate(d))
             {
-                a.Siege = WarMath.EstimateHubSiege(d, WarMath.FullFleet);
+                a.Siege = WarMath.EstimateHubSiege(d, WarMath.FullFleetStrength(tracked));
                 if (a.Siege.Result == SiegeResult.Captured)
                 {
                     a.Kind = AdviceKind.LeaveIt;
@@ -150,7 +145,6 @@ internal static class WarAdvice
                     a.Color = ColorHelper.greenish;
                     return a;
                 }
-                if (EffortLeverFinishes(d, ref a)) return a;
                 a.Kind = AdviceKind.FallsShort;
                 a.Text = "Help: 1 fleet falls short";
                 a.Color = ColorHelper.orange75;
@@ -162,17 +156,9 @@ internal static class WarAdvice
             return a;
         }
 
-        // An assault. Two levers could bring it down: kill the fleets defending the system, or run war effort missions.
-        int afterKill = d.Fleets > 0f ? WarMath.FleetsToStart(d.NextBattle - d.Fleets) : a.Fleets;
-        int afterEffort = a.Fleets;
-        float nextEffort = d.NextBattle;
-        bool effortPossible = cs.warEffortPenalty < PenaltyMax - 0.001f;
-        if (effortPossible)
-        {
-            nextEffort = NextBattleAt(cs, PenaltyMax);
-            afterEffort = WarMath.FleetsToStart(nextEffort);
-        }
-        if (afterKill < a.Fleets && afterKill <= afterEffort)
+        // An assault. One lever could bring it down: kill the fleets defending the system.
+        int afterKill = d.Fleets > 0f ? WarMath.FleetsToStart(d.NextBattle - d.Fleets, tracked) : a.Fleets;
+        if (afterKill < a.Fleets)
         {
             a.Kind = AdviceKind.KillFleet;
             a.FleetsAfter = afterKill;
@@ -181,19 +167,8 @@ internal static class WarAdvice
             a.Color = ColorHelper.orange75;
             return a;
         }
-        if (afterEffort < a.Fleets)
-        {
-            int missions = MissionsNeeded(cs, afterEffort, out float next);
-            a.Kind = AdviceKind.WarEffort;
-            a.FleetsAfter = afterEffort;
-            a.NextAfter = next;
-            a.Missions = missions;
-            a.Text = "Help: war effort missions";
-            a.Color = ColorHelper.orange75;
-            return a;
-        }
         a.Kind = AdviceKind.Skip;
-        a.FleetsAfter = Mathf.Min(afterKill, afterEffort);
+        a.FleetsAfter = afterKill;
         a.Text = "Skip: needs " + a.Fleets + " fleets";
         return WithHubKill(a, cs, tracked);
     }
@@ -216,56 +191,6 @@ internal static class WarAdvice
         a.Kind = AdviceKind.KillHub;
         a.Text = "Help: kill the hub";
         a.Color = ColorHelper.orange75;
-    }
-
-    // The next battle number with the system's war effort penalty set to a value, by the game's own function. The field
-    // is put back before this returns.
-    internal static float NextBattleAt(ConquestSystem cs, float penalty)
-    {
-        float saved = cs.warEffortPenalty;
-        try
-        {
-            cs.warEffortPenalty = penalty;
-            return ConquestCombat.GetNextBattleStrength(cs);
-        }
-        finally { cs.warEffortPenalty = saved; }
-    }
-
-    // The fewest more missions that bring the attack to the fleet count the full penalty reaches.
-    private static int MissionsNeeded(ConquestSystem cs, int targetFleets, out float next)
-    {
-        int most = Mathf.CeilToInt((PenaltyMax - cs.warEffortPenalty) / PenaltyStep - 0.001f);
-        next = NextBattleAt(cs, PenaltyMax);
-        for (int n = 1; n < most; n++)
-        {
-            float candidate = NextBattleAt(cs, Mathf.Min(PenaltyMax, cs.warEffortPenalty + n * PenaltyStep));
-            if (WarMath.FleetsToStart(candidate) <= targetFleets) { next = candidate; return n; }
-        }
-        return Mathf.Max(1, most);
-    }
-
-    // A single fleet that stops short of capturing might finish once the system's station fire is cut by the full penalty.
-    private static bool EffortLeverFinishes(DefenseParts d, ref Advice a)
-    {
-        var cs = d.System;
-        if (cs.warEffortPenalty >= PenaltyMax - 0.001f) return false;
-        float saved = d.WarEffort;
-        SiegeEstimate cut;
-        try
-        {
-            d.WarEffort = Mathf.Max(0f, 1f + cs.warEffortBonus - PenaltyMax);
-            cut = WarMath.EstimateHubSiege(d, WarMath.FullFleet);
-        }
-        finally { d.WarEffort = saved; }
-        if (cut.Result != SiegeResult.Captured) return false;
-        a.Kind = AdviceKind.WarEffort;
-        a.FleetsAfter = 1;
-        a.Missions = Mathf.CeilToInt((PenaltyMax - cs.warEffortPenalty) / PenaltyStep - 0.001f);
-        a.NextAfter = NextBattleAt(cs, PenaltyMax);
-        a.Siege = cut;
-        a.Text = "Help: war effort missions";
-        a.Color = ColorHelper.orange75;
-        return true;
     }
 
     // The sentence under the verdict on the full card.
@@ -298,15 +223,22 @@ internal static class WarAdvice
                 return "One full fleet can start the attack but " + FallsShortWhy(a.Siege.Result) + " and nothing you can change here brings it within reach. " + HubOutcome(a, cs, who);
             case AdviceKind.KillFleet:
                 return "Killing the " + WarMath.Points(d.Fleets) + " points of fleets defending it takes the attack from " + a.Fleets + " full fleets to " + a.FleetsAfter + ".";
-            case AdviceKind.WarEffort:
-                return WarEffortDetail(a, d, who);
             case AdviceKind.Skip:
-                return "It needs " + a.Fleets + " full fleets. Killing its defending fleets would leave " + FleetsAfterKill(d) + ", a full war effort penalty " + EffortFleets(d) + ". "
-                    + HubOutcome(a, cs, who);
+                return "It needs " + a.Fleets + " full fleets. Killing its defending fleets would leave " + FleetsAfterKill(d, a.Tracked) + ". "
+                    + HubOutcome(a, cs, who) + WarFleetNote(a.Tracked, who);
             case AdviceKind.KillHub:
                 return HubOutcome(a, cs, who);
         }
         return null;
+    }
+
+    // The verdicts judge the faction's regular fleets. A war fleet (ConquestFleet.isWarFleet) is the exception: when it
+    // can't beat any target it raids a nearby outpost or attacks the weakest system it can reach (TryOrderRaid, TryAttackWeakest).
+    private static string WarFleetNote(Faction tracked, string who)
+    {
+        var economy = tracked != null ? WarMath.Universe?.PeekFactionEconomy(tracked) : null;
+        if (economy == null || WarFleets.CountActive(economy) == 0) return "";
+        return " " + who + " has a war fleet out, though, and when it can't win it raids a nearby outpost or attacks the weakest system it can reach.";
     }
 
     // What destroying the hub would do for the faction, as one or two sentences.
@@ -359,40 +291,6 @@ internal static class WarAdvice
         _ => "is destroyed",
     };
 
-    private static int FleetsAfterKill(DefenseParts d) => d.Fleets > 0f ? WarMath.FleetsToStart(d.NextBattle - d.Fleets) : WarMath.FleetsToStart(d.NextBattle);
-
-    private static int EffortFleets(DefenseParts d) =>
-        d.System.warEffortPenalty < PenaltyMax - 0.001f ? WarMath.FleetsToStart(NextBattleAt(d.System, PenaltyMax)) : WarMath.FleetsToStart(d.NextBattle);
-
-    private static string WarEffortDetail(in Advice a, DefenseParts d, string who)
-    {
-        var cs = d.System;
-        string text = a.Missions + (a.Missions == 1 ? " more war effort mission" : " more war effort missions") + " take its next battle from "
-            + WarMath.Points(d.NextBattle) + " to " + WarMath.Points(a.NextAfter) + ", "
-            + (a.Fleets == 1 ? "which lets one full fleet finish the siege" : (a.FleetsAfter == 1 ? "1 full fleet" : a.FleetsAfter + " full fleets") + " instead of " + a.Fleets)
-            + ". Run them at a hub next to it, ideally one of " + who + "'s";
-        string near = OwnedNeighbours(cs, a.Tracked);
-        if (near != null) text += " (" + near + ")";
-        text += ", with a reward line that names " + (cs.faction != null ? Translation.Translate(cs.faction.name) : "its owner") + ".";
-        if (cs.warEffortPenalty > 0f)
-            text += " It already has " + Mathf.RoundToInt(cs.warEffortPenalty / PenaltyStep) + " of " + Mathf.RoundToInt(PenaltyMax / PenaltyStep)
-                + ", with " + WarMath.Timer(cs.warEffortPenaltySeconds) + " left.";
-        return text;
-    }
-
-    // Up to two neighbours of the system that the faction owns.
-    private static string OwnedNeighbours(ConquestSystem cs, Faction faction)
-    {
-        if (faction == null) return null;
-        cs.EnsureConnections();
-        string names = null;
-        int count = 0;
-        foreach (var n in cs.connectedSystems)
-        {
-            if (n.faction != faction || count >= 2) continue;
-            names = names == null ? n.system.name : names + " or " + n.system.name;
-            count++;
-        }
-        return names;
-    }
+    private static int FleetsAfterKill(DefenseParts d, Faction attacker) =>
+        d.Fleets > 0f ? WarMath.FleetsToStart(d.NextBattle - d.Fleets, attacker) : WarMath.FleetsToStart(d.NextBattle, attacker);
 }

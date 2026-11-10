@@ -1,6 +1,6 @@
 # Your Empire
 
-This page covers what changes for the war zone and for you once you accept "Beyond the Front". The topics are the expansion sectors, buying and claiming systems, your capital, Empire Level and upkeep, your own stations, reputation from capture and claim, and the faction economy once the expansion war is open. It applies from the moment you accept that mission, which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten.
+This page covers what changes for the war zone and for you once you accept "Beyond the Front". The topics are the expansion sectors, buying and claiming systems, your capital, Empire Level and upkeep, your own stations, reputation from capture and claim, and the faction economy once the expansion war is open. It applies from the moment you accept that mission, which needs level 60 and one finished 30% sector-control mission ([gate](README.md)). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. The war, level and mission statements were checked again against the 0.8.3.7 source.
 
 Terms and abbreviations are explained in the [Beyond the Front glossary](glossary.md), the [Conquest glossary](../conquest/glossary.md) and the [basics glossary](../basics/glossary.md). Your fleets are covered in [Empire Fleets](empire-fleets.md).
 
@@ -28,6 +28,8 @@ Accepting the mission raises four caps:
 - The cap on skill points found in Locked Containers and facilities goes from 10 to 30.
 - The cap on bonus skill points goes from 61 to 101.
 - The reputation cap goes to Exalted.
+
+Level 100 is the end of the normal levels. In 0.8.3.7, Vanguard levels past 100 start only after you accept an offer from Stella Chion, who waits at your capital hub (or at the Darkspace embassy before you have one). You can decline and stay at level 100. Your effective level is your captain level plus your Vanguard level, so the choice also raises the level the war-zone systems and NPC fleets follow.
 
 All of the unlock effects are in the [gate table](README.md#spoiler-what-level-60-and-beyond-the-front-gate). [What You Face](empire-fleets.md#what-you-face) explains how the war changes for your level and for NPC fleets above level 60.
 
@@ -144,11 +146,11 @@ A station you build has no facilities, so it uses a Small layout. Nothing in the
 
 In the code: [Player Stations](#code-player-stations).
 
-### War Effort on Your Own Systems
+### War Footing on Your Own Systems
 
-War effort never applies to a system you hold. A mission raises war effort only at its source station's system when the mission's source faction owns that system, and at that faction's neighbouring systems. The game gives a mission its war effort reward only when the station's faction is one of the ten conquest factions, and you are not one of them, so missions from a system you hold carry no such reward. What war effort does is explained in [war](../conquest/war.md#war-effort).
+War footing never applies to a system you hold. A mission adds contribution to the faction that gave it, and only when its source station is in a war-zone system. The game gives a mission that contribution only when the station's faction is one of the ten conquest factions, and you are not one of them, so missions from a system you hold carry no such reward, and `WarFooting.GetBonus` is 0 for you. Version 0.8.3.7 also removed the per-system war effort this section used to describe. What war footing does is explained in [war](../conquest/war.md#war-footing-and-war-fleets).
 
-In the code: [War Effort on Your Own Systems](#code-war-effort-on-your-own-systems).
+In the code: [War Footing on Your Own Systems](#code-war-footing-on-your-own-systems).
 
 ## Reputation
 
@@ -228,7 +230,7 @@ This row is added to the table in [Ways to Slow a Faction](../conquest/faction-e
 
 ## In the Game Code
 
-This part holds the code names, formulas and `Source:` lines behind the sections above. It comes from the decompiled game code of version 0.8.3.4, compared with the 0.8.3.5 source. To check a claim, look up the class and method named in the `Source:` line.
+This part holds the code names, formulas and `Source:` lines behind the sections above. It comes from the decompiled game code of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources. To check a claim, look up the class and method named in the `Source:` line.
 
 ### Code: The Expanded War Zone
 
@@ -298,11 +300,11 @@ A player-owned station is a `PlayerStation` built with no facilities, so it uses
 
 Source: `StationSiteRules.GetRefusal`, `StationClaim.GetCooldownSeconds`, `PlayerStationCapture.HandOver`, `PlayerStationCapture.HandOverStation`, `PlayerStationCapture.TakeOver`, `PlayerStationCapture.GetTakeoverTier`, `StationDecommission`, `StationDefense.IsDefenseStation`
 
-#### Code: War Effort on Your Own Systems
+#### Code: War Footing on Your Own Systems
 
-`ConquestWarEffort.Apply(mission, step)` is called only from `ConquestStrength.OnComplete`, and only when the reward's `wealth` is 0. `MissionGenerator.AddRewards` adds a `ConquestStrength` reward only when `Conquest.conquestFactions.Contains(faction)` (the source station's faction) and the source POI is an `EmbassyStation` or `ConquestStation`. `Conquest.conquestFactions` holds the ten conquest factions (Kolyatov, Stellar, Luminate, Mining Guild, Salvage Guild, Marauders, Meridia's Chosen, Darkspace Compact, Stranded, Malcyte), so `Faction.player` is not in it. `MissionGenerator` sets `Mission.sourceFaction` from `poi.faction`; the only missions with `Faction.player` as source are tutorial missions. `Apply` raises the bonus at the mission's system only if `missionSystem.faction == mission.sourceFaction`, and at neighbours only if their owner is that employer. The targeted-faction penalty also needs a conquest faction. A system you hold has `faction == Faction.player`, so none of these branches reaches it.
+`ConquestWarContribution.Apply(mission, contribution)` is called only from `ConquestStrength.OnComplete`, and only when the reward's `wealth` is 0. `MissionGenerator.AddRewards` adds a `ConquestStrength` reward only when `Conquest.conquestFactions.Contains(faction)` (the source station's faction) and the source POI is an `EmbassyStation` or `ConquestStation`. `Conquest.conquestFactions` holds the ten conquest factions (Kolyatov, Stellar, Luminate, Mining Guild, Salvage Guild, Marauders, Meridia's Chosen, Darkspace Compact, Stranded, Malcyte), so `Faction.player` is not in it. `MissionGenerator` sets `Mission.sourceFaction` from `poi.faction`; the only missions with `Faction.player` as source are tutorial missions. `Apply` needs `GetMissionSystem` to find a war-zone `ConquestSystem` at the mission's source station and `mission.sourceFaction` to be a conquest faction, and it adds the contribution to that faction only (`AddToFaction`). `WarFooting.GetBonus` returns 0 for `Faction.player` and for any faction outside `Conquest.conquestFactions`.
 
-Source: `ConquestWarEffort.Apply`, `ConquestWarEffort.GetMissionSystem`, `ConquestStrength.OnComplete`, `MissionGenerator.AddRewards`, `Conquest.conquestFactions`
+Source: `ConquestWarContribution.Apply`, `ConquestWarContribution.GetMissionSystem`, `ConquestWarContribution.AddToFaction`, `WarFooting.GetBonus`, `ConquestStrength.OnComplete`, `MissionGenerator.AddRewards`, `Conquest.conquestFactions`
 
 ### Code: Reputation
 

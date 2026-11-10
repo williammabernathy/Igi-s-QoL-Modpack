@@ -127,35 +127,49 @@ internal static class ShipStatsCheck
                 ctx.Pass("effects", effectsDetail);
             else ctx.Fail("effects", effectsDetail + $"; debuffs {debuffsBefore} -> {debuffs}");
 
-            // A real ability fired from the flagship: its effects show, translated, each once.
-            ActivatedAbility ability = null;
+            // A real ability fired from the flagship: its effects show, translated, each once. An instant ability (a
+            // heal) leaves no effect behind, so the next one is tried. The fights of earlier checks use abilities
+            // (EchoKit fires them by its rules), so one cooling down has its cooldown cleared for the shot and set back.
+            var abilities = new List<ActivatedAbility>();
             foreach (var a in flagship.GetComponentsInChildren<ActivatedAbility>())
-                if (ability == null && !a.toggledAbility && a.isReady && !a.IsPayloadActive()) ability = a;
-            var abilityBefore = Rows(EffectsSection(flagship));
-            GameObject fired = ability == null ? null : ability.TriggerPayload();
-            if (ability == null) ctx.Skip("ability", "no ready, untoggled ability on the flagship");
-            else if (fired == null) ctx.Fail("ability", ability.displayName + ": the game didn't trigger it");
-            else
+                if (!a.toggledAbility && !a.IsPayloadActive()) abilities.Add(a);
+            abilities.Sort((x, y) => y.isReady.CompareTo(x.isReady));
+            if (abilities.Count == 0) ctx.Skip("ability", "no untoggled ability on the flagship without its effect already running");
+            var instant = new List<string>();
+            bool judged = false;
+            foreach (var ability in abilities)
             {
+                var abilityBefore = Rows(EffectsSection(flagship));
+                float cooling = ability.cooldownRemaining;
+                ability.cooldownRemaining = 0f;
+                GameObject fired = ability.TriggerPayload();
+                if (fired == null) { ability.cooldownRemaining = cooling; ctx.Fail("ability", ability.displayName + ": the game didn't trigger it"); judged = true; break; }
                 yield return null;
                 var abilityRows = Rows(EffectsSection(flagship));
                 var fresh = new List<string>();
                 foreach (var r in abilityRows)
                     if (!abilityBefore.Contains(r)) fresh.Add(r);
-                bool clean = fresh.Count > 0;
+                bool clean = true;
                 foreach (var r in fresh)
                     if (r.StartsWith("@") || abilityRows.IndexOf(r) != abilityRows.LastIndexOf(r)) clean = false;
                 string abilityDetail = $"{flagship.displayName} fired {Translation.Translate(ability.displayName)}: {Describe(EffectsSection(flagship))}";
-                if (clean) ctx.Pass("ability", abilityDetail);
-                else ctx.Fail("ability", abilityDetail + $"; {fresh.Count} new rows");
+                if (fresh.Count > 0)
+                {
+                    if (clean) ctx.Pass("ability", abilityDetail);
+                    else ctx.Fail("ability", abilityDetail + $"; {fresh.Count} new rows");
+                    judged = true;
+                }
+                else instant.Add(Translation.Translate(ability.displayName));
                 // Take back what the ability did: its payload (and the effects under it) and its cooldown, so later
                 // checks and the player's save don't carry the buff.
                 Object.Destroy(fired);
-                ability.cooldownRemaining = 0f;
-                GamePlayer.current.abilityCooldowns.Remove(ability.identifier);
+                ability.cooldownRemaining = cooling;
+                if (cooling <= 0f) GamePlayer.current.abilityCooldowns.Remove(ability.identifier);
                 flagship.MarkStatsDirty();
                 yield return null;
+                if (judged) break;
             }
+            if (!judged && abilities.Count > 0) ctx.Skip("ability", $"{flagship.displayName}: no ability left a lasting effect (fired {string.Join(", ", instant)})");
 
             // The tooltip the game shows on hover carries both sections and rebuilds itself while it shows.
             var source = target.GetComponent<TooltipSource>();
@@ -169,8 +183,9 @@ internal static class ShipStatsCheck
             {
                 UITooltip.Show(source, source.Prefab);
                 string shownText = TooltipText();
-                bool resists = shownText.Contains("\n" + ShipStats.SectionTitle.ToUpperInvariant() + "\n");
-                bool effects = shownText.Contains("\n" + ShipStats.EffectsTitle.ToUpperInvariant() + "\n");
+                // 0.8.3.7 shows section titles as written; 0.8.3.5 upper-cased them.
+                bool resists = shownText.IndexOf("\n" + ShipStats.SectionTitle + "\n", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                bool effects = shownText.IndexOf("\n" + ShipStats.EffectsTitle + "\n", System.StringComparison.OrdinalIgnoreCase) >= 0;
                 if (resists && effects) ctx.Pass("tooltip", target.displayName + ": both sections shown");
                 else ctx.Fail("tooltip", $"{target.displayName}: resistances {resists}, buffs and debuffs {effects}");
 

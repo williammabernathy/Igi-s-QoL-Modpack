@@ -629,14 +629,14 @@ In the code: [What a Destroyed NPC Ship Drops](#code-what-a-destroyed-npc-ship-d
 XP per kill = ceil( 5 * base XP reward * level factor * 2^(your level / 9) ) * ship rank point multiplier
 ```
 
-The base XP reward is a per-ship value. In the 0.8.3.5 data dump it is 10 on 45 of the 159 ship prefabs, and the others range from 2 (the small drone ships) to 110 (for example Aquila, Bogatyr and Monsoon). The tables below use 10. Your level is your effective level. The level factor depends on the target's unit level compared with yours:
+The base XP reward is a per-ship value. In the 0.8.3.5 data dump it is 10 on 45 of the 159 ship prefabs, and the others range from 2 (the small drone ships) to 110 (for example Aquila, Bogatyr and Monsoon). The tables below use 10. Your level is your effective level. The level factor depends on the target's unit level compared with yours (changed in 0.8.3.7; before it, the bonus stopped at 3 levels above and kills 4 or more levels below gave nothing):
 
 | Target's level compared with yours | Level factor |
 |---|---|
-| Up to 3 levels above | 1 + 0.1 per level (up to 1.3) |
+| 1 to 6 levels above | 1 + 0.4 / 6 per level (about 1.07 per level, up to 1.4 at 6 or more above) |
 | The same level | 1.0 |
-| 1, 2 or 3 levels below | 0.8, 0.6 or 0.4 |
-| 4 or more levels below | 0.00001 (effectively nothing) |
+| 1 to 9 levels below | 1 - 0.1 per level (0.9 at 1 below down to 0.1 at 9 below) |
+| 10 or more levels below | 0.00001 (effectively nothing) |
 
 XP needed to finish a level is 1000 * 2^(level / 5). Kill XP grows by 2^(1/9) per level, while the XP needed grows by 2^(1/5), so each level takes more kills than the last. The next table is for a Rookie ship (point multiplier x1.0) at the same level as you:
 
@@ -651,7 +651,7 @@ XP needed to finish a level is 1000 * 2^(level / 5). Kill XP grows by 2^(1/9) pe
 
 Vanguard XP (earned past the maximum level) uses a 0.25 scale on the same curve. It is not covered further here.
 
-Killing an enemy of a higher ship rank is worth more. Compared with a Rookie's base, a Regular is worth x1.2, a Veteran x1.3, an Elite x1.5, a Champion x1.6, a Commander x2.0 and a Legendary x2.4. Killing targets 4 or more levels below you gives almost nothing, so XP farming needs enemies close to your level.
+Killing an enemy of a higher ship rank is worth more. Compared with a Rookie's base, a Regular is worth x1.2, a Veteran x1.3, an Elite x1.5, a Champion x1.6, a Commander x2.0 and a Legendary x2.4. Killing targets 10 or more levels below you gives almost nothing, and each level below you takes a tenth off before that, so XP farming still pays best close to your level or above it.
 
 In the code: [XP Rewards](#code-xp-rewards).
 
@@ -1082,7 +1082,7 @@ Source: `SpaceShipData.CreateLootTable`, `SpaceShipData.GetEquipedModulesForLoot
 XP per kill = ceil( 5 * baseExperienceReward * levelFactor * 2^(ownLevel / 9) ) * rankPointMultiplier
 ```
 
-`baseExperienceReward` is a prefab value that defaults to 10. In the 0.8.3.5 `SpaceShip.allShips` dump it is 10 on 45 of the 159 ship prefabs and ranges from 2 to 110 on the rest. `LootManager.AddKillExperience` reads it through `unit.baseExperienceReward`. `ownLevel` is your effective level. `levelFactor` depends on the target's unit level compared with yours.
+`baseExperienceReward` is a prefab value that defaults to 10. In the 0.8.3.5 `SpaceShip.allShips` dump it is 10 on 45 of the 159 ship prefabs and ranges from 2 to 110 on the rest. `LootManager.AddKillExperience` reads it through `unit.baseExperienceReward`. `ownLevel` is your effective level. `levelFactor` depends on the target's unit level compared with yours. In 0.8.3.7 `GameMath.GetExperienceRewardValue` computes it as `1 - 0.1 * (ownLevel - targetLevel)` for a target 1 to 9 levels below, `0.00001` for 10 or more below, and `1 + 0.4 * min(6, targetLevel - ownLevel) / 6` for a target above (0.8.3.5: `1 - 0.2 * gap` up to 3 below, then `0.00001`; `1 + 0.1 * min(3, gap)` above).
 
 XP needed to finish a level is `1000 * 2^(level / 5)`. Kill XP grows by `2^(1/9)` per level while the need grows by `2^(1/5)`. The XP-per-level curve and the kill XP formula are read from `GameMath` and `AbstractPersonnelData.GiveExperience`; vanguard (past max level) XP uses a 0.25 scale on the same curve (`CaptainData.maxVanguardExperience`).
 

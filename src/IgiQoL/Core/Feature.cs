@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using BepInEx.Configuration;
 using HarmonyLib;
+using IgiQoL.UI;
+using UnityEngine;
 
 namespace IgiQoL.Core;
 
@@ -28,6 +30,9 @@ public abstract class Feature
     }
 
     public virtual void OnActivated() { }
+
+    // The feature's rows on the Settings tab. Override to lay the rows out in groups of your own.
+    public virtual void AddSettingRows(RectTransform column) => SettingRows.AddEntries(column, Id);
 
     public virtual IEnumerator SelfCheck(SelfCheckContext ctx) { yield break; }
 

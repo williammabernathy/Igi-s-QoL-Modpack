@@ -80,7 +80,7 @@ public sealed class WindowFeature : Feature
             // A feature whose tab isn't there (its owner switched off) shows its settings here instead.
             if (feature.SettingsTab == null || !ModWindow.HasTab(feature.SettingsTab))
             {
-                SettingRows.AddEntries(content, feature.Id);
+                feature.AddSettingRows(content);
                 if (feature == Instance) AddButtonReset(content);
                 continue;
             }
@@ -115,8 +115,15 @@ public sealed class WindowFeature : Feature
         if (ModWindow.IsOpen)
         {
             var content = ModWindow.Content;
+            // Rows sit in the column, or one level down inside a group box (Kit.Box).
             for (int i = 0; i < content.childCount; i++)
-                if (content.GetChild(i).name == "Row") rows++;
+            {
+                var child = content.GetChild(i);
+                if (child.name == "Row") rows++;
+                else if (child.name == Kit.BoxName)
+                    for (int j = 0; j < child.childCount; j++)
+                        if (child.GetChild(j).name == "Row") rows++;
+            }
         }
         string detail = $"rows={rows} entries={entries} tab={ModWindow.CurrentTab}";
         if (ModWindow.IsOpen && rows == entries) ctx.Pass("window-open", detail);
@@ -134,12 +141,14 @@ public sealed class WindowFeature : Feature
             else ctx.Fail("hud-button", hudDetail);
         }
 
-        if (SpaceStationInterior.instance == null) ctx.Skip("station-button", "not docked");
+        // A save that starts in space docks here first, so the station tab and the undock step get tested too.
+        yield return ctx.EnsureDocked();
+        if (SpaceStationInterior.instance == null) ctx.Skip("station-button", ctx.DockNote ?? "not docked");
         else if (HudButton.StationInstance == null) ctx.Fail("station-button", "docked but no QoL station tab");
         else
         {
             var placed = HudButton.StationInstance.GetComponent<PersonalFleetButton>();
-            string stationDetail = $"above {(placed.target != null ? placed.target.name : "-")} rect={placed.rectTransform.rect.width:0.#}x{placed.rectTransform.rect.height:0.#}";
+            string stationDetail = $"above {(placed.target != null ? placed.target.name : "-")} rect={placed.rect.rect.width:0.#}x{placed.rect.rect.height:0.#}";
             if (placed.target != null) ctx.Pass("station-button", stationDetail);
             else ctx.Fail("station-button", stationDetail);
         }

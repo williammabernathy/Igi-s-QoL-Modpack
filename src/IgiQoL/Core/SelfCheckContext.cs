@@ -56,6 +56,70 @@ public sealed class SelfCheckContext
         yield return new WaitForSecondsRealtime(2f);
     }
 
+    // Docks for a check that needs a station. Inside or outside a station that suits, the flagship stays and enters it.
+    // Elsewhere it flies to a friendly station in this system, one that suits if there is one (the home station first,
+    // else the first in the system's own order, as SystemMapData.GetNearestSpaceStationWithFacility picks), and enters
+    // it. A trip abandons the player's running operations like any trip does (TravelManager.SetRouteToPOI). Undocks
+    // again in a cleanup when it docked. The caller reads SpaceStationInterior.instance afterwards and skips with
+    // DockNote, which also says when no station in the system suits (the caller's own facility test then skips).
+    public IEnumerator EnsureDocked(Func<Source.Galaxy.POI.SpaceStation, bool> suits = null)
+    {
+        DockNote = null;
+        var here = MapPointOfInterest.current as Source.Galaxy.POI.SpaceStation;
+        var target = PickStation(suits);
+        if (target == null && suits != null)
+        {
+            // Docked anyway, for the checks that need only a station; the caller's own facility test skips with this.
+            DockNote = $"no friendly station in {SystemMapData.current?.name ?? "this system"} has what the check needs";
+            target = PickStation(null);
+        }
+        bool stay = here != null && here.PlayerIsFriendly() && (target == null || target == here || suits == null || suits(here));
+        if (Behaviour.UI.Spacestation.SpaceStationInterior.instance != null)
+        {
+            if (stay) yield break;
+            yield return EnsureInSpace();
+        }
+        if (!stay)
+        {
+            var travel = Behaviour.Util.Singleton<Behaviour.Managers.TravelManager>.Instance;
+            if (target == null || travel == null || !travel.CanWeTravel(target) || !travel.SetRouteToPOI(target))
+            {
+                DockNote = target == null ? "no friendly station in this system" : "can't travel to " + target.name;
+                yield break;
+            }
+            float arrive = Time.realtimeSinceStartup + 180f;
+            while (Time.realtimeSinceStartup < arrive && (MapPointOfInterest.current != target || travel.TravelActive() || !(Behaviour.Managers.BasePoiManager.current is SpacestationExteriorManager)))
+                yield return null;
+            Plugin.Log.LogInfo($"[Dev] {FeatureId}: flew to {target.name} to dock, arrived={MapPointOfInterest.current == target}");
+            yield return new WaitForSecondsRealtime(2f);
+        }
+        if (!(Behaviour.Managers.BasePoiManager.current is SpacestationExteriorManager exterior))
+        {
+            DockNote = "not outside a station after the trip: " + MapPointOfInterest.current?.name;
+            yield break;
+        }
+        exterior.EnterSpacestation();
+        float wait = Time.realtimeSinceStartup + 30f;
+        while (Behaviour.UI.Spacestation.SpaceStationInterior.instance == null && Time.realtimeSinceStartup < wait) yield return null;
+        yield return new WaitForSecondsRealtime(3f);
+        if (Behaviour.UI.Spacestation.SpaceStationInterior.instance == null) DockNote = "could not dock at " + MapPointOfInterest.current?.name;
+        else Cleanup(() => { if (Behaviour.UI.Spacestation.SpaceStationInterior.instance != null) Behaviour.UI.Spacestation.SpaceStationInterior.instance.ExitSpacestation(); });
+    }
+
+    private static Source.Galaxy.POI.SpaceStation PickStation(Func<Source.Galaxy.POI.SpaceStation, bool> suits)
+    {
+        bool Ok(Source.Galaxy.POI.SpaceStation s) => s != null && !s.hidden && s.PlayerIsFriendly() && (suits == null || suits(s));
+        var home = GamePlayer.current?.homeStation;
+        if (home != null && home.IsCurrentSystem() && Ok(home)) return home;
+        if (SystemMapData.current != null)
+            foreach (var p in SystemMapData.current.pointsOfInterest)
+                if (p is Source.Galaxy.POI.SpaceStation s && Ok(s)) return s;
+        return null;
+    }
+
+    // Why the last EnsureDocked call isn't docked, or that no station in the system suits; null otherwise.
+    public string DockNote;
+
     // An asteroid with the given surface ore and no core, built from the first asteroid field in this system and added
     // to the current location (AddPersistable spawns it). Remove it again with poi.RemovePersistable.
     public static Source.Data.Persistable.AsteroidData SpawnAsteroid(Vector2 position, Behaviour.Mining.OreItemData ore)

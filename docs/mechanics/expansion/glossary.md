@@ -2,7 +2,7 @@
 
 This page covers the terms that appear once you accept "Beyond the Front", which needs level 60 and one finished 30% sector-control mission. Earlier terms are in the [basics glossary](../basics/glossary.md) and the [Conquest glossary](../conquest/glossary.md). Terms that come later are on the pages for later stages.
 
-The wording comes from the game's translation strings and interface text of version 0.8.3.4, not from play. The interface code was compared with the 0.8.3.5 source. The translation strings were not re-read for 0.8.3.5. The basics glossary explains the table columns. The code name for each term is in the last part of this page.
+The wording comes from the game's translation strings and interface text of version 0.8.3.4, not from play. The interface code was compared with the 0.8.3.5 source. The strings for fleets, systems, upkeep, claiming and the station buttons were re-read in the 0.8.3.7 string table. The basics glossary explains the table columns. The code name for each term is in the last part of this page.
 
 Pages: [Your Empire](your-empire.md) and [Empire Fleets](empire-fleets.md).
 
@@ -50,7 +50,7 @@ In the code: [Conquest Map](#code-conquest-map).
 | Term used here | What the game shows | Meaning |
 |---|---|---|
 | fleet slots (yours) | "{n} / {m} fleet slots", "Hold {n} systems to field another fleet" | How many Empire Fleets you may field. |
-| Empire Fleet | "Empire Fleets" (button and window), "Fleets" (tab) | Your own fleets on the Conquest Map. Their ships are your real ships. |
+| Empire Fleet | "Empire Fleets" (window title and button tooltip), "Fleets" (tab) | Your own fleets on the Conquest Map. Their ships are your real ships. In a station the button is a flag icon next to the Personal Fleet icon (text buttons before 0.8.3.7). |
 | patrol fleet | "Patrol fleets" (station window), "Patrol strength" | Ships you assign to one of your Defense stations to guard its system. They count toward Defense, and they are lost for good if destroyed. |
 | defense stance | "Defend system", "Defend sector", "Not defending" | Whether an idle Empire Fleet joins the defense of its own system, or of any of your systems in its sector. |
 | fleet mix | "Fleet mix {x} off-screen strength ({n} ship sizes)" | A bonus for Empire Fleets that have two or more ship sizes. It applies in simulated battles and in the Defense number, not in live combat. |
@@ -94,7 +94,7 @@ These words have more than one meaning in the game:
 
 ## In the Game Code
 
-This part holds the code name column of the tables above, one table per group. The wording comes from the game's translation strings (`resources.assets`, read in 0.8.3.4) and the decompiled interface code of version 0.8.3.4, compared with the 0.8.3.5 source.
+This part holds the code name column of the tables above, one table per group. The wording comes from the game's translation strings (`resources.assets`, read in 0.8.3.4 and re-read for the rows named above in 0.8.3.7) and the decompiled interface code of version 0.8.3.4, compared with the 0.8.3.5 and 0.8.3.7 sources.
 
 ### Code: Places and Stations
 

@@ -61,17 +61,8 @@ internal static class LoadoutsCheck
         // Saved loadouts come back from parsed JSON, so the checks apply the parsed copy too.
         a = Loadout.FromJson(Json(aj));
 
-        // The harness's Window check undocks; dock again (the dev save sits at a station) and leave afterwards.
-        bool docked = false;
-        if (SpaceStationInterior.instance == null && Behaviour.Managers.BasePoiManager.current is SpacestationExteriorManager exterior)
-        {
-            exterior.EnterSpacestation();
-            float wait = Time.realtimeSinceStartup + 30f;
-            while (SpaceStationInterior.instance == null && Time.realtimeSinceStartup < wait) yield return null;
-            yield return new WaitForSeconds(3f);
-            docked = SpaceStationInterior.instance != null;
-        }
-        if (docked) ctx.Cleanup(() => { if (SpaceStationInterior.instance != null) SpaceStationInterior.instance.ExitSpacestation(); });
+        // The harness's Window check undocks; dock again at a station with a hangar, and leave afterwards.
+        yield return ctx.EnsureDocked(s => s.HasFacility(Source.Galaxy.POI.SpaceStationFacility.PersonalHangar));
 
         string reason = LoadoutApply.CannotApplyReason(ship);
         if (reason != null)
@@ -305,17 +296,54 @@ internal static class LoadoutsCheck
         else ctx.Fail("hangar-button", button == null ? "no button" : "button hidden");
         yield return ctx.Screenshot("hangar-loadouts");
 
-        // Hired mercenaries aren't offered, and applying to one is refused.
-        bool listed = LoadoutsTab.Ships().Exists(s => s.commanderData is Source.Personnel.Mercenary);
-        if (!listed) ctx.Pass("no-mercenary", "no hired ship in the Loadouts list");
-        else ctx.Fail("no-mercenary", "a hired ship is in the Loadouts list");
+        // Hired mercenaries aren't offered, and applying to one is refused. A save without one docks at a station with a
+        // recruitment center in this system (when this one has none) and hires one the way its Hire button does
+        // (MercenaryOption.OnHire, minus the fee), and dismisses it afterwards.
         var merc = player.activeFleet.Find(s => s != null && s.commanderData is Source.Personnel.Mercenary);
-        if (merc == null) ctx.Skip("no-mercenary-reason", "no mercenary hired");
-        else
+        bool hiredHere = false;
+        if (merc == null) yield return ctx.EnsureDocked(s => s.HasFacility(SpaceStationFacility.RecruitmentCenter));
+        var recruits = SpaceStation.current != null ? SpaceStation.current.recruitmentCenter : null;
+        string noHire = null;
+        if (merc == null)
         {
-            string why = LoadoutApply.CannotApplyReason(merc);
-            if (why != null && why.Contains("hired ship")) ctx.Pass("no-mercenary-reason", why);
-            else ctx.Fail("no-mercenary-reason", why ?? "no reason given");
+            var flagUnit = GameplayManager.Instance != null ? GameplayManager.Instance.spaceShip : null;
+            int offers = 0;
+            if (recruits != null)
+            {
+                recruits.CreateRecruits(Source.Personnel.Profession.Combat);
+                offers = recruits.GetMercenaries(Source.Personnel.Profession.Combat).Count;
+            }
+            var offer = recruits?.GetMercenaries(Source.Personnel.Profession.Combat).Find(m => m != null);
+            if (offer != null && flagUnit != null)
+            {
+                offer.timeLeft = 3600f;
+                GameplayManager.Instance.CreateMercenary((Vector2)flagUnit.transform.position + new Vector2(8f, 6f), offer);
+                yield return new WaitForSeconds(1f);
+                merc = player.activeFleet.Find(s => s != null && s.commanderData is Source.Personnel.Mercenary);
+                hiredHere = merc != null;
+            }
+            if (merc == null)
+                noHire = $"no mercenary hired, and none hired for the check at {SpaceStation.current?.name ?? "no station"}: recruitment center {recruits != null}, combat offers {offers}, flagship unit {flagUnit != null}"
+                    + (ctx.DockNote != null ? ", " + ctx.DockNote : "");
+        }
+        try
+        {
+            string hired = merc == null ? "none hired" : (hiredHere ? "hired for the check: " : "hired: ") + merc.GetShipName();
+            bool listed = LoadoutsTab.Ships().Exists(s => s.commanderData is Source.Personnel.Mercenary);
+            if (merc == null) ctx.Skip("no-mercenary", noHire);
+            else if (!listed) ctx.Pass("no-mercenary", $"no hired ship in the Loadouts list ({hired})");
+            else ctx.Fail("no-mercenary", $"a hired ship is in the Loadouts list ({hired})");
+            if (merc == null) ctx.Skip("no-mercenary-reason", noHire);
+            else
+            {
+                string why = LoadoutApply.CannotApplyReason(merc);
+                if (why != null && why.Contains("hired ship")) ctx.Pass("no-mercenary-reason", why);
+                else ctx.Fail("no-mercenary-reason", why ?? "no reason given");
+            }
+        }
+        finally
+        {
+            if (hiredHere) player.RemoveHiredMercenary();
         }
     }
 

@@ -14,6 +14,7 @@ using Source.Galaxy;
 using Source.Galaxy.POI;
 using Source.Galaxy.POI.Station;
 using Source.Item;
+using Source.Dungeon;
 using Source.Player;
 using Source.Personnel;
 using Source.SpaceShip;
@@ -90,6 +91,9 @@ public sealed class EchoGates : Feature
     public override IEnumerator SelfCheck(SelfCheckContext ctx)
     {
         CheckRaidThreshold(ctx);
+        // The station steps need a station; a save that starts in space docks at one with a personnel center.
+        yield return ctx.EnsureDocked(s => s.HasFacility(SpaceStationFacility.PersonnelCenter));
+        if (ctx.DockNote != null) Plugin.Log.LogInfo($"[EchoGates] check dock: {ctx.DockNote}");
         CheckFastUnload(ctx);
         CheckHireThreshold(ctx);
         CheckDungeonMinimum(ctx);
@@ -98,7 +102,7 @@ public sealed class EchoGates : Feature
         CheckRecruitPrisoners(ctx);
         CheckHireFits(ctx);
         CheckRebalance(ctx);
-        yield break;
+        yield return null;
     }
 
     private void CheckRaidThreshold(SelfCheckContext ctx)
@@ -642,25 +646,49 @@ public sealed class EchoGates : Feature
         }
     }
 
+    // The crew minimum at its boundary: ECHO starts an operation with exactly the minimum aboard and refuses one crew
+    // member short. The location is a walk-in Mining Outpost built the way the console's spawn builds one
+    // (ConsoleScreen.BuildDungeonLocationData) and never added to the world; the crew selection reads only its type,
+    // so a save needs no dungeon of its own. Walk-in, because a boarding adds the boarding-crew gate.
     private void CheckDungeonMinimum(SelfCheckContext ctx)
     {
-        DungeonLocationData location = null;
-        var poi = MapPointOfInterest.current;
-        if (poi != null)
-            foreach (var p in poi.GetPersistables())
-                if (p is DungeonLocationData d) { location = d; break; }
-        if (location == null)
+        var crewData = GamePlayer.current?.currentSpaceShip?.crewData;
+        if (crewData == null)
         {
-            ctx.Skip("dungeon-min", "no dungeon at the current location");
+            ctx.Skip("dungeon-min", "no ship you fly");
             return;
         }
+        // The crew the selection counts: everyone aboard but the types it never sends (IdleManager.ExcludedFromAutonomousDungeonCrewIds).
+        int aboard = 0;
+        foreach (var kv in crewData.crew)
+            if (!IdleManager.ExcludedFromAutonomousDungeonCrewIds.Contains(kv.Key)) aboard += kv.Value;
+        if (aboard < 1)
+        {
+            ctx.Skip("dungeon-min", "no crew aboard the ship you fly that operations take");
+            return;
+        }
+        var location = new DungeonLocationData
+        {
+            dungeonType = DungeonType.MiningOutpost,
+            level = MapPointOfInterest.current != null ? MapPointOfInterest.current.level : 1,
+            dungeonData = new DungeonData { dungeonType = DungeonType.MiningOutpost },
+        };
         int saved = DungeonCrewMinimum.Value;
         try
         {
+            // At exactly the game's own 3 the mod hands the call to the game, which applies the same 3.
+            int at = aboard;
+            DungeonCrewMinimum.Value = at;
+            var exact = IdleManager.SelectAutonomousDungeonCrew(location);
+            DungeonCrewMinimum.Value = at + 1;
+            var short1 = IdleManager.SelectAutonomousDungeonCrew(location);
             DungeonCrewMinimum.Value = 9999;
-            var crew = IdleManager.SelectAutonomousDungeonCrew(location);
-            if (crew == null) ctx.Pass("dungeon-min", "minimum 9999 -> no crew selected");
-            else ctx.Fail("dungeon-min", $"minimum 9999 still selected {crew.Count} crew types");
+            var huge = IdleManager.SelectAutonomousDungeonCrew(location);
+            int sent = 0;
+            if (exact != null) foreach (var kv in exact) sent += kv.Value;
+            string detail = $"{aboard} crew aboard: minimum {at} -> {(exact == null ? "refused" : sent + " sent")}, {at + 1} -> {(short1 == null ? "refused" : "selected")}, 9999 -> {(huge == null ? "refused" : "selected")}";
+            if (exact != null && sent > 0 && short1 == null && huge == null) ctx.Pass("dungeon-min", detail);
+            else ctx.Fail("dungeon-min", detail);
         }
         finally { DungeonCrewMinimum.Value = saved; }
     }

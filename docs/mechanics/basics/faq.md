@@ -330,16 +330,16 @@ Details: [Rarity](scaling.md#rarity) and [What Gear Rarity Is Worth](scaling.md#
 
 ### How Much XP Does a Kill Give?
 
-XP per kill is ceil(5 x base XP reward x level factor x 2^(your level / 9)) x the ship rank multiplier. The base XP reward is 10 unless a ship overrides it. Your level is your effective level. The level factor depends on the target's level against yours:
+XP per kill is ceil(5 x base XP reward x level factor x 2^(your level / 9)) x the ship rank multiplier. The base XP reward is 10 unless a ship overrides it. Your level is your effective level. The level factor depends on the target's level against yours (since 0.8.3.7):
 
 | Target vs you | Level factor |
 |---|---|
-| Up to 3 levels above | 1 + 0.1 per level (up to 1.3) |
+| 1 to 6 levels above | 1 + 0.4 / 6 per level (up to 1.4) |
 | Same level | 1.0 |
-| 1, 2 or 3 levels below | 0.8, 0.6 and 0.4 in that order |
-| 4 or more levels below | 0.00001 (effectively nothing) |
+| 1 to 9 levels below | 0.9 at 1 below, 0.1 less per level, down to 0.1 at 9 below |
+| 10 or more levels below | 0.00001 (effectively nothing) |
 
-To earn XP from kills, you need enemies close to your level. A higher ship rank pays more: Regular x1.2, Veteran x1.3, Elite x1.5, Champion x1.6, Commander x2.0 and Legendary x2.4. Each level takes more kills than the last, because the XP you need doubles every 5 levels while XP per kill doubles every 9. For a Rookie ship (x1.0) of your own level:
+Kills up to 9 levels below you still pay something, but the most XP comes from enemies at or above your level. A higher ship rank pays more: Regular x1.2, Veteran x1.3, Elite x1.5, Champion x1.6, Commander x2.0 and Legendary x2.4. Each level takes more kills than the last, because the XP you need doubles every 5 levels while XP per kill doubles every 9. For a Rookie ship (x1.0) of your own level:
 
 | Level | XP per kill | XP to finish the level | Kills per level |
 |---|---|---|---|

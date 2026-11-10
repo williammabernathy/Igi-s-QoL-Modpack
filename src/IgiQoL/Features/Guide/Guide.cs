@@ -216,13 +216,30 @@ public sealed class Guide : Feature
         if (Weapons.Count > 0 && Armours.Count > 0) ctx.Pass("data", d);
         else ctx.Fail("data", d);
 
+        // The tab against the collected data: one line per damage type naming every weapon that deals it, and one line
+        // per armor type with its resistance.
         ModWindow.Open("guide");
         yield return null;
-        int lines = 0;
+        var texts = new List<string>();
         if (ModWindow.IsOpen)
-            foreach (var t in ModWindow.Content.GetComponentsInChildren<TMP_Text>()) lines++;
-        if (ModWindow.CurrentTab == "guide" && lines > 10) ctx.Pass("tab", $"{lines} text lines");
-        else ctx.Fail("tab", $"tab={ModWindow.CurrentTab} lines={lines}");
+            foreach (var t in ModWindow.Content.GetComponentsInChildren<TMP_Text>()) texts.Add(t.text);
+        var missing = new List<string>();
+        int typeLines = 0, armourLines = 0;
+        foreach (DamageType t in Enum.GetValues(typeof(DamageType)))
+        {
+            string line = texts.Find(x => x.StartsWith(Colored(t) + ": "));
+            if (line == null) { missing.Add(t + " line"); continue; }
+            typeLines++;
+            foreach (var w in Weapons)
+                if (w.type == t && !line.Contains(w.name)) missing.Add($"{w.name} under {t}");
+        }
+        foreach (var a in Armours)
+            if (texts.Exists(x => x.StartsWith(a.name + ": resists " + Percent(a.minResist, a.maxResist)))) armourLines++;
+            else missing.Add(a.name + " armor line");
+        int types = Enum.GetValues(typeof(DamageType)).Length;
+        string tabDetail = $"tab={ModWindow.CurrentTab} damage type lines {typeLines}/{types}, armor lines {armourLines}/{Armours.Count}, {texts.Count} text lines" + (missing.Count > 0 ? "; missing " + string.Join(", ", missing) : "");
+        if (ModWindow.CurrentTab == "guide" && missing.Count == 0) ctx.Pass("tab", tabDetail);
+        else ctx.Fail("tab", tabDetail);
         yield return ctx.Screenshot("window-guide");
         ModWindow.Close();
 

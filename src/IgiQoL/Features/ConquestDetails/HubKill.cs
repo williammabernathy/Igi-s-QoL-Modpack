@@ -24,12 +24,13 @@ internal enum HubKillResult
 // what happens with claiming locked, or after you decline. A siege in its hub stage hands the system to its lead
 // attacker at once (BattleManager.EndBattlesAt, SystemClaim.Decline). Otherwise every other fight there ends, the system
 // is unowned, and it goes to the first fleet that lands: one already flying in to attack it, or the one a bordering
-// faction's next planning pass sends (every 600 s, all factions together, or at once for the factions of a fight that
-// just ended; see FirstToGo). A fleet flies 60 s plus 150 s a jump. A faction with no frontline at all looks up to 60
-// jumps away.
+// faction's next planning pass sends (the sooner of the 600 s Fleet orders clock and the hourly economy tick, all
+// factions together, or at once for the factions of a fight that just ended; see FirstToGo). A fleet flies 60 s plus
+// 150 s a jump. A faction with no frontline at all looks up to 60 jumps away.
 //
 // Not modelled: what the same pass does before it gets to the attacks beyond refits, help for a system under attack and
-// assaults (a retreat roll, a raid), and fleets whose orders change between now and that pass.
+// assaults (a retreat roll, a raid), a war fleet the Fleet orders pass grants first (WarFleets.TryGrant), and fleets
+// whose orders change between now and that pass.
 internal struct HubKill
 {
     public HubKillResult Result;
@@ -75,7 +76,9 @@ internal struct HubKill
             foreach (var supporter in battle.supportFleets) replanNow.Add(supporter.factionId);
         }
 
-        float pass = universe.militaryPlanningTime;
+        // The next planning pass for a faction is the sooner of the 600 s Fleet orders clock and the hourly economy tick,
+        // which also assigns orders (LivingUniverse.RunHourlyTick, ConquestFleetPlanner.Tick).
+        float pass = Mathf.Min(universe.militaryPlanningTime, universe.tickTime);
         var after = new List<BattleInstance>();
         foreach (var b in battles)
             if (b.targetSystemGuid != cs.system.guid) after.Add(b);
@@ -94,10 +97,11 @@ internal struct HubKill
                     float left = fleet.travelDuration * (1f - fleet.routeProgress);
                     if (left < seconds) (seconds, jumps) = (left, -1);
                 }
-            var sent = FirstToGo(economy, cs, battles, after, out int hops);
+            float wait = replanNow.Contains(f.identifier) ? 0f : pass;
+            var sent = FirstToGo(economy, cs, battles, after, wait, out int hops);
             if (sent != null)
             {
-                float t = (replanNow.Contains(f.identifier) ? 0f : pass) + (hops == 0 ? 0f : ConquestFleetPlanner.TravelDuration(hops));
+                float t = wait + (hops == 0 ? 0f : ConquestFleetPlanner.TravelDuration(hops));
                 if (t < seconds) (seconds, jumps) = (t, hops);
             }
             if (seconds == float.MaxValue) continue;
@@ -135,7 +139,7 @@ internal struct HubKill
     // system of its own under attack and those gathering for an assault; each takes its best target in turn
     // (AttackTarget.IsBetterThan puts an unowned system first, then the nearest), and the first whose best target is
     // this system goes. Jumps 0 is a fleet already in the system.
-    private static ConquestFleet FirstToGo(FactionEconomy economy, ConquestSystem cs, List<BattleInstance> battles, List<BattleInstance> after, out int jumps)
+    private static ConquestFleet FirstToGo(FactionEconomy economy, ConquestSystem cs, List<BattleInstance> battles, List<BattleInstance> after, float wait, out int jumps)
     {
         jumps = -1;
         var f = economy.faction;
@@ -147,11 +151,22 @@ internal struct HubKill
         if (!front && (!ConquestWarTuning.FleetFieldingFactions.Contains(f) || WarMath.Conquest?.IsSittingOut(f) == true)) return null;
         int maxHops = front ? 4 : 60;
         var candidates = new List<ConquestSystem>(view.Candidates);
-        if (!candidates.Contains(cs)) candidates.Add(cs);
+        if (!candidates.Contains(cs))
+        {
+            // A faction that raids from home only goes for systems within its homeland reach.
+            if (view.Reach != null && !view.Reach.Contains(cs)) return null;
+            candidates.Add(cs);
+        }
         var claimed = ConquestFleetOrders.GetClaimedTargets(economy, after);
         var territory = view.Territory;
 
         var available = new List<ConquestFleet>();
+        // War fleets (ConquestFleet.isWarFleet) are split off before the refit, distress and frontline orders and get
+        // theirs after them (ConquestFleetOrders.AssignOrders, AssignWarFleets), only while their lifetime lasts: a
+        // fleet with less time left than the wait for the pass is gone (or skipped) by then. They never retreat. When no
+        // target is one they can beat, a war fleet raids an outpost within 4 jumps if there is one, else attacks the weakest
+        // open system (TryOrderRaid, TryAttackWeakest).
+        var warFleets = new List<ConquestFleet>();
         foreach (var fleet in economy.fleets)
         {
             if (fleet.isEmpireFleet || fleet.interceptHeld || ConquestFleetOrders.NeedsToRetreat(fleet)) continue;
@@ -161,7 +176,8 @@ internal struct HubKill
                 if (b.targetSystemGuid == cs.system.guid && b.HasAttacker(fleet.guid)) attacksHere = true;
             if (!attacksHere && (fleet.state != ConquestFleetState.Idle || ConquestFleetOrders.IsInBattle(fleet, after))) continue;
             if (fleet.currentSystem != cs.system && ConquestFleetOrders.IsDefendingOnSite(fleet)) continue;
-            available.Add(fleet);
+            if (fleet.isWarFleet) warFleets.Add(fleet);
+            else available.Add(fleet);
         }
         int slots = 3;
         foreach (var fleet in economy.fleets)
@@ -185,6 +201,7 @@ internal struct HubKill
         }
         available.RemoveAll(fleet => fleet.isInAssault && ConquestFleetOrders.IsGatheringForAssault(fleet) && candidates.Exists(c => c.system.guid == fleet.assaultTargetGuid));
 
+        available.AddRange(warFleets.FindAll(fleet => fleet.lifetimeHoursLeft * 3600f > wait));
         foreach (var fleet in available)
         {
             if (fleet.currentSystem == null) continue;
@@ -197,20 +214,53 @@ internal struct HubKill
                     continue;
                 bool unowned = c == cs || c.isUnowned;
                 float strength = c == cs ? 0f : NextBattle(c);
-                if (fleet.totalPoints < strength * WarMath.AttackMargin) continue;
+                if (WarFooting.GetJudgedStrength(fleet) < strength * WarMath.AttackMargin) continue;
                 int size = unowned ? int.MaxValue : territory.TryGetValue(c.faction, out int n) ? n : 0;
                 var t = new ConquestFleetOrders.AttackTarget(c, size, strength, hops);
                 if (!pick.HasValue || t.IsBetterThan(pick.Value)) pick = t;
             }
+            // Only a war fleet that can beat nothing falls through to TryOrderRaid and then TryAttackWeakest; one that has
+            // an enemy outpost to raid within 4 jumps goes there and does not claim the system.
+            bool weakest = !pick.HasValue && fleet.isWarFleet;
+            if (weakest && RaidsInstead(fleet, candidates, cs, view.Reach)) continue;
+            // TryAttackWeakest ignores what other fleets have claimed and doesn't add to it.
+            if (weakest) pick = Weakest(fleet, candidates, cs, maxHops);
             if (!pick.HasValue) continue;
             if (pick.Value.system == cs)
             {
                 jumps = pick.Value.hops;
                 return fleet;
             }
-            claimed.Add(pick.Value.system.system.guid);
+            if (!weakest) claimed.Add(pick.Value.system.system.guid);
         }
         return null;
+    }
+
+    // ConquestFleetOrders.TryOrderRaid: the war fleet raids the nearest raidable outpost of the factions that own the
+    // candidates (the system itself is unowned once its hub is gone) and of the player when it's an enemy.
+    private static bool RaidsInstead(ConquestFleet fleet, List<ConquestSystem> candidates, ConquestSystem cs, HashSet<ConquestSystem> reach)
+    {
+        var enemies = new HashSet<Faction>();
+        foreach (var c in candidates)
+            if (c != cs && c.faction != null) enemies.Add(c.faction);
+        if (fleet.faction.IsEnemy(Faction.player)) enemies.Add(Faction.player);
+        return enemies.Count > 0 && ConquestFleetOrders.ChooseRaidTarget(fleet, enemies, reach) != null;
+    }
+
+    // ConquestFleetOrders.TryAttackWeakest: the war fleet's last resort before it rallies. Every candidate in reach counts,
+    // whatever its strength, and the owner's territory no longer ranks them (every owner size is 0), so the lowest next
+    // battle wins, then the nearest. The unowned system is a candidate with a next battle of 0.
+    private static ConquestFleetOrders.AttackTarget? Weakest(ConquestFleet fleet, List<ConquestSystem> candidates, ConquestSystem cs, int maxHops)
+    {
+        var distances = Distances(fleet.currentSystem, maxHops);
+        ConquestFleetOrders.AttackTarget? pick = null;
+        foreach (var c in candidates)
+        {
+            if (!distances.TryGetValue(c.system, out int hops) || fleet.IsReattackBlocked(c.system.guid) || hops < 1 && c.system != fleet.currentSystem) continue;
+            var t = new ConquestFleetOrders.AttackTarget(c, 0, c == cs ? 0f : NextBattle(c), hops);
+            if (!pick.HasValue || t.IsBetterThan(pick.Value)) pick = t;
+        }
+        return pick;
     }
 
     // What a prediction reads for every system and faction alike, kept for the frame: the War overview predicts every
@@ -221,6 +271,7 @@ internal struct HubKill
         public FrontlineSnapshot Snapshot;
         public List<ConquestSystem> Candidates;
         public Dictionary<Faction, int> Territory;
+        public HashSet<ConquestSystem> Reach;
     }
 
     private static int frame = -1;
@@ -247,8 +298,9 @@ internal struct HubKill
         Fresh();
         if (Views.TryGetValue(f, out var v)) return v;
         var snapshot = ConquestFrontline.Build(f);
-        var candidates = ConquestFleetOrders.GatherCandidates(f, snapshot, snapshot.systems.Count > 0, null);
-        v = new FactionView { Snapshot = snapshot, Candidates = candidates, Territory = ConquestFleetOrders.CountOwnerTerritory(candidates) };
+        var reach = ConquestFleetOrders.GetAttackReach(f);
+        var candidates = ConquestFleetOrders.GatherCandidates(f, snapshot, snapshot.systems.Count > 0, reach);
+        v = new FactionView { Snapshot = snapshot, Candidates = candidates, Territory = ConquestFleetOrders.CountOwnerTerritory(candidates), Reach = reach };
         Views[f] = v;
         return v;
     }

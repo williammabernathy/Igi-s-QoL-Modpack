@@ -1,6 +1,6 @@
 # War Stations
 
-Conquest opens at level 28 (see the [Conquest stage](README.md)). This page covers the stations of that war: hubs, Defense stations and headquarters, the x20 and x30 hit point multipliers, war effort on station weapons, the conquest station layouts, the off-screen siege numbers and Defense station garrisons. Part stats, the stat formula, loot and reputation rules are on [basics/stations.md](../basics/stations.md). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. The station part values (hit points, turret slots) come from the part prefabs, which were dumped from the running game in both versions and did not change.
+Conquest opens at level 28 (see the [Conquest stage](README.md)). This page covers the stations of that war: hubs, Defense stations and headquarters, the x20 and x30 hit point multipliers, war footing in live battles, the conquest station layouts, the off-screen siege numbers and Defense station garrisons. Part stats, the stat formula, loot and reputation rules are on [basics/stations.md](../basics/stations.md). Values were read from the game code of version 0.8.3.4 (the decompiled source, not in-game testing). The code was then compared with the 0.8.3.5 source, and every statement that changed there was rewritten. The station part values (hit points, turret slots) come from the part prefabs, which were dumped from the running game in both versions and did not change. Version 0.8.3.7 removed the per-system war effort that used to scale station weapons; the section on it was rewritten from the 0.8.3.7 source.
 
 Terms and abbreviations are explained in the [conquest glossary](glossary.md) and the [basics glossary](../basics/glossary.md).
 
@@ -51,21 +51,19 @@ At Escalation tier 0, the combined multiplier is the "Combined" column of the ta
 
 Worked example: a level 60 Station Core in a hub has a base hull of 900. Its Small Hull module multiplies that by 1 + u * 1920 (u is rolled between 0.010 and 0.014, and 1920 is the level 60 power level of 1600 times the High Grade factor 1.2), so by x20.2 to x27.9, about x24.0 for a mid-range roll. With the hub multiplier that is about 900 x 24.0 x 36.2 = 783,000 hull, before any Escalation multiplier. The roll and the module's aspect change it, so the part's tooltip "Hull" row shows the real current and maximum. The module formula is on [basics/stations.md](../basics/stations.md#how-tough-a-part-is). Each stat has one module (Hull, Shield Generator or Armor), so the only way two multipliers meet on the same stat is an aspect on any equipped module, such as a x1.05 hull aspect. They multiply: `AbstractUnitData.AggregateStatLines` runs `ApplyStatSourceLines` for every source, which multiplies `statMultipliers[stat]` by each line's multiplier and adds each line's flat amount to `calcedStats[stat]`.
 
-Station parts use the same hit pipeline as ships ([Combat Damage](../basics/combat-damage.md#npc-and-station-modifiers)). Only the stat set differs: it includes the HP multiplier above and the war effort multiplier below.
+Station parts use the same hit pipeline as ships ([Combat Damage](../basics/combat-damage.md#npc-and-station-modifiers)). Only the stat set differs: it includes the HP multiplier above.
 
 In the code: [How Tough a Hub or Defense Station Is](#code-how-tough-a-hub-or-defense-station-is).
 
-## War Effort on Station Weapons
+## War Footing in Live Battles
 
-War effort is the firepower bonus that Conquest missions you complete give a system's stations. It lasts 3 hours from the last mission. In the same places as the x20 and x30 multipliers (a hub, or a Defense station in a war-zone system), the part's Combat Power, Drone Power and Torpedo Power are multiplied by that system's war effort multiplier. This happens only while the system has a war effort running.
+Until 0.8.3.5 a system's war effort multiplied the Combat Power, Drone Power and Torpedo Power of its hub's and Defense stations' parts. Version 0.8.3.7 removed that: a station part's weapons no longer have a war effort multiplier of their own, and a station part does not change with the missions you complete.
 
-```
-multiplier = 1 + bonus - penalty      (never below 0)
-```
+War footing, the faction-wide bonus that replaced it, multiplies those same three stats for the ships of a live conquest battle (a unit whose generation identity starts with "conquestbattle:"): garrison ships, defending fleets and attacking fleets of that faction. The multiplier is 1 plus the faction's footing bonus, up to x1.25. Station parts have the identity "stationpart" plus a number, so a hub's or Defense station's own turrets never get it. See [war.md](war.md#war-footing-and-war-fleets) for how footing is earned and what else it scales.
 
-Escalation and the level-based NPC multiplier scale the same three stats on top of that, which is why a high-level station hits much harder than a low-level one. How war effort is earned and decays is on [war.md](war.md).
+Escalation and the level-based NPC multiplier scale the same three stats on top of that, which is why a high-level station hits much harder than a low-level one.
 
-In the code: [War Effort on Station Weapons](#code-war-effort-on-station-weapons).
+In the code: [War Footing in Live Battles](#code-war-footing-in-live-battles).
 
 ## Station Layouts
 
@@ -134,7 +132,7 @@ In the code: [How Long Damage Lasts in a War Zone](#code-how-long-damage-lasts-i
 
 These steps come on top of the ones in [basics/stations.md](../basics/stations.md#when-the-last-part-dies). The station counts as destroyed when no part other than a Connector is left. The steps run after the mission objectives for a destroyed combat station complete and before the pocket achievement, in this order:
 
-1. The conquest code handles the station first. If it is the hub of an owned war-zone system, the system is abandoned: it loses its owner and its war effort, and the first fleet to arrive can claim it. In your own sector it goes back on sale instead ([war.md](war.md) covers what that does). A hub that is waiting to be rebuilt when you leave is skipped.
+1. The conquest code handles the station first. If it is the hub of an owned war-zone system, the system is abandoned: it loses its owner, and the first fleet to arrive can claim it. In your own sector it goes back on sale instead ([war.md](war.md) covers what that does). A hub that is waiting to be rebuilt when you leave is skipped.
 2. If the station is a faction station that is not already wrecked, it is handled next. If a part you hit was among those destroyed, the station is wrecked on the spot ([Wrecking a Faction Station](../basics/stations.md#wrecking-a-faction-station)). Then, if an active live siege of that Defense station exists, the siege ends with the attacker taking the station. Otherwise, if the station is not wrecked yet, it is destroyed.
 
 A Defense station that you did not destroy but that is taken during a live siege goes through the same destruction step. The Empire Log then shows "Defense station destroyed" or "Defense station lost".
@@ -204,7 +202,7 @@ A station's tier rises in two ways. New Defense stations start at tier 1, and th
 
 Refit works as follows. When the garrison's average level (weighted by ship points) is 3 or more levels below the current NPC fleet level and the system is not besieged, a 300 second refit starts. It raises every ship below that level to it. A refit does not add ships. Refits stop while the station is in raid recovery, and a wrecked station runs no jobs at all.
 
-When a Defense station siege is running and you are at that station, the garrison ships are spawned into the live fight as real ships at their stored level, hull rating and seed, along with the defending fleets in the system. When the siege targets the hub instead, the garrisons of every Defense station in the system spawn at the hub. Ships killed in the live fight are removed from the garrison.
+When a Defense station siege is running and you are at that station, the garrison ships are spawned into the live fight as real ships at their stored level, hull rating and seed, along with the defending fleets in the system. When the siege targets the hub instead, the garrisons of every Defense station in the system spawn at the hub. Ships killed in the live fight are removed from the garrison. These ships get the owner's war footing on their weapons. Off-screen, the garrison counts at its points times 1 + the owner's war footing bonus.
 
 When the station is taken (in a live fight, or in the simulated siege either early or when the siege reaches its time limit), it is destroyed. If you are there, the garrison is cleared and the station is marked wrecked. Otherwise the station is swapped for a wreck right away.
 
@@ -243,11 +241,11 @@ Combined multiplier at escalation tier 0 is `rankHP * HpBalance * NpcBase`, the 
 
 Source: `CombatStationPart.GetStationHpMultiplier`, `CombatStationPart.GetConquestDefenseSystem`, `CombatStationPart.AddStatModifiers`, `AbstractUnit.ApplyNpcRankModifiers`, `AbstractUnit.GetStatRaw`, `AbstractUnitData.AggregateStatLines`, `AbstractUnitData.ApplyStatSourceLines`, `EquipmentBuilder.BuildInitialStats`, `BasePoiManager.AddToWorld`.
 
-### Code: War Effort on Station Weapons
+### Code: War Footing in Live Battles
 
-The part's combat power, drone power and torpedo power are multiplied by that system's war effort multiplier, `max(0, 1 + warEffortBonus - warEffortPenalty)`, but only while the system has a war effort running. It applies to stat indices 21, 25 and 26 (`CombatPower`, `DronePower`, `TorpedoPower`). Escalation and `NpcBase` multiply the same three stats on top of that.
+`AbstractUnit.ApplyWarFooting` calls `MultiplyDamageStats(WarFooting.GetMultiplier(faction))` when `BattleUnitKey.IsBattleIdentity(unitData.generationIdentity)` is true (identity starting with `conquestbattle:`). Battle ships get that identity in `ConquestCombat.SpawnShip` and `BattleUnitDescriptor.Build`. Station parts get `stationpart` plus an index in `CombatStationData.AddPart`, so they are not scaled. `MultiplyDamageStats` multiplies stat indices 21, 25 and 26 (`CombatPower`, `DronePower`, `TorpedoPower`) of `statMultipliers`. Escalation and `NpcBase` multiply the same three stats through `MultiplyDamageStats` as well. `CombatStationPart.ApplyWarEffort` and `ConquestSystem.warEffortMultiplier` no longer exist in 0.8.3.7.
 
-Source: `CombatStationPart.ApplyWarEffort`, `ConquestSystem.warEffortMultiplier`, `AbstractUnit.ApplyEscalationNpcModifiers`, `AbstractUnit.ApplyNpcRankModifiers`.
+Source: `AbstractUnit.ApplyWarFooting`, `AbstractUnit.MultiplyDamageStats`, `WarFooting.GetMultiplier`, `BattleUnitKey.IsBattleIdentity`, `AbstractUnit.ApplyEscalationNpcModifiers`, `AbstractUnit.ApplyNpcRankModifiers`.
 
 ### Code: Station Layouts
 
@@ -287,7 +285,7 @@ Source: `Conquest.DoConquestTick`, `Conquest.RepairConquestStations`, `ConquestO
 
 These steps run after the `CombatStationDestroyed` mission trigger and before the pocket achievement, in this order. `CombatStationPart.CheckCombatStationFullyDestroyed` fires them once no `CombatStationPart` other than a Connector is left in the station:
 
-1. `ConquestOwnership.OnStationDestroyed` runs for the current station. If it is the hub of an owned war-zone system, `ConquestOwnership.Abandon` runs: it clears the owner, control level and war effort. Outside the player sector `HandOverToClaimant` then offers the claim or gives it to the fleet there. In the player sector `ReturnToSale` puts the system back on sale. A hub flagged `rebuildOnLeave` is skipped.
+1. `ConquestOwnership.OnStationDestroyed` runs for the current station. If it is the hub of an owned war-zone system, `ConquestOwnership.Abandon` runs: it clears the owner and control level. Outside the player sector `HandOverToClaimant` then offers the claim or gives it to the fleet there. In the player sector `ReturnToSale` puts the system back on sale. A hub flagged `rebuildOnLeave` is skipped.
 2. If the station is a faction station that is not already wrecked: if a part you hit was destroyed (`playerContributedToDestruction`), it is wrecked on the spot. Then, if an active live siege of that Defense station exists, the siege ends with the attacker taking the station. Otherwise, and if it is not wrecked yet, the faction station is destroyed.
 
 A Defense station taken during a live siege (`DefenseStationDestroyed`, shown in the Empire Log as "Defense station destroyed" or "Defense station lost") goes through `FactionStationDestruction.Destroy` the same way.
@@ -327,6 +325,6 @@ Garrison refill paths:
 
 `FactionEconomicPlanner.TryTakeAction` calls `TryUpgrade` when `FactionStation.GetAllOwnedBy(faction).Count + economy.constructions.Count >= economy.outpostSlots`, up to twice per `FactionEconomicPlanner.Tick`. `ChooseUpgradeTarget` looks at every owned `FactionStation` with `tier < maxTier` (`PlayerStation.GetMaxTier`: 5 for every type except Production, which has 4) and keeps the one with the highest `GetStorageFullness()`, the first in the list on a tie. Nothing in it excludes `PlayerStationType.Defense`. A Defense station's `factionStorage` stays empty, because `StationProduction.Roll` returns null for it, so its fullness is 0. `FactionEconomicPlanner` never builds a Defense station; `ConquestFleetPlanner.TryBuildDefenseStation` does.
 
-In a live siege, `FactionGarrison.SpawnInto` and `BattleManager.SpawnSiegeDefenders` spawn the garrison ships (`BattleManager.EnsureVenueUnits` for the venue). When the station is taken (live, early after 600 s of siege in `TryEndDefenseStationStageEarly`, or when the stage's timer runs out in `ResolveDefenseStationSiegeAtCap`) `BattleManager.TakeDefenseStation` sends it through `FactionStationDestruction.Destroy`. The cap of 2 is `FactionStation.MaxPerSystem`.
+In a live siege, `FactionGarrison.SpawnInto` and `BattleManager.SpawnSiegeDefenders` spawn the garrison ships (`BattleManager.EnsureVenueUnits` for the venue). When the station is taken (live, early after 600 s of siege in `TryEndDefenseStationStageEarly`, or when the stage's timer runs out in `ResolveDefenseStationSiegeAtCap`) `BattleManager.TakeDefenseStation` sends it through `FactionStationDestruction.Destroy`. `FactionGarrison.GetStrength` returns the garrison points times `WarFooting.GetMultiplier(station.faction)`. The cap of 2 is `FactionStation.MaxPerSystem`.
 
 Source: `FactionGarrison.GetWantedCount`, `FactionGarrison.PickShip`, `FactionGarrison.Repair`, `FactionGarrison.ProgressRefit`, `FactionGarrison.CompleteRefit`, `FactionGarrison.SpawnInto`, `Conquest.DrainCombatStrengthIntoGarrisons`, `ConquestFleetPlanner.ChooseGarrisonToSupply`, `FactionEconomicPlanner.TryTakeAction`, `FactionEconomicPlanner.TryUpgrade`, `FactionEconomicPlanner.ChooseUpgradeTarget`, `PlayerStation.GetMaxTier`, `ExpansionEconomySeeder.SeedGateFortresses`, `StationProduction.Roll`, `WarshipDeliveries`, `BattleManager.SpawnSiegeDefenders`, `BattleManager.EnsureVenueUnits`, `BattleManager.TakeDefenseStation`, `FactionStation.MaxPerSystem`.

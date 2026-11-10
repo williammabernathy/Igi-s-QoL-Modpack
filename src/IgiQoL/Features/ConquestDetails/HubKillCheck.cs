@@ -122,7 +122,8 @@ internal static partial class ConquestDetailsCheck
             if (f == null || f == Faction.player || ConquestJoin.IsRaider(f) || ConquestJoin.IsDormant(f)) continue;
             foreach (var fleet in economy.fleets)
             {
-                if (fleet.isEmpireFleet || fleet.interceptHeld || ConquestFleetOrders.IsInBattle(fleet, battles) || ConquestFleetOrders.NeedsToRetreat(fleet)) continue;
+                if (fleet.isEmpireFleet || fleet.interceptHeld || ConquestFleetOrders.IsInBattle(fleet, battles) || ConquestFleetOrders.NeedsToRetreat(fleet)
+                    || fleet.isWarFleet && fleet.lifetimeHoursLeft <= 0f) continue;
                 tried++;
                 var saved = new FleetPlace(fleet);
                 foreach (var home in conquest.systems)

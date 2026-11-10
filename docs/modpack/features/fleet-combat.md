@@ -102,6 +102,24 @@ The game's formation code flies a fleet ship that is in formation, on Escort or 
 
 In spawned fights with 12 enemies and 4 allies (4 rounds of 33 s each way), overlapping ship pairs dropped by 42% with both settings on. The share of turrets with their target in range dropped from 78% to 71%, because ships that slide apart sometimes slide out of reach.
 
+## Ship Collisions
+
+Switches for what bumps into what. All of them are off until you turn them on. The Settings tab shows them in three boxes. Options in the same box replace each other: turning one on turns the other off. Options in different boxes work together.
+
+Your fleet and your ship (one at most):
+
+- "Fleet passes through your ships" makes the ship you fly and your fleet ships ignore each other completely, the way the game already treats a carrier and its fighters. Enemies and other ships still collide with them. The mod brings the pairs in line with your fleet every 0.5 s, so ships that join or leave the fleet follow, and turning the option off restores collision for the pairs it changed.
+- "Fleet passes through while turning in formation" targets the swing. When you turn, the game turns each fleet ship in formation on the spot to match your heading, and its obstacle avoidance ignores your ships while it is in formation, so a long hull sweeps into you. With this on, a fleet ship in formation loses its contacts with every ship while it turns (faster than 15° per second, or more than 5° off the heading it was told to hold). It uses the game's own docking pass-through, which makes the hull solid again only once it no longer overlaps another one.
+
+Formation (works with either of the above): "Formation ships keep their own heading" stops the game from turning a fleet ship in formation to match your heading. The ship slides sideways into its place and keeps the heading it arrived with. It still turns when its place is more than two hull radii away and it has to fly there.
+
+Stations (one at most):
+
+- "Stations can't be pushed" fixes station parts in place. Ships bounce off them like a wall. The game does the same to an outpost during an industry mission.
+- "Heavier stations" multiplies each station part's weight by "Station weight (x)" (2 to 100, default 10) and makes a shoved part stop within a few seconds instead of drifting on. Ships can still nudge a station a little.
+
+The station options apply to stations built from parts: combat stations, faction stations and outposts. Changing one applies it at once to the stations where you are. Without either option, stations are left exactly as the game builds them.
+
 ## Retreat for Repairs
 
 In the game, a fleet ship leaves a fight for repairs once a hit drops it below 10% hull. It flies out, repairs for 120 s and rejoins. Your fleet ships can't be destroyed, but every hull hit of 2% or more can kill crew aboard.

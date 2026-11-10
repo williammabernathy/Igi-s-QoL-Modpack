@@ -137,9 +137,9 @@ internal static class OrePreferenceCheck
         var ship = Fleet.Flagship;
         var poi = MapPointOfInterest.current;
         var bay = ship != null ? ship.droneBayModule : null;
-        if (ship == null || poi == null || bay == null || ship.spaceShipData.droneSlots.Count == 0)
+        if (ship == null || poi == null || bay == null || ship.spaceShipData.droneSlots.Count == 0 || bay.droneAmount == 0)
         {
-            ctx.Skip("picks", ship == null ? "not in space" : bay == null ? "flagship has no drone bay" : "no current location");
+            ctx.Skip("picks", ship == null ? "not in space" : bay == null ? "flagship has no drone bay" : poi == null ? "no current location" : "the drone bay has no drone slots");
             yield break;
         }
 
@@ -156,7 +156,8 @@ internal static class OrePreferenceCheck
         var spawned = new[] { near, far };
 
         var slots = ship.spaceShipData.droneSlots;
-        int idx = slots.Count - 1;
+        // The bay builds drones only for its first droneAmount slots; the saved slot list can be longer.
+        int idx = Mathf.Min(slots.Count, bay.droneAmount) - 1;
         var oldDrone = slots[idx];
         var g = ship.spaceShipData.guid;
         var s = ShipSettings.Get(g);
@@ -169,7 +170,8 @@ internal static class OrePreferenceCheck
             bay.ForceResetDrones();
             bay.DeployDrones();
             MiningModule gm = null;
-            float until = Time.realtimeSinceStartup + 12f;
+            // The bay launches its drones one after another and the swapped slot is the last, so allow for the bay's size.
+            float until = Time.realtimeSinceStartup + 12f + 3f * slots.Count;
             while (gm == null && Time.realtimeSinceStartup < until)
             {
                 foreach (var d in bay.drones)
